@@ -73,10 +73,10 @@ const Salesdash = () => {
 
   // 2. Follow-ups Due Today
   const [followups] = useState([
-    { id: 1, name: "Sanjay Sharma", company: "Metro Signage", time: "10:00 AM", phone: "+91 98765 43210", tag: "Quote Review" },
-    { id: 2, name: "Nitin Verma", company: "Apex Digital Media", time: "02:00 PM", phone: "+91 98123 45678", tag: "Demo Scheduled" },
-    { id: 3, name: "Kritika Roy", company: "Urban Displays Pvt Ltd", time: "04:30 PM", phone: "+91 97654 32109", tag: "Price Negotiation" },
-    { id: 4, name: "Vikram Malhotra", company: "Prime Boards", time: "06:00 PM", phone: "+91 98989 12345", tag: "Contract Closing" }
+    { id: 1, name: "Aarav Sharma", company: "CodeCrafter IT Hub", time: "10:00 AM", phone: "+91 98765 44434", tag: "P3 Video Wall Demo" },
+    { id: 2, name: "Pooja Verma", company: "Verma Jewellers", time: "02:00 PM", phone: "+91 98765 59088", tag: "Signboard Final Quote" },
+    { id: 3, name: "Dr. Sunita Tripathi", company: "City Care Hospital", time: "04:30 PM", phone: "+91 98390 90889", tag: "Reception Kiosks Review" },
+    { id: 4, name: "Mohd. Irshad Khan", company: "Grand Imperial Banquet", time: "06:00 PM", phone: "+91 98780 80889", tag: "Stage Display Contract" }
   ]);
 
   // 3. Lead Status Breakdown (Donut Data)
@@ -89,11 +89,11 @@ const Salesdash = () => {
 
   // 4. Recent Leads Table Data
   const recentLeads = [
-    { id: "LD-901", date: "25/08/2026", name: "Ramesh Kumar", company: "Kumar Electronics", amount: "₹ 5,00,000", status: "Hot", source: "Direct Call" },
-    { id: "LD-902", date: "24/08/2026", name: "Aman Singh", company: "Singh Multiplex", amount: "₹ 10,00,000", status: "Warm", source: "Website" },
-    { id: "LD-903", date: "23/08/2026", name: "Rajesh Patel", company: "Patel Jewellers", amount: "₹ 2,00,000", status: "Cold", source: "Campaign" },
-    { id: "LD-904", date: "22/08/2026", name: "Neha Gupta", company: "Gupta Fabrics", amount: "₹ 7,50,000", status: "Hot", source: "Referral" },
-    { id: "LD-905", date: "21/08/2026", name: "Sameer Joshi", company: "Joshi Auto Corp", amount: "₹ 3,20,000", status: "Warm", source: "Direct Call" }
+    { id: "LD-901", date: "25/08/2026", name: "Aarav Sharma", company: "CodeCrafter IT Hub", amount: "₹ 2,45,000", status: "Hot", source: "Direct Call" },
+    { id: "LD-902", date: "24/08/2026", name: "Pooja Verma", company: "Verma Jewellers", amount: "₹ 3,80,000", status: "Hot", source: "WhatsApp" },
+    { id: "LD-903", date: "23/08/2026", name: "Rajesh Singhania", company: "Singhania Logistics", amount: "₹ 1,50,000", status: "Warm", source: "JustDial" },
+    { id: "LD-904", date: "22/08/2026", name: "Dr. Sunita Tripathi", company: "City Care Hospital", amount: "₹ 2,85,000", status: "Hot", source: "Direct Call" },
+    { id: "LD-905", date: "21/08/2026", name: "Vikramaditya Roy", company: "Code Crafter PVT LTD", amount: "₹ 84,000", status: "Warm", source: "Facebook" }
   ];
 
   const getStatusBadge = (status) => {
