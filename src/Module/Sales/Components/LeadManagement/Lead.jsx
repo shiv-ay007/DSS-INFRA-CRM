@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
 import { initialLeadsData } from "../../data/leadManagementData";
 
@@ -28,7 +28,7 @@ const timeOptions = [
   "04:00 pm", "04:30 pm", "05:00 pm", "05:30 pm", "06:00 pm"
 ];
 
-const   Lead = () => {
+const Lead = () => {
   // Leads state with localStorage cache
   const [leads, setLeads] = useState(() => {
     try {
@@ -63,14 +63,126 @@ const   Lead = () => {
   const [remarksModalLead, setRemarksModalLead] = useState(null);
   const [completeModalLead, setCompleteModalLead] = useState(null);
 
+  // Media Attachments and Audio Recording State
+  const [attachments, setAttachments] = useState({
+    current: [],
+    next: [],
+    remarks: []
+  });
+  const [recordingState, setRecordingState] = useState({
+    current: false,
+    next: false,
+    remarks: false
+  });
+
+  const fileInputRef = useRef(null);
+  const activeUploadSectionRef = useRef("current");
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+
+  const triggerFileUpload = (section) => {
+    activeUploadSectionRef.current = section;
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileChange = (e) => {
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
+
+    const section = activeUploadSectionRef.current;
+    const newItems = files.map((file) => ({
+      name: file.name,
+      type: file.type.startsWith("image") ? "image" : file.type.startsWith("audio") ? "audio" : file.type.startsWith("video") ? "video" : "file",
+      url: URL.createObjectURL(file)
+    }));
+
+    setAttachments((prev) => ({
+      ...prev,
+      [section]: [...(prev[section] || []), ...newItems]
+    }));
+    e.target.value = "";
+  };
+
+  const removeAttachment = (section, index) => {
+    setAttachments((prev) => ({
+      ...prev,
+      [section]: prev[section].filter((_, i) => i !== index)
+    }));
+  };
+
+  const toggleVoiceRecording = async (section) => {
+    if (recordingState[section]) {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stop();
+      }
+      setRecordingState((prev) => ({ ...prev, [section]: false }));
+    } else {
+      try {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaRecorderRef.current = new MediaRecorder(stream);
+          audioChunksRef.current = [];
+
+          mediaRecorderRef.current.ondataavailable = (ev) => {
+            if (ev.data.size > 0) audioChunksRef.current.push(ev.data);
+          };
+
+          mediaRecorderRef.current.onstop = () => {
+            const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+            const audioUrl = URL.createObjectURL(audioBlob);
+            const voiceNote = {
+              name: `Voice Note (${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})`,
+              type: "audio",
+              url: audioUrl
+            };
+            setAttachments((prev) => ({
+              ...prev,
+              [section]: [...(prev[section] || []), voiceNote]
+            }));
+            stream.getTracks().forEach((t) => t.stop());
+          };
+
+          mediaRecorderRef.current.start();
+          setRecordingState((prev) => ({ ...prev, [section]: true }));
+        } else {
+          throw new Error("No mediaDevices");
+        }
+      } catch (err) {
+        const voiceNote = {
+          name: `Voice Note (${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})`,
+          type: "audio",
+          url: ""
+        };
+        setAttachments((prev) => ({
+          ...prev,
+          [section]: [...(prev[section] || []), voiceNote]
+        }));
+      }
+    }
+  };
+
   // Schedule Form State
   const [scheduleFormData, setScheduleFormData] = useState({
+    type: "Call",
     date: "",
     time: "10:00 am",
     assignedTo: "Sales TL",
+    talkToPerson: "",
+    personDesignation: "",
+    notes: "",
+    nextDiscussionTopic: "",
+    clientRating: "4",
+    revenue: "LOW",
+    satisfaction: "LOW",
+    repeatPotential: "LOW",
+    complexity: "LOW",
+    engagement: "HIGH",
+    positiveAttitude: "LOW",
+    followupRemarks: "",
     reminder: true,
-    reminderHours: 24,
-    notes: ""
+    reminderHours: 24
   });
   const [scheduleFormErrors, setScheduleFormErrors] = useState({});
 
@@ -157,39 +269,54 @@ const   Lead = () => {
   // Open Schedule Modal
   const handleOpenScheduleModal = (lead) => {
     setScheduleModalLead(lead);
+    setAttachments({ current: [], next: [], remarks: [] });
+    setRecordingState({ current: false, next: false, remarks: false });
     const tmr = new Date();
     tmr.setDate(tmr.getDate() + 1);
     const tmrStr = tmr.toISOString().split("T")[0];
 
     setScheduleFormData({
-      date: tmrStr,
-      time: "10:00 am",
+      type: "Call",
+      date: lead.nextFollowupDateRaw || tmrStr,
+      time: lead.nextFollowupTime !== "--" ? lead.nextFollowupTime : "10:00 am",
       assignedTo: lead.assignTo !== "--" ? lead.assignTo : "Sales TL",
+      talkToPerson: lead.concernPersonName || "",
+      personDesignation: lead.clientDesignation || "",
+      notes: "",
+      nextDiscussionTopic: "",
+      clientRating: lead.clientRating || "4",
+      revenue: "LOW",
+      satisfaction: "LOW",
+      repeatPotential: "LOW",
+      complexity: "LOW",
+      engagement: "HIGH",
+      positiveAttitude: "LOW",
+      followupRemarks: "",
       reminder: true,
-      reminderHours: 24,
-      notes: ""
+      reminderHours: 24
     });
     setScheduleFormErrors({});
   };
 
   // Submit Schedule Form
   const handleSaveSchedule = (e) => {
-    e.preventDefault();
-    if (!scheduleFormData.notes?.trim()) {
-      setScheduleFormErrors({ notes: "Notes are required" });
-      return;
-    }
+    if (e && e.preventDefault) e.preventDefault();
     if (!scheduleModalLead) return;
 
-    const [year, month, day] = scheduleFormData.date.split("-");
-    const formattedDisplayDate = `${day} ${new Date(year, month - 1, day).toLocaleString("en-IN", { month: "short" })} ${year}`;
+    const activeNotes = scheduleFormData.notes || scheduleFormData.nextDiscussionTopic || "Follow-up scheduled";
+
+    let formattedDisplayDate = scheduleFormData.date;
+    if (scheduleFormData.date && scheduleFormData.date.includes("-")) {
+      const [year, month, day] = scheduleFormData.date.split("-");
+      formattedDisplayDate = `${day} ${new Date(year, month - 1, day).toLocaleString("en-IN", { month: "short" })} ${year}`;
+    }
 
     const newHistoryEntry = {
       date: formattedDisplayDate,
-      time: scheduleFormData.time,
-      notes: scheduleFormData.notes,
-      rep: scheduleFormData.assignedTo,
-      status: "Scheduled"
+      time: scheduleFormData.time || "10:00 am",
+      notes: activeNotes,
+      rep: scheduleFormData.assignedTo || "Sales TL",
+      status: scheduleFormData.type || "Scheduled"
     };
 
     const updated = leads.map((item) => {
@@ -199,8 +326,9 @@ const   Lead = () => {
           ...item,
           nextFollowupDate: formattedDisplayDate,
           nextFollowupDateRaw: scheduleFormData.date,
-          nextFollowupTime: scheduleFormData.time,
-          channelType: "Call",
+          nextFollowupTime: scheduleFormData.time || "10:00 am",
+          channelType: scheduleFormData.type || "Call",
+          clientRating: scheduleFormData.clientRating,
           followupRemarksCount: prevHist.length + 1,
           followupHistory: [newHistoryEntry, ...prevHist],
           assignTo: scheduleFormData.assignedTo
@@ -741,128 +869,456 @@ const   Lead = () => {
 
       {/* ================= MODAL 1: SCHEDULE FOLLOW-UP MODAL ================= */}
       {scheduleModalLead && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-300 overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-100 overflow-hidden my-6 animate-in zoom-in-95 duration-150">
             
-            <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between border-b border-slate-800">
-              <div>
-                <div className="flex items-center gap-2">
-                  <span className="text-emerald-400 font-bold">📅</span>
-                  <h3 className="text-sm sm:text-base font-black tracking-wider uppercase">
-                    SCHEDULE FOLLOW-UP
-                  </h3>
+            {/* Modal Header */}
+            <div className="p-5 sm:p-6 pb-4 flex items-center justify-between border-b border-slate-100 bg-white">
+              <div className="flex items-center gap-3.5">
+                <div className="w-12 h-12 rounded-full bg-blue-50 border border-blue-200/80 flex items-center justify-center text-blue-600 shrink-0 shadow-2xs">
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                  </svg>
                 </div>
-                <div className="text-xs text-slate-300 font-medium mt-1">
-                  Client: <span className="text-white font-bold">{scheduleModalLead.concernPersonName}</span>
+                <div>
+                  <h2 className="text-xl font-black text-slate-900 tracking-tight">
+                    {scheduleModalLead.concernPersonName}
+                  </h2>
+                  <p className="text-sm font-semibold text-slate-500">
+                    {scheduleModalLead.phoneNumber}
+                  </p>
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setScheduleModalLead(null)}
-                className="w-8 h-8 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white flex items-center justify-center text-sm font-bold cursor-pointer transition-colors"
-                title="Close"
-              >
-                ✕
-              </button>
+              {/* Header Action Buttons: [Save] & [✕] */}
+              <div className="flex items-center gap-2.5">
+                <button
+                  type="button"
+                  onClick={handleSaveSchedule}
+                  className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-98 text-white font-bold text-sm shadow-md shadow-blue-600/25 transition-all cursor-pointer"
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setScheduleModalLead(null)}
+                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold flex items-center justify-center text-sm cursor-pointer transition-colors"
+                  title="Close"
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
-            <form onSubmit={handleSaveSchedule} className="p-6 space-y-4 text-xs sm:text-sm">
-              <div className="border border-slate-200 bg-slate-50/70 rounded-xl p-4 sm:p-5 space-y-4 shadow-2xs">
-                
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-800 mb-1">Date*</label>
-                    <input
-                      type="date"
-                      value={scheduleFormData.date}
-                      onChange={(e) => setScheduleFormData({ ...scheduleFormData, date: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-900 focus:outline-hidden focus:border-black cursor-pointer shadow-2xs"
-                      required
-                    />
-                  </div>
+            {/* Hidden File Input for Image/Audio/Video upload */}
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileChange}
+              accept="image/*,audio/*,video/*"
+              multiple
+              className="hidden"
+            />
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-800 mb-1">Time*</label>
-                    <select
-                      value={scheduleFormData.time}
-                      onChange={(e) => setScheduleFormData({ ...scheduleFormData, time: e.target.value })}
-                      className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-900 focus:outline-hidden focus:border-black cursor-pointer shadow-2xs"
-                      required
-                    >
-                      {timeOptions.map((t) => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
-                    </select>
+            {/* Modal Body Form */}
+            <form onSubmit={handleSaveSchedule} className="p-5 sm:p-6 space-y-5 max-h-[72vh] overflow-y-auto">
+              
+              {/* Row 1: SELECT TYPE & SCHEDULE DATE & TIME (OPTIONAL) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
+                    SELECT TYPE *
+                  </label>
+                  <select
+                    value={scheduleFormData.type || "Call"}
+                    onChange={(e) => setScheduleFormData({ ...scheduleFormData, type: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-800 focus:outline-none focus:border-blue-500 transition-all cursor-pointer shadow-2xs"
+                  >
+                    <option value="Call">Call</option>
+                    <option value="Meeting">Meeting</option>
+                    <option value="WhatsApp">WhatsApp</option>
+                    <option value="Email">Email</option>
+                    <option value="Site Visit">Site Visit</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
+                    SCHEDULE DATE & TIME (OPTIONAL)
+                  </label>
+                  <input
+                    type="date"
+                    value={scheduleFormData.date}
+                    onChange={(e) => setScheduleFormData({ ...scheduleFormData, date: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-800 focus:outline-none focus:border-blue-500 transition-all cursor-pointer shadow-2xs"
+                    placeholder="Select date and time (optional)"
+                  />
+                </div>
+              </div>
+
+              {/* Row 2: TALK TO PERSON NAME & PERSON DESIGNATION */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
+                    TALK TO PERSON NAME
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Who did you speak with?"
+                    value={scheduleFormData.talkToPerson || ""}
+                    onChange={(e) => setScheduleFormData({ ...scheduleFormData, talkToPerson: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 transition-all shadow-2xs"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
+                    PERSON DESIGNATION
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Contact person's designation"
+                    value={scheduleFormData.personDesignation || ""}
+                    onChange={(e) => setScheduleFormData({ ...scheduleFormData, personDesignation: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 transition-all shadow-2xs"
+                  />
+                </div>
+              </div>
+
+              {/* Row 3: CURRENT DISCUSSION & NEXT DISCUSSION TOPIC (SPEECH CARDS) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-2">
+                    CURRENT DISCUSSION
+                  </label>
+                  <div className="p-4 rounded-2xl bg-slate-50/70 border border-slate-200/70 relative flex flex-col justify-between min-h-[120px] focus-within:bg-white focus-within:border-blue-400 transition-all shadow-2xs">
+                    <textarea
+                      rows={3}
+                      placeholder="Enter current discussion or record..."
+                      value={scheduleFormData.notes || ""}
+                      onChange={(e) => setScheduleFormData({ ...scheduleFormData, notes: e.target.value })}
+                      className="w-full bg-transparent text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none resize-none"
+                    />
+
+                    {/* Attachments Display */}
+                    {attachments.current && attachments.current.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-slate-200/60">
+                        {attachments.current.map((att, i) => (
+                          <div key={i} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-semibold text-slate-700 shadow-2xs">
+                            <span>{att.type === "image" ? "📷" : att.type === "video" ? "🎥" : "🎵"}</span>
+                            <span className="max-w-[100px] truncate">{att.name}</span>
+                            {att.url && att.type === "audio" && (
+                              <audio src={att.url} controls className="h-6 w-24 text-xs" />
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => removeAttachment("current", i)}
+                              className="text-slate-400 hover:text-red-500 font-bold ml-1 text-xs cursor-pointer"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between mt-2 pt-1">
+                      {recordingState.current ? (
+                        <span className="text-[11px] font-bold text-red-500 animate-pulse flex items-center gap-1">
+                          🔴 Recording...
+                        </span>
+                      ) : (
+                        <span />
+                      )}
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => triggerFileUpload("current")}
+                          className="w-8 h-8 rounded-full bg-slate-200/80 hover:bg-slate-300 text-slate-700 font-bold flex items-center justify-center text-sm transition-colors cursor-pointer"
+                          title="Upload Image, Audio or Video"
+                        >
+                          +
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleVoiceRecording("current")}
+                          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm shadow-xs transition-all cursor-pointer ${
+                            recordingState.current ? "bg-red-600 text-white animate-pulse" : "bg-emerald-500 hover:bg-emerald-600 text-white"
+                          }`}
+                          title={recordingState.current ? "Stop Recording" : "Record Voice Note"}
+                        >
+                          🎙️
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1">Assigned To*</label>
+                  <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-2">
+                    NEXT DISCUSSION TOPIC
+                  </label>
+                  <div className="p-4 rounded-2xl bg-slate-50/70 border border-slate-200/70 relative flex flex-col justify-between min-h-[120px] focus-within:bg-white focus-within:border-blue-400 transition-all shadow-2xs">
+                    <textarea
+                      rows={3}
+                      placeholder="Enter next topic or record..."
+                      value={scheduleFormData.nextDiscussionTopic || ""}
+                      onChange={(e) => setScheduleFormData({ ...scheduleFormData, nextDiscussionTopic: e.target.value })}
+                      className="w-full bg-transparent text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none resize-none"
+                    />
+
+                    {/* Attachments Display */}
+                    {attachments.next && attachments.next.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-slate-200/60">
+                        {attachments.next.map((att, i) => (
+                          <div key={i} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-semibold text-slate-700 shadow-2xs">
+                            <span>{att.type === "image" ? "📷" : att.type === "video" ? "🎥" : "🎵"}</span>
+                            <span className="max-w-[100px] truncate">{att.name}</span>
+                            {att.url && att.type === "audio" && (
+                              <audio src={att.url} controls className="h-6 w-24 text-xs" />
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => removeAttachment("next", i)}
+                              className="text-slate-400 hover:text-red-500 font-bold ml-1 text-xs cursor-pointer"
+                            >
+                              ✕
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between mt-2 pt-1">
+                      {recordingState.next ? (
+                        <span className="text-[11px] font-bold text-red-500 animate-pulse flex items-center gap-1">
+                          🔴 Recording...
+                        </span>
+                      ) : (
+                        <span />
+                      )}
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => triggerFileUpload("next")}
+                          className="w-8 h-8 rounded-full bg-slate-200/80 hover:bg-slate-300 text-slate-700 font-bold flex items-center justify-center text-sm transition-colors cursor-pointer"
+                          title="Upload Image, Audio or Video"
+                        >
+                          +
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => toggleVoiceRecording("next")}
+                          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm shadow-xs transition-all cursor-pointer ${
+                            recordingState.next ? "bg-red-600 text-white animate-pulse" : "bg-emerald-500 hover:bg-emerald-600 text-white"
+                          }`}
+                          title={recordingState.next ? "Stop Recording" : "Record Voice Note"}
+                        >
+                          🎙️
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Row 4: CLIENT RATING (0-10) & ASSIGNED TO */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
+                    CLIENT RATING (0-10)
+                  </label>
                   <select
-                    value={scheduleFormData.assignedTo}
+                    value={scheduleFormData.clientRating || "4"}
+                    onChange={(e) => setScheduleFormData({ ...scheduleFormData, clientRating: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-800 focus:outline-none focus:border-blue-500 transition-all cursor-pointer shadow-2xs"
+                  >
+                    {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
+                      <option key={num} value={num}>{num}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
+                    ASSIGNED TO
+                  </label>
+                  <select
+                    value={scheduleFormData.assignedTo || "Sales TL"}
                     onChange={(e) => setScheduleFormData({ ...scheduleFormData, assignedTo: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-semibold text-slate-900 focus:outline-hidden focus:border-black cursor-pointer shadow-2xs"
-                    required
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-800 focus:outline-none focus:border-blue-500 transition-all cursor-pointer shadow-2xs"
                   >
                     {teamMembers.map((m) => (
                       <option key={m} value={m}>{m}</option>
                     ))}
                   </select>
                 </div>
+              </div>
 
-                <div className="bg-white p-3 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-2 shadow-2xs">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-slate-800">Reminder:</span>
-                    <button
-                      type="button"
-                      onClick={() => setScheduleFormData({ ...scheduleFormData, reminder: !scheduleFormData.reminder })}
-                      className={`px-3 py-1 rounded-md text-xs font-bold transition-all cursor-pointer ${
-                        scheduleFormData.reminder
-                          ? "bg-emerald-600 text-white shadow-xs"
-                          : "bg-slate-200 text-slate-600"
-                      }`}
-                    >
-                      [{scheduleFormData.reminder ? "ON" : "OFF"}]
-                    </button>
-                    <span className="text-xs text-slate-600 font-medium">
-                      {scheduleFormData.reminderHours || 24} hours before
-                    </span>
-                  </div>
+              {/* Row 5 (From Image 2): REVENUE, SATISFACTION, REPEAT POTENTIAL */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
+                    REVENUE
+                  </label>
+                  <select
+                    value={scheduleFormData.revenue || "LOW"}
+                    onChange={(e) => setScheduleFormData({ ...scheduleFormData, revenue: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-800 focus:outline-none focus:border-blue-500 transition-all cursor-pointer shadow-2xs"
+                  >
+                    <option value="LOW">LOW</option>
+                    <option value="MEDIUM">MEDIUM</option>
+                    <option value="HIGH">HIGH</option>
+                  </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1">Discussion Notes*</label>
-                  <textarea
-                    rows={3}
-                    placeholder="Enter discussion notes, call objective, quotation details..."
-                    value={scheduleFormData.notes}
-                    onChange={(e) => setScheduleFormData({ ...scheduleFormData, notes: e.target.value })}
-                    className="w-full px-3 py-2 rounded-xl border border-slate-300 bg-white text-xs font-medium text-slate-900 focus:outline-hidden focus:border-black shadow-2xs"
-                    required
-                  />
-                  {scheduleFormErrors.notes && (
-                    <div className="text-rose-500 text-[10px] mt-0.5">{scheduleFormErrors.notes}</div>
-                  )}
+                  <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
+                    SATISFACTION
+                  </label>
+                  <select
+                    value={scheduleFormData.satisfaction || "LOW"}
+                    onChange={(e) => setScheduleFormData({ ...scheduleFormData, satisfaction: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-800 focus:outline-none focus:border-blue-500 transition-all cursor-pointer shadow-2xs"
+                  >
+                    <option value="LOW">LOW</option>
+                    <option value="MEDIUM">MEDIUM</option>
+                    <option value="HIGH">HIGH</option>
+                  </select>
                 </div>
 
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
+                    REPEAT POTENTIAL
+                  </label>
+                  <select
+                    value={scheduleFormData.repeatPotential || "LOW"}
+                    onChange={(e) => setScheduleFormData({ ...scheduleFormData, repeatPotential: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-800 focus:outline-none focus:border-blue-500 transition-all cursor-pointer shadow-2xs"
+                  >
+                    <option value="LOW">LOW</option>
+                    <option value="MEDIUM">MEDIUM</option>
+                    <option value="HIGH">HIGH</option>
+                  </select>
+                </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setScheduleModalLead(null)}
-                  className="px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-100 text-slate-700 font-bold transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-6 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold transition-all shadow-md cursor-pointer"
-                >
-                  Schedule Follow-up
-                </button>
+              {/* Row 6 (From Image 2): COMPLEXITY, ENGAGEMENT, POSITIVE ATTITUDE */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
+                    COMPLEXITY
+                  </label>
+                  <select
+                    value={scheduleFormData.complexity || "LOW"}
+                    onChange={(e) => setScheduleFormData({ ...scheduleFormData, complexity: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-800 focus:outline-none focus:border-blue-500 transition-all cursor-pointer shadow-2xs"
+                  >
+                    <option value="LOW">LOW</option>
+                    <option value="MEDIUM">MEDIUM</option>
+                    <option value="HIGH">HIGH</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
+                    ENGAGEMENT
+                  </label>
+                  <select
+                    value={scheduleFormData.engagement || "HIGH"}
+                    onChange={(e) => setScheduleFormData({ ...scheduleFormData, engagement: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-800 focus:outline-none focus:border-blue-500 transition-all cursor-pointer shadow-2xs"
+                  >
+                    <option value="LOW">LOW</option>
+                    <option value="MEDIUM">MEDIUM</option>
+                    <option value="HIGH">HIGH</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
+                    POSITIVE ATTITUDE
+                  </label>
+                  <select
+                    value={scheduleFormData.positiveAttitude || "LOW"}
+                    onChange={(e) => setScheduleFormData({ ...scheduleFormData, positiveAttitude: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-800 focus:outline-none focus:border-blue-500 transition-all cursor-pointer shadow-2xs"
+                  >
+                    <option value="LOW">LOW</option>
+                    <option value="MEDIUM">MEDIUM</option>
+                    <option value="HIGH">HIGH</option>
+                  </select>
+                </div>
               </div>
+
+              {/* Row 7 (From Image 2): FOLLOW-UP REMARKS SPEECH CARD */}
+              <div>
+                <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-2">
+                  FOLLOW-UP REMARKS
+                </label>
+                <div className="p-4 rounded-2xl bg-slate-50/70 border border-slate-200/70 relative flex flex-col justify-between min-h-[120px] focus-within:bg-white focus-within:border-blue-400 transition-all shadow-2xs">
+                  <textarea
+                    rows={3}
+                    placeholder="Enter remarks or record voice note..."
+                    value={scheduleFormData.followupRemarks || ""}
+                    onChange={(e) => setScheduleFormData({ ...scheduleFormData, followupRemarks: e.target.value })}
+                    className="w-full bg-transparent text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none resize-none"
+                  />
+
+                  {/* Attachments Display */}
+                  {attachments.remarks && attachments.remarks.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-slate-200/60">
+                      {attachments.remarks.map((att, i) => (
+                        <div key={i} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-semibold text-slate-700 shadow-2xs">
+                          <span>{att.type === "image" ? "📷" : att.type === "video" ? "🎥" : "🎵"}</span>
+                          <span className="max-w-[100px] truncate">{att.name}</span>
+                          {att.url && att.type === "audio" && (
+                            <audio src={att.url} controls className="h-6 w-24 text-xs" />
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => removeAttachment("remarks", i)}
+                            className="text-slate-400 hover:text-red-500 font-bold ml-1 text-xs cursor-pointer"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between mt-2 pt-1">
+                    {recordingState.remarks ? (
+                      <span className="text-[11px] font-bold text-red-500 animate-pulse flex items-center gap-1">
+                        🔴 Recording...
+                      </span>
+                    ) : (
+                      <span />
+                    )}
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => triggerFileUpload("remarks")}
+                        className="w-8 h-8 rounded-full bg-slate-200/80 hover:bg-slate-300 text-slate-700 font-bold flex items-center justify-center text-sm transition-colors cursor-pointer"
+                        title="Upload Image, Audio or Video"
+                      >
+                        +
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => toggleVoiceRecording("remarks")}
+                        className={`w-8 h-8 rounded-full flex items-center justify-center text-sm shadow-xs transition-all cursor-pointer ${
+                          recordingState.remarks ? "bg-red-600 text-white animate-pulse" : "bg-emerald-500 hover:bg-emerald-600 text-white"
+                        }`}
+                        title={recordingState.remarks ? "Stop Recording" : "Record Voice Note"}
+                      >
+                        🎙️
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
             </form>
 
           </div>
