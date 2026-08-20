@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useRef } from "react";
 import PageHeader from "../../../../Common/Components/PageHeader";
+import Table from "../../../../Common/Components/Table";
 import {
   getOffsetDateString,
   teamMembers,
@@ -47,6 +48,202 @@ const Follow = () => {
   const [remarksModalLead, setRemarksModalLead] = useState(null); // Opens Follow-up Remarks History Modal
   const [detailModalLead, setDetailModalLead] = useState(null); // Opens Lead Detail Modal
   const [completeModalLead, setCompleteModalLead] = useState(null); // Opens Mark Complete Modal
+
+  // Table Column Configuration for common Table component
+  const columnConfig = useMemo(() => ({
+    actions: {
+      label: "ACTIONS",
+      render: (val, row) => (
+        <div className="grid grid-cols-2 gap-1.5 w-14 mx-auto">
+          <button
+            type="button"
+            onClick={() => setDetailModalLead(row)}
+            className="w-6 h-6 rounded-lg border border-orange-400 text-orange-600 hover:bg-orange-500 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
+            title="View Lead Details"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setRemarksModalLead(row)}
+            className="w-6 h-6 rounded-lg border border-purple-400 text-purple-600 hover:bg-purple-600 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
+            title="View Follow-up Remarks & History"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setCompleteModalLead(row)}
+            className="w-6 h-6 rounded-lg border border-emerald-400 text-emerald-600 hover:bg-emerald-600 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
+            title="Mark Follow-up Complete / Log Activity"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => handleOpenScheduleModal(row)}
+            className="w-6 h-6 rounded-lg border border-blue-400 text-blue-600 hover:bg-blue-600 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
+            title="Schedule / Reschedule Follow-up"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
+          </button>
+        </div>
+      )
+    },
+    concernPersonName: {
+      label: "CONCERN PERSON",
+      render: (val, row) => (
+        <div className="text-left font-medium text-slate-800 text-xs">
+          <div className="font-bold text-slate-900 cursor-pointer hover:text-blue-600 hover:underline" onClick={() => setDetailModalLead(row)}>
+            {row.concernPersonName || row.clientName || "--"}
+          </div>
+          <div className="text-xs text-slate-600 font-mono font-medium">{row.phoneNumber}</div>
+          <div className="text-xs text-slate-400 truncate max-w-[160px]">{row.emailAddress}</div>
+        </div>
+      )
+    },
+    nextFollowup: {
+      label: "NEXT FOLLOW-UP",
+      render: (val, row) => (
+        <div className="text-center text-xs">
+          <div className="font-bold text-rose-600">{row.nextFollowupDate}</div>
+          <div className="text-[10px] text-slate-500 font-mono">{row.nextFollowupTime}</div>
+          <div className="text-[10px] text-blue-500 font-semibold">{row.channelType}</div>
+        </div>
+      )
+    },
+    followupRemarks: {
+      label: "FOLLOW-UP REMARK",
+      render: (val, row) => (
+        <button
+          type="button"
+          onClick={() => setRemarksModalLead(row)}
+          className="px-3 py-1 rounded-full bg-blue-50/90 text-blue-600 border border-blue-200 text-xs font-semibold hover:bg-blue-100 transition-colors cursor-pointer shadow-2xs"
+        >
+          {row.followupRemarksCount || 1} Follow-up{(row.followupRemarksCount || 1) > 1 ? "s" : ""}
+        </button>
+      )
+    },
+    createdDate: {
+      label: "CREATED DATE",
+      render: (val, row) => (
+        <div className="text-center font-sans text-xs">
+          <div className="font-semibold text-slate-700">{row.createdDate}</div>
+          <div className="text-[10px] text-slate-400 font-mono">{row.createdTime}</div>
+        </div>
+      )
+    },
+    leadAge: {
+      label: "LEAD AGE",
+      render: (val, row) => (
+        <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-600 font-bold italic text-xs border border-blue-200 inline-block">
+          {row.leadAge || "33 Days"}
+        </span>
+      )
+    },
+    status: {
+      label: "STATUS",
+      render: (val, row) => {
+        const s = (val || row.status || "").toString().toUpperCase();
+        const isNew = s === "NEW" || s === "FRESH" || row.jobType === "NEW";
+        const displayStatus = isNew ? "NEW" : "OLD";
+
+        return (
+          <span
+            className={`px-3 py-0.5 rounded-full text-xs font-extrabold uppercase border ${
+              displayStatus === "NEW"
+                ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                : "bg-slate-100 text-slate-700 border-slate-300"
+            }`}
+          >
+            {displayStatus}
+          </span>
+        );
+      }
+    },
+    leadLabel: {
+      label: "LEAD LABEL",
+      render: (val, row) => {
+        const lbl = (row.leadLabel || "WARM").toUpperCase();
+        const colors = {
+          HOT: "bg-rose-100 text-rose-800 border-rose-200",
+          WARM: "bg-amber-100 text-amber-800 border-amber-200",
+          COLD: "bg-sky-100 text-sky-800 border-sky-200"
+        };
+        return (
+          <span className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold uppercase border ${colors[lbl] || "bg-slate-100 text-slate-700 border-slate-200"}`}>
+            {lbl}
+          </span>
+        );
+      }
+    },
+    leadType: {
+      label: "LEAD TYPE",
+      render: (val, row) => (
+        <span className="text-xs font-bold text-slate-700">{row.leadType || "FRESH"}</span>
+      )
+    },
+    requirement: {
+      label: "REQUIREMENT",
+      render: (val, row) => (
+        <div className="max-w-[160px] truncate text-xs text-slate-700 font-medium" title={row.requirement}>
+          {row.requirement || "--"}
+        </div>
+      )
+    },
+    expectedBusiness: {
+      label: "EXPECTED BUSINESS",
+      render: (val, row) => (
+        <span className="font-mono font-bold text-slate-800 text-xs">
+          {row.expectedBusiness || "₹ 0"}
+        </span>
+      )
+    },
+    pincode: {
+      label: "PIN CODE",
+      render: (val, row) => (
+        <span className="font-mono text-slate-600 text-xs">{row.pincode || "--"}</span>
+      )
+    },
+    leadSource: {
+      label: "LEAD SOURCE",
+      render: (val, row) => (
+        <span className="text-xs font-bold text-slate-700 uppercase">{row.leadSource || "WEBSITE"}</span>
+      )
+    },
+    leadBy: {
+      label: "LEAD BY",
+      render: (val, row) => (
+        <span className="text-xs text-slate-700">{row.leadBy || "Executive"}</span>
+      )
+    },
+    assignTo: {
+      label: "ASSIGN TO",
+      render: (val, row) => (
+        <span className="text-xs text-slate-600">{row.assignTo || "--"}</span>
+      )
+    },
+    address: {
+      label: "ADDRESS",
+      render: (val, row) => (
+        <div className="max-w-[140px] truncate text-xs text-slate-600" title={row.address}>
+          {row.address || "--"}
+        </div>
+      )
+    }
+  }), []);
 
   // Media Attachments and Audio Recording State
   const [attachments, setAttachments] = useState({
@@ -436,297 +633,15 @@ const Follow = () => {
 
         </div>
       </div>
-
-      {/* ================= 4. DATA TABLE (Exact Screenshot Columns & Row Design) ================= */}
-      <div className="w-full bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
-        <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-300">
-          <table className="w-full text-left border-collapse text-xs">
-            
-            {/* Solid Black Header Row */}
-            <thead>
-              <tr className="bg-slate-900 text-white text-xs font-bold uppercase tracking-wider select-none border-b border-slate-800">
-                <th className="py-3.5 px-3 text-center w-12">
-                  <div className="flex items-center justify-center gap-1"><span>S. NO.</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 text-center whitespace-nowrap w-28">
-                  <div className="flex items-center justify-center gap-1"><span>ACTIONS</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 min-w-[170px]">
-                  <div className="flex items-center gap-1"><span>CONCERN PERSON</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 whitespace-nowrap text-center">
-                  <div className="flex items-center justify-center gap-1"><span>NEXT FOLLOW-UP</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 text-center whitespace-nowrap">
-                  <div className="flex items-center justify-center gap-1"><span>FOLLOW-UP REMARK</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 whitespace-nowrap text-center">
-                  <div className="flex items-center justify-center gap-1"><span>CREATED DATE</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 text-center whitespace-nowrap">
-                  <div className="flex items-center justify-center gap-1"><span>LEAD AGE</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 text-center whitespace-nowrap">
-                  <div className="flex items-center justify-center gap-1"><span>STATUS</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 text-center whitespace-nowrap">
-                  <div className="flex items-center justify-center gap-1"><span>LEAD LABEL</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 whitespace-nowrap">
-                  <div className="flex items-center gap-1"><span>LEAD TYPE</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 min-w-[160px]">
-                  <div className="flex items-center gap-1"><span>REQUIREMENT</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 text-right whitespace-nowrap">
-                  <div className="flex items-center justify-end gap-1"><span>EXPECTED BUSINESS</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 text-center whitespace-nowrap">
-                  <div className="flex items-center justify-center gap-1"><span>PIN CODE</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 whitespace-nowrap">
-                  <div className="flex items-center gap-1"><span>LEAD SOURCE</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 whitespace-nowrap">
-                  <div className="flex items-center gap-1"><span>LEAD BY</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 text-center whitespace-nowrap">
-                  <div className="flex items-center justify-center gap-1"><span>ASSIGN TO</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 min-w-[140px]">
-                  <div className="flex items-center gap-1"><span>ADDRESS</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-              </tr>
-            </thead>
-
-            {/* Table Body Rows */}
-            <tbody className="divide-y divide-slate-100 bg-white">
-              {paginatedLeads.length > 0 ? (
-                paginatedLeads.map((item, index) => {
-                  const serialNumber = (currentPage - 1) * rowsPerPage + index + 1;
-                  const followupColorClass = getFollowupColorClass(item);
-
-                  return (
-                    <tr key={item.id} className="hover:bg-slate-50/90 transition-colors group">
-                      
-                      {/* 1. S. NO. */}
-                      <td className="py-3.5 px-3 text-center font-mono font-bold text-slate-800">
-                        {serialNumber}
-                      </td>
-
-                      {/* 2. ACTIONS (2x2 Grid of Square Buttons: Eye, Info, Message, Calendar) */}
-                      <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                        <div className="grid grid-cols-2 gap-1.5 w-14 mx-auto">
-                          
-                          {/* 1. Orange Eye Button (View Detail) */}
-                          <button
-                            type="button"
-                            onClick={() => setDetailModalLead(item)}
-                            className="w-6 h-6 rounded-lg border border-orange-400 text-orange-600 hover:bg-orange-500 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
-                            title="View Lead Details"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            </svg>
-                          </button>
-
-                          {/* 2. Purple Info Button (Follow-up Remarks History) */}
-                          <button
-                            type="button"
-                            onClick={() => setRemarksModalLead(item)}
-                            className="w-6 h-6 rounded-lg border border-purple-400 text-purple-600 hover:bg-purple-600 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
-                            title="View Follow-up Remarks & History"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                          </button>
-
-                          {/* 3. Blue/Green Check or Message Button */}
-                          <button
-                            type="button"
-                            onClick={() => setCompleteModalLead(item)}
-                            className="w-6 h-6 rounded-lg border border-emerald-400 text-emerald-600 hover:bg-emerald-600 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
-                            title="Mark Follow-up Complete / Log Activity"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                          </button>
-
-                          {/* 4. Blue Calendar Button (Opens ASCII Schedule Follow-up Modal) */}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenScheduleModal(item)}
-                            className="w-6 h-6 rounded-lg border border-blue-400 text-blue-600 hover:bg-blue-600 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
-                            title="Schedule / Reschedule Follow-up"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                          </button>
-
-                        </div>
-                      </td>
-
-                      {/* 3. CONCERN PERSON (Name, Phone, Email) */}
-                      <td className="py-3.5 px-3">
-                        <div
-                          onClick={() => setDetailModalLead(item)}
-                          className="font-bold text-slate-900 text-sm sm:text-base cursor-pointer hover:text-blue-600 hover:underline leading-tight"
-                        >
-                          {item.concernPersonName}
-                        </div>
-                        <div className="text-xs text-slate-600 font-mono font-medium mt-0.5">{item.phoneNumber}</div>
-                        <div className="text-xs text-slate-400 truncate max-w-[160px]">{item.emailAddress}</div>
-                      </td>
-
-                      {/* 4. NEXT FOLLOW-UP (Red/Green Date, Time, Channel) */}
-                      <td className="py-3 px-3 text-center whitespace-nowrap">
-                        <div className={`text-[11px] ${followupColorClass}`}>
-                          {item.nextFollowupDate}
-                        </div>
-                        <div className="text-[10px] text-slate-500 font-mono">
-                          {item.nextFollowupTime}
-                        </div>
-                        <div className="text-[10px] text-blue-500 font-semibold cursor-pointer hover:underline">
-                          {item.channelType}
-                        </div>
-                      </td>
-
-                      {/* 5. FOLLOW-UP REMARK (Light Blue Pill Button) */}
-                      <td className="py-3 px-3 text-center whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => setRemarksModalLead(item)}
-                          className="px-3 py-1 rounded-full bg-blue-50/90 text-blue-600 border border-blue-200 text-xs font-semibold hover:bg-blue-100 transition-colors cursor-pointer shadow-2xs"
-                        >
-                          {item.followupRemarksCount} Follow-up{item.followupRemarksCount > 1 ? "s" : ""}
-                        </button>
-                      </td>
-
-                      {/* 6. CREATED DATE */}
-                      <td className="py-3 px-3 text-center whitespace-nowrap">
-                        <div className="font-semibold text-slate-700 text-[11px]">{item.createdDate}</div>
-                        <div className="text-[10px] text-slate-400 font-mono">{item.createdTime}</div>
-                      </td>
-
-                      {/* 7. LEAD AGE */}
-                      <td className="py-3 px-3 text-center whitespace-nowrap">
-                        <span className="inline-block px-2.5 py-0.5 rounded text-blue-600 bg-blue-50/70 border border-blue-200 text-xs font-semibold italic">
-                          {item.leadAge}
-                        </span>
-                      </td>
-
-                      {/* 8. STATUS */}
-                      <td className="py-3 px-3 text-center whitespace-nowrap">
-                        <span className={`inline-block px-2.5 py-0.5 rounded text-[11px] font-bold uppercase tracking-wide ${getStatusBadgeClass(item.status)}`}>
-                          {item.status}
-                        </span>
-                      </td>
-
-                      {/* 9. LEAD LABEL */}
-                      <td className="py-3 px-3 text-center whitespace-nowrap">
-                        <span className={`inline-block px-2 py-0.5 rounded text-[10px] uppercase ${getLeadLabelBadgeClass(item.leadLabel)}`}>
-                          {item.leadLabel}
-                        </span>
-                      </td>
-
-                      {/* 10. LEAD TYPE */}
-                      <td className="py-3 px-3 whitespace-nowrap font-medium text-slate-700">
-                        {item.leadType}
-                      </td>
-
-                      {/* 11. REQUIREMENT */}
-                      <td className="py-3 px-3 text-slate-600 max-w-[160px] truncate" title={item.requirement}>
-                        {item.requirement}
-                      </td>
-
-                      {/* 12. EXPECTED BUSINESS */}
-                      <td className="py-3 px-3 text-right font-mono font-medium text-slate-800 whitespace-nowrap">
-                        {item.expectedBusiness}
-                      </td>
-
-                      {/* 13. PIN CODE */}
-                      <td className="py-3 px-3 text-center font-mono text-slate-600 whitespace-nowrap">
-                        {item.pincode}
-                      </td>
-
-                      {/* 14. LEAD SOURCE */}
-                      <td className="py-3 px-3 whitespace-nowrap font-medium text-slate-700 uppercase">
-                        {item.leadSource}
-                      </td>
-
-                      {/* 15. LEAD BY */}
-                      <td className="py-3 px-3 whitespace-nowrap text-slate-700">
-                        {item.leadBy}
-                      </td>
-
-                      {/* 16. ASSIGN TO */}
-                      <td className="py-3 px-3 text-center whitespace-nowrap text-slate-400">
-                        {item.assignTo}
-                      </td>
-
-                      {/* 17. ADDRESS */}
-                      <td className="py-3 px-3 text-slate-600 truncate max-w-[140px]" title={item.address}>
-                        {item.address}
-                      </td>
-
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan={17} className="py-12 text-center text-slate-400">
-                    <div className="text-xl mb-1">📋</div>
-                    <div className="font-bold text-slate-700 text-xs">No scheduled leads found</div>
-                    <div className="text-[11px] text-slate-400 mt-0.5">
-                      Try clearing or changing your filters.
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* ================= 5. PAGINATION BAR ================= */}
-        {filteredLeads.length > 0 && (
-          <div className="px-4 py-3 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs bg-slate-50/50">
-            <div className="text-slate-500 font-medium">
-              Showing {(currentPage - 1) * rowsPerPage + 1} to {Math.min(currentPage * rowsPerPage, filteredLeads.length)} of {filteredLeads.length} entries
-            </div>
-
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-bold text-slate-700 cursor-pointer transition-colors"
-              >
-                Previous
-              </button>
-
-              <button
-                type="button"
-                className="w-8 h-8 rounded-lg bg-black text-white font-bold cursor-pointer"
-              >
-                {currentPage}
-              </button>
-
-              <button
-                type="button"
-                disabled={currentPage * rowsPerPage >= filteredLeads.length}
-                onClick={() => setCurrentPage((p) => p + 1)}
-                className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-bold text-slate-700 cursor-pointer transition-colors"
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+      {/* ================= 4. MAIN TABLE ================= */}
+      <Table
+        data={paginatedLeads}
+        columnConfig={columnConfig}
+        currentPage={currentPage}
+        totalItems={filteredLeads.length}
+        itemsPerPage={rowsPerPage}
+        onPageChange={(page) => setCurrentPage(page)}
+      />
 
       {/* ========================================================================= */}
       {/* MODAL 1: SCHEDULE FOLLOW-UP (EXACT ASCII WIREFRAME SPECIFICATION)         */}

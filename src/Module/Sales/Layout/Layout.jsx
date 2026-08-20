@@ -5,7 +5,18 @@ import SalseSidebar from './SalseSidebar'
 import SalseFooter from './SalseFooter'
 
 const Layout = () => {
+  const [isSidebarOpen, setIsSidebarOpen] = useState(window.innerWidth >= 1024);
   const [showScrollTop, setShowScrollTop] = useState(false);
+
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 1024) {
+        setIsSidebarOpen(false);
+      }
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -42,16 +53,24 @@ const Layout = () => {
 
   return (
     <div className="h-screen bg-slate-100 flex w-full relative overflow-hidden">
-      {/* 1. Fixed Left Sidebar */}
-      <SalseSidebar />
+      {/* Mobile Overlay Backdrop */}
+      {isSidebarOpen && (
+        <div
+          onClick={() => setIsSidebarOpen(false)}
+          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-40 lg:hidden transition-opacity"
+        />
+      )}
+
+      {/* 1. Left Sidebar */}
+      <SalseSidebar isOpen={isSidebarOpen} setIsOpen={setIsSidebarOpen} />
 
       {/* 2. Right Side Content Area */}
       <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
-        {/* Top Fixed Header */}
-        <SalesHeader />
+        {/* Top Fixed Header with Mobile Hamburger Toggle */}
+        <SalesHeader toggleSidebar={() => setIsSidebarOpen((prev) => !prev)} />
 
         {/* Dynamic Page Content (Scrollable Middle Section) */}
-        <main className="flex-1 p-4 sm:p-6 overflow-y-auto scroll-smooth">
+        <main className="flex-1 p-3 sm:p-6 overflow-y-auto scroll-smooth">
           <Outlet />
         </main>
 

@@ -91,8 +91,10 @@ const SalseSidebar = ({ isOpen = true, setIsOpen }) => {
 
   return (
     <aside
-      className={`h-screen bg-[#0F172A] text-white flex flex-col shrink-0 transition-all duration-300 ease-in-out select-none sticky top-0 z-50 overflow-x-hidden border-r border-slate-800/80 shadow-xl ${
-        isSidebarOpen ? "w-64 sm:w-72" : "w-20"
+      className={`h-screen bg-[#0F172A] text-white flex flex-col shrink-0 transition-all duration-300 ease-in-out select-none sticky top-0 z-50 overflow-x-hidden border-r border-slate-800/80 shadow-xl max-lg:fixed max-lg:inset-y-0 max-lg:left-0 ${
+        isSidebarOpen
+          ? "w-64 sm:w-72 max-lg:translate-x-0"
+          : "max-lg:-translate-x-full lg:w-20"
       }`}
     >
       {/* ================= TOP HEADER (LOGO & HAMBURGER) ================= */}

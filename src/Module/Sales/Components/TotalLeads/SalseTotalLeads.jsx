@@ -515,8 +515,8 @@ const SalseTotalLeads = () => {
       />
 
       {/* ================= 2. COLLAPSIBLE FILTER TOGGLE BAR ================= */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 flex items-center justify-between gap-4">
-        <div className="text-xs sm:text-sm font-semibold text-slate-600">
+      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3.5 sm:p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="text-xs sm:text-sm font-semibold text-slate-600 text-center sm:text-left">
           Showing <strong className="font-bold text-slate-900">{filteredLeads.length}</strong> of <strong className="font-bold text-slate-900">{leads.length}</strong> Total Leads
         </div>
 

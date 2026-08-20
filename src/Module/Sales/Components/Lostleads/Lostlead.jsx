@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import PageHeader from "../../../../Common/Components/PageHeader";
+import Table from "../../../../Common/Components/Table";
 import { initialLostLeads } from "../../data/lostLeadsData";
 
 const leadTypeOptions = ["Lead Type", "FRESH", "EXISTING CLIENT", "RENEWAL", "CROSS-SELL"];
@@ -64,6 +65,96 @@ const Lostlead = () => {
   const [reviveModalLead, setReviveModalLead] = useState(null);
   const [reviveStatus, setReviveStatus] = useState("Warm");
   const [reviveNotes, setReviveNotes] = useState("");
+
+  // Table Column Configuration for common Table component
+  const columnConfig = useMemo(() => ({
+    actions: {
+      label: "ACTIONS",
+      render: (val, row) => (
+        <div className="flex items-center justify-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => setSelectedLead(row)}
+            className="w-7 h-7 rounded-lg border border-orange-400 text-orange-500 hover:bg-orange-500 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
+            title="View Lost Lead Details"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setReviveModalLead(row)}
+            className="w-7 h-7 rounded-lg border border-emerald-400 text-emerald-600 hover:bg-emerald-600 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
+            title="Revive / Reopen Lead"
+          >
+            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+          </button>
+        </div>
+      )
+    },
+    lostDate: {
+      label: "LOST DATE",
+      render: (val, row) => (
+        <span className="text-slate-700 text-xs font-sans font-medium">
+          {val || row.createdDate || "18/7/2026"}
+        </span>
+      )
+    },
+    lostReason: {
+      label: "LOST REASON",
+      render: (val, row) => (
+        <span className="px-2.5 py-0.5 rounded text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
+          {val || row.lostReason || "Price / Budget Constraint"}
+        </span>
+      )
+    },
+    concernPersonName: {
+      label: "CONCERN PERSON NAME",
+      render: (val, row) => (
+        <div className="text-left font-medium text-slate-800 text-xs">
+          {row.concernPersonName || row.clientName || "--"}
+          {row.clientDesignation && <div className="text-[11px] text-slate-500 font-normal">{row.clientDesignation}</div>}
+        </div>
+      )
+    },
+    phoneNumber: {
+      label: "PHONE",
+      render: (val, row) => (
+        <div className="text-left font-sans text-slate-800 text-xs font-medium">
+          {row.phoneNumber || row.contact || "--"}
+        </div>
+      )
+    },
+    expectedBusinessAmount: {
+      label: "EXPECTED REVENUE",
+      render: (val, row) => (
+        <span className="font-mono font-bold text-rose-600 text-xs">
+          ₹ {Number(val || row.expectedBusinessAmount || 0).toLocaleString("en-IN")}
+        </span>
+      )
+    },
+    salesPerson: {
+      label: "SALES PERSON",
+      render: (val, row) => (
+        <span className="text-xs font-semibold text-slate-800">
+          {val || row.salesPerson || "Sales Rep"}
+        </span>
+      )
+    },
+    sourceType: {
+      label: "SOURCE / TYPE",
+      render: (val, row) => (
+        <span className="text-xs text-slate-700">
+          <strong className="text-slate-800">{row.leadSource || "WEBSITE"}</strong> ({row.leadType || "FRESH"})
+        </span>
+      )
+    }
+  }), []);
 
   const handleResetFilters = () => {
     setFilterLeadType("Lead Type");
@@ -381,132 +472,14 @@ const Lostlead = () => {
       </div>
 
       {/* 5. TABLE */}
-      <div className="w-full bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs">
-            <thead>
-              <tr className="bg-black text-white text-[11px] font-bold uppercase tracking-wider select-none border-b border-black">
-                <th onClick={() => handleSortToggle("id")} className="py-3 px-3.5 cursor-pointer hover:bg-neutral-800 text-center w-16">
-                  <div className="flex items-center justify-center gap-1.5"><span>S. NO.</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3 px-3.5 text-center whitespace-nowrap w-28">
-                  <div className="flex items-center justify-center gap-1.5"><span>ACTIONS</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th onClick={() => handleSortToggle("lostDate")} className="py-3 px-3.5 cursor-pointer hover:bg-neutral-800 whitespace-nowrap">
-                  <div className="flex items-center gap-1.5"><span>LOST DATE</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th onClick={() => handleSortToggle("lostReason")} className="py-3 px-3.5 cursor-pointer hover:bg-neutral-800 whitespace-nowrap">
-                  <div className="flex items-center gap-1.5"><span>LOST REASON</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th onClick={() => handleSortToggle("concernPersonName")} className="py-3 px-3.5 cursor-pointer hover:bg-neutral-800 min-w-[200px]">
-                  <div className="flex items-center gap-1.5"><span>CONCERN PERSON NAME</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th onClick={() => handleSortToggle("phoneNumber")} className="py-3 px-3.5 cursor-pointer hover:bg-neutral-800 whitespace-nowrap">
-                  <div className="flex items-center gap-1.5"><span>PHONE</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th onClick={() => handleSortToggle("expectedBusinessAmount")} className="py-3 px-3.5 cursor-pointer hover:bg-neutral-800 whitespace-nowrap">
-                  <div className="flex items-center gap-1.5"><span>LOST VALUE (₹)</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3 px-3.5 whitespace-nowrap">
-                  <div className="flex items-center gap-1.5"><span>SALES PERSON</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3 px-3.5 whitespace-nowrap"><span>SOURCE / TYPE</span></th>
-              </tr>
-            </thead>
-
-            <tbody className="divide-y divide-slate-100 bg-white">
-              {paginatedLeads.length > 0 ? (
-                paginatedLeads.map((item, index) => {
-                  const serialNumber = (currentPage - 1) * rowsPerPage + index + 1;
-                  return (
-                    <tr key={item.id} className="hover:bg-slate-50/80 transition-colors group">
-                      <td className="py-3.5 px-3.5 text-center font-mono font-bold text-slate-700">{serialNumber}</td>
-                      <td className="py-3.5 px-3.5 text-center whitespace-nowrap">
-                        <div className="flex items-center justify-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedLead(item)}
-                            className="w-7 h-7 rounded-md border border-orange-400 text-orange-500 hover:bg-orange-500 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
-                            title="View Lost Lead Details"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            </svg>
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={() => setReviveModalLead(item)}
-                            className="w-7 h-7 rounded-md border border-emerald-400 text-emerald-600 hover:bg-emerald-600 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
-                            title="Revive / Reopen Lead"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                            </svg>
-                          </button>
-                        </div>
-                      </td>
-                      <td className="py-3.5 px-3.5 text-slate-600 font-mono whitespace-nowrap text-[11px]">{item.lostDate || item.createdDate}</td>
-                      <td className="py-3.5 px-3.5 whitespace-nowrap">
-                        <span className={`inline-block px-2.5 py-0.5 rounded text-[11px] font-bold border ${getReasonBadgeClass(item.lostReason)}`}>
-                          {item.lostReason}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-3.5 text-slate-900 font-medium max-w-[240px]">
-                        <div className="truncate font-semibold text-slate-800" title={item.concernPersonName}>{item.concernPersonName}</div>
-                        {item.clientDesignation && <div className="text-[10px] text-slate-400 font-normal">{item.clientDesignation} • {item.clientType || "Individual"}</div>}
-                      </td>
-                      <td className="py-3.5 px-3.5 font-mono text-slate-800 font-medium whitespace-nowrap">{item.phoneNumber}</td>
-                      <td className="py-3.5 px-3.5 font-mono font-black text-rose-600 whitespace-nowrap">
-                        ₹ {Number(item.expectedBusinessAmount || 0).toLocaleString("en-IN")}
-                      </td>
-                      <td className="py-3.5 px-3.5 whitespace-nowrap">
-                        <span className="text-xs font-semibold text-slate-700">{item.salesPerson || "Sales TL"}</span>
-                      </td>
-                      <td className="py-3.5 px-3.5 whitespace-nowrap text-[11px] text-slate-500">
-                        <span className="font-semibold text-slate-700">{item.leadSource}</span> <span className="text-slate-400">({item.leadType})</span>
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-400 text-xs">
-                    No lost leads found matching the selected filters.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* 6. PAGINATION */}
-        <div className="p-3.5 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs bg-slate-50/50">
-          <div className="text-slate-500">
-            Showing <strong>{paginatedLeads.length > 0 ? (currentPage - 1) * rowsPerPage + 1 : 0}</strong> to <strong>{Math.min(currentPage * rowsPerPage, sortedLeads.length)}</strong> of <strong>{sortedLeads.length}</strong> entries
-          </div>
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              disabled={currentPage === 1}
-              onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-              className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 disabled:opacity-40 hover:bg-white font-bold cursor-pointer"
-            >
-              Previous
-            </button>
-            <span className="px-3 py-1 font-mono font-bold text-slate-800">{currentPage} / {totalPages}</span>
-            <button
-              type="button"
-              disabled={currentPage === totalPages || totalPages === 0}
-              onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
-              className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 disabled:opacity-40 hover:bg-white font-bold cursor-pointer"
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      </div>
+      <Table
+        data={paginatedLeads}
+        columnConfig={columnConfig}
+        currentPage={currentPage}
+        totalItems={sortedLeads.length}
+        itemsPerPage={rowsPerPage}
+        onPageChange={(page) => setCurrentPage(page)}
+      />
 
       {/* 7. FULL LOST LEAD DETAIL MODAL */}
       {selectedLead && (

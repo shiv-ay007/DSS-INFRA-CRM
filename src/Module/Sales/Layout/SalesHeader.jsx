@@ -5,6 +5,7 @@ const SalesHeader = ({
   role = "Sales TL",
   unreadNotification = true,
   onLogout,
+  toggleSidebar
 }) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const dropdownRef = useRef(null);
@@ -23,8 +24,19 @@ const SalesHeader = ({
   return (
     <header className="w-full bg-white font-sans antialiased h-16 px-4 sm:px-6 flex items-center justify-between border-b border-slate-100 sticky top-0 z-40">
       
-      {/* Left Space */}
-      <div className="flex items-center gap-2"></div>
+      {/* Left Space: Mobile Menu Toggle */}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          className="p-2 rounded-xl text-slate-700 hover:bg-slate-100 lg:hidden transition-colors cursor-pointer flex items-center justify-center"
+          title="Toggle Navigation Menu"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+          </svg>
+        </button>
+      </div>
 
       {/* Right Action Icons (Notification + Profile) */}
       <div className="flex items-center gap-3 relative" ref={dropdownRef}>

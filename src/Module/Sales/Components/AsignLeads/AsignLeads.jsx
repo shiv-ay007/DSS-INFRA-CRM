@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import PageHeader from "../../../../Common/Components/PageHeader";
+import Table from "../../../../Common/Components/Table";
 import {
   initialAssignedLeads,
   leadTypeOptions,
@@ -50,6 +51,118 @@ const AsignLeads = () => {
   const [selectedLead, setSelectedLead] = useState(null);
   const [reassignModalLead, setReassignModalLead] = useState(null);
   const [newAssignee, setNewAssignee] = useState("");
+
+  // Table Column Configuration for common Table component
+  const columnConfig = useMemo(() => ({
+    actions: {
+      label: "ACTIONS",
+      render: (val, row) => {
+        const phone = row.phoneNumber || row.contact || "";
+        return (
+          <div className="flex items-center justify-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setSelectedLead(row)}
+              className="w-7 h-7 rounded-lg border border-orange-400 text-orange-500 hover:bg-orange-500 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
+              title="View Lead Details"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+            </button>
+
+            <a
+              href={phone ? `tel:${phone}` : "#"}
+              className={`w-7 h-7 rounded-lg border border-emerald-400 text-emerald-600 hover:bg-emerald-600 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs ${!phone && "opacity-40 pointer-events-none"}`}
+              title={phone ? `Call ${phone}` : "No phone available"}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+              </svg>
+            </a>
+          </div>
+        );
+      }
+    },
+    createdDate: {
+      label: "CREATED DATE",
+      render: (val, row) => (
+        <span className="text-slate-700 text-xs font-sans font-medium">
+          {val || row.createdDate || "18/7/2026, 12:45:35 pm"}
+        </span>
+      )
+    },
+    leadAge: {
+      label: "LEAD AGE",
+      render: (val, row) => (
+        <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-600 font-bold italic text-xs border border-blue-200 inline-block">
+          {val || row.leadAge || "33 Days"}
+        </span>
+      )
+    },
+    status: {
+      label: "STATUS",
+      render: (val, row) => {
+        const s = (val || row.status || row.leadStatus || "").toString().toUpperCase();
+        const isNew = s === "NEW" || s === "FRESH" || row.jobType === "NEW";
+        const displayStatus = isNew ? "NEW" : "OLD";
+
+        return (
+          <span
+            className={`px-3 py-0.5 rounded-full text-xs font-extrabold uppercase border ${
+              displayStatus === "NEW"
+                ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                : "bg-slate-100 text-slate-700 border-slate-300"
+            }`}
+          >
+            {displayStatus}
+          </span>
+        );
+      }
+    },
+    concernPersonName: {
+      label: "CONCERN PERSON NAME",
+      render: (val, row) => (
+        <div className="text-left font-medium text-slate-800 text-xs">
+          {row.concernPersonName || row.clientName || "--"}
+          {row.clientDesignation && <div className="text-[11px] text-slate-500 font-normal">{row.clientDesignation}</div>}
+        </div>
+      )
+    },
+    phoneNumber: {
+      label: "PHONE",
+      render: (val, row) => (
+        <div className="text-left font-sans text-slate-800 text-xs font-medium">
+          {row.phoneNumber || row.contact || "--"}
+        </div>
+      )
+    },
+    assignedTo: {
+      label: "ASSIGNED TO",
+      render: (val, row) => (
+        <div className="flex items-center justify-center gap-2">
+          <span className={`w-2.5 h-2.5 rounded-full ${row.assignedType === "self" ? "bg-emerald-500" : "bg-blue-500"}`} />
+          <span className="text-xs font-bold text-slate-800">{val || row.assignedTo || "Sales TL"}</span>
+          <button
+            type="button"
+            onClick={() => { setReassignModalLead(row); setNewAssignee(row.assignedTo || teamMembers[0]); }}
+            className="text-xs text-blue-600 hover:text-blue-800 font-semibold underline cursor-pointer"
+          >
+            Edit
+          </button>
+        </div>
+      )
+    },
+    sourceType: {
+      label: "SOURCE / TYPE",
+      render: (val, row) => (
+        <span className="text-xs text-slate-700">
+          <strong className="text-slate-800">{row.leadSource || "WEBSITE"}</strong> ({row.leadType || "FRESH"})
+        </span>
+      )
+    }
+  }), []);
 
   const handleResetFilters = () => {
     setFilterLeadType("Lead Type");
@@ -352,128 +465,14 @@ const AsignLeads = () => {
       </div>
 
       {/* 5. TABLE */}
-      <div className="w-full bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs sm:text-sm">
-            <thead>
-              <tr className="bg-slate-900 text-white text-xs font-bold uppercase tracking-wider select-none border-b border-slate-800">
-                <th onClick={() => handleSortToggle("id")} className="py-3.5 px-3.5 cursor-pointer hover:bg-slate-800 text-center w-16">
-                  <div className="flex items-center justify-center gap-1.5"><span>S. NO.</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3.5 text-center whitespace-nowrap w-20">
-                  <div className="flex items-center justify-center gap-1.5"><span>ACTIONS</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th onClick={() => handleSortToggle("createdDate")} className="py-3.5 px-3.5 cursor-pointer hover:bg-slate-800 whitespace-nowrap">
-                  <div className="flex items-center gap-1.5"><span>CREATED DATE</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th onClick={() => handleSortToggle("leadAge")} className="py-3.5 px-3.5 cursor-pointer hover:bg-slate-800 text-center whitespace-nowrap">
-                  <div className="flex items-center justify-center gap-1.5"><span>LEAD AGE</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th onClick={() => handleSortToggle("leadStatus")} className="py-3.5 px-3.5 cursor-pointer hover:bg-slate-800 text-center whitespace-nowrap">
-                  <div className="flex items-center justify-center gap-1.5"><span>STATUS</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th onClick={() => handleSortToggle("concernPersonName")} className="py-3.5 px-3.5 cursor-pointer hover:bg-slate-800 min-w-[200px]">
-                  <div className="flex items-center gap-1.5"><span>CONCERN PERSON NAME</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th onClick={() => handleSortToggle("phoneNumber")} className="py-3.5 px-3.5 cursor-pointer hover:bg-slate-800 whitespace-nowrap">
-                  <div className="flex items-center gap-1.5"><span>PHONE</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3.5 whitespace-nowrap">
-                  <div className="flex items-center gap-1.5"><span>ASSIGNED TO</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3.5 whitespace-nowrap"><span>SOURCE / TYPE</span></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 bg-white">
-              {paginatedLeads.length > 0 ? (
-                paginatedLeads.map((item, index) => {
-                  const serialNumber = (currentPage - 1) * rowsPerPage + index + 1;
-                  return (
-                    <tr key={item.id} className="hover:bg-slate-50/90 transition-colors group">
-                      <td className="py-4 px-3.5 text-center font-mono font-bold text-slate-800">{serialNumber}</td>
-                      <td className="py-4 px-3.5 text-center whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => setSelectedLead(item)}
-                          className="w-8 h-8 rounded-lg border border-orange-400 text-orange-600 hover:bg-orange-500 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs mx-auto"
-                          title="View Full Lead Details"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                        </button>
-                      </td>
-                      <td className="py-4 px-3.5 text-slate-600 font-mono whitespace-nowrap text-xs">{item.createdDate}</td>
-                      <td className="py-4 px-3.5 text-center whitespace-nowrap">
-                        <span className="inline-block px-3 py-1 rounded-md text-blue-700 bg-blue-50 border border-blue-200 text-xs font-bold">{item.leadAge}</span>
-                      </td>
-                      <td className="py-4 px-3.5 text-center whitespace-nowrap">
-                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wide ${getStatusBadgeClass(item.leadStatus)}`}>{item.leadStatus || "INTERESTED"}</span>
-                      </td>
-                      <td className="py-4 px-3.5 text-slate-900 font-medium max-w-[240px]">
-                        <div className="truncate font-bold text-slate-900 text-sm sm:text-base" title={item.concernPersonName}>{item.concernPersonName}</div>
-                        {item.clientDesignation && <div className="text-xs text-slate-500 font-medium mt-0.5">{item.clientDesignation} • {item.clientType || "Individual"}</div>}
-                      </td>
-                      <td className="py-4 px-3.5 font-mono text-slate-800 font-bold whitespace-nowrap">
-                        <a href={`tel:${item.phoneNumber}`} className="hover:text-blue-600 hover:underline">{item.phoneNumber}</a>
-                      </td>
-                      <td className="py-4 px-3.5 whitespace-nowrap">
-                        <div className="flex items-center gap-2">
-                          <span className={`w-2.5 h-2.5 rounded-full ${item.assignedType === "self" ? "bg-emerald-500" : "bg-blue-500"}`} />
-                          <span className="text-xs sm:text-sm font-bold text-slate-800">{item.assignedTo || "Sales TL"}</span>
-                          <button
-                            type="button"
-                            onClick={() => { setReassignModalLead(item); setNewAssignee(item.assignedTo || teamMembers[0]); }}
-                            className="ml-1 text-xs text-blue-600 hover:text-blue-800 font-semibold underline cursor-pointer"
-                          >
-                            Edit
-                          </button>
-                        </div>
-                      </td>
-                      <td className="py-4 px-3.5 whitespace-nowrap text-xs text-slate-600">
-                        <span className="font-bold text-slate-800">{item.leadSource}</span> <span className="text-slate-500">({item.leadType})</span>
-                      </td>
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-400 text-sm">
-                    No assigned leads found matching the selected filters.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* 6. PAGINATION */}
-        <div className="p-3.5 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs bg-slate-50/50">
-          <div className="text-slate-500">
-            Showing <strong>{paginatedLeads.length > 0 ? (currentPage - 1) * rowsPerPage + 1 : 0}</strong> to <strong>{Math.min(currentPage * rowsPerPage, sortedLeads.length)}</strong> of <strong>{sortedLeads.length}</strong> entries
-          </div>
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              disabled={currentPage === 1}
-              onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-              className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 disabled:opacity-40 hover:bg-white font-bold cursor-pointer"
-            >
-              Previous
-            </button>
-            <span className="px-3 py-1 font-mono font-bold text-slate-800">{currentPage} / {totalPages}</span>
-            <button
-              type="button"
-              disabled={currentPage === totalPages || totalPages === 0}
-              onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
-              className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 disabled:opacity-40 hover:bg-white font-bold cursor-pointer"
-            >
-              Next
-            </button>
-          </div>
-        </div>
-      </div>
+      <Table
+        data={paginatedLeads}
+        columnConfig={columnConfig}
+        currentPage={currentPage}
+        totalItems={sortedLeads.length}
+        itemsPerPage={rowsPerPage}
+        onPageChange={(page) => setCurrentPage(page)}
+      />
 
       {/* 7. FULL LEAD DETAIL MODAL */}
       {selectedLead && (

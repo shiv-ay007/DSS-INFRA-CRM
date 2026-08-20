@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
 import PageHeader from "../../../../Common/Components/PageHeader";
+import Table from "../../../../Common/Components/Table";
 import { initialSalesData } from "../../data/salesManagementData";
 
 /**
@@ -17,6 +18,155 @@ const Salse = () => {
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
   const [detailModalLead, setDetailModalLead] = useState(null);
+
+  // Table Column Configuration for common Table component
+  const columnConfig = useMemo(() => ({
+    actions: {
+      label: "ACTIONS",
+      render: (val, row) => (
+        <button
+          type="button"
+          onClick={() => setDetailModalLead(row)}
+          className="w-7 h-7 rounded-lg border border-orange-400 text-orange-500 hover:bg-orange-500 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs mx-auto"
+          title="View Lead Details"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+          </svg>
+        </button>
+      )
+    },
+    amount: {
+      label: "AMOUNT",
+      render: (val, row) => (
+        <span className="inline-block px-3 py-1 rounded-md text-emerald-800 bg-emerald-50 border border-emerald-300 font-mono font-bold text-xs">
+          ₹{val ? val.toLocaleString("en-IN") : "0"}
+        </span>
+      )
+    },
+    clientId: {
+      label: "CLIENT ID",
+      render: (val, row) => (
+        <span className="font-mono font-bold text-slate-700 text-xs">{val || "--"}</span>
+      )
+    },
+    clientName: {
+      label: "CLIENT",
+      render: (val, row) => (
+        <div className="text-left font-medium text-slate-800 text-xs">
+          <div className="font-bold text-slate-900 cursor-pointer hover:text-blue-600 hover:underline" onClick={() => setDetailModalLead(row)}>
+            {row.clientName || "--"}
+          </div>
+          <div className="text-xs text-slate-600 font-mono font-medium">{row.phoneNumber}</div>
+          {row.emailAddress && row.emailAddress !== "--" && (
+            <div className="text-xs text-slate-400 truncate max-w-[160px]">{row.emailAddress}</div>
+          )}
+        </div>
+      )
+    },
+    priority: {
+      label: "PRIORITY",
+      render: (val, row) => {
+        const p = (val || "LOW").toUpperCase();
+        const badges = {
+          HIGH: "bg-red-50 text-red-700 border-red-200",
+          MEDIUM: "bg-amber-50 text-amber-700 border-amber-200",
+          LOW: "bg-emerald-50 text-emerald-700 border-emerald-200"
+        };
+        return (
+          <span className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold uppercase border ${badges[p] || "bg-slate-100 text-slate-700 border-slate-200"}`}>
+            {p === "HIGH" ? "🔴 High" : p === "MEDIUM" ? "🟡 Medium" : "🟢 Low"}
+          </span>
+        );
+      }
+    },
+    status: {
+      label: "STATUS",
+      render: (val, row) => {
+        const s = (val || "").toString().toUpperCase();
+        const isNew = s === "NEW" || s === "FRESH" || row.jobType === "NEW";
+        const displayStatus = isNew ? "NEW" : "OLD";
+
+        return (
+          <span
+            className={`px-3 py-0.5 rounded-full text-xs font-extrabold uppercase border ${
+              displayStatus === "NEW"
+                ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                : "bg-slate-100 text-slate-700 border-slate-300"
+            }`}
+          >
+            {displayStatus}
+          </span>
+        );
+      }
+    },
+    createdAt: {
+      label: "CREATED AT",
+      render: (val, row) => (
+        <div className="text-center font-sans text-xs">
+          <div className="font-semibold text-slate-700">{row.createdAt}</div>
+          <div className="text-[10px] text-slate-400 font-mono">{row.createdTime}</div>
+        </div>
+      )
+    },
+    companyName: {
+      label: "COMPANY NAME",
+      render: (val, row) => (
+        <span className="text-xs text-slate-600">{val || "--"}</span>
+      )
+    },
+    businessType: {
+      label: "BUSINESS TYPE",
+      render: (val, row) => (
+        <span className="text-xs font-medium text-slate-700">{val || "--"}</span>
+      )
+    },
+    jobType: {
+      label: "JOB TYPE",
+      render: (val, row) => (
+        <span className="px-2 py-0.5 rounded text-xs font-bold uppercase bg-emerald-50 text-emerald-800 border border-emerald-200">
+          {val || "NEW"}
+        </span>
+      )
+    },
+    city: {
+      label: "CITY",
+      render: (val, row) => (
+        <span className="text-xs font-medium text-slate-800">{val || "--"}</span>
+      )
+    },
+    pincode: {
+      label: "PINCODE",
+      render: (val, row) => (
+        <span className="font-mono text-slate-600 text-xs">{val || "--"}</span>
+      )
+    },
+    requirement: {
+      label: "REQUIREMENT",
+      render: (val, row) => (
+        <div className="max-w-[160px] truncate text-xs text-slate-700" title={val}>
+          {val || "--"}
+        </div>
+      )
+    },
+    address: {
+      label: "ADDRESS",
+      render: (val, row) => (
+        <div className="max-w-[150px] truncate text-xs text-slate-600" title={val}>
+          {val || "--"}
+        </div>
+      )
+    },
+    clientRating: {
+      label: "CLIENT RATING",
+      render: (val, row) => (
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black font-mono bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs">
+          <span className="text-amber-500">★</span> {val ? val.toFixed(1) : "4.0"}
+        </span>
+      )
+    }
+  }), []);
 
   // KPI numbers
   const stats = useMemo(() => {
@@ -293,230 +443,15 @@ const Salse = () => {
         </div>
       </div>
 
-      {/* ================= 4. MAIN DATA TABLE (Exact Screenshot Columns) ================= */}
-      <div className="w-full bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs sm:text-sm">
-            <thead>
-              <tr className="bg-slate-900 text-white text-xs font-bold uppercase tracking-wider select-none border-b border-slate-800">
-                <th className="py-3.5 px-3 text-center w-12">
-                  <div className="flex items-center justify-center gap-1"><span>S. NO.</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 text-center whitespace-nowrap w-20">
-                  <div className="flex items-center justify-center gap-1"><span>ACTIONS</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 text-center whitespace-nowrap">
-                  <div className="flex items-center justify-center gap-1"><span>AMOUNT</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 whitespace-nowrap">
-                  <div className="flex items-center gap-1"><span>CLIENT ID</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 min-w-[170px]">
-                  <div className="flex items-center gap-1"><span>CLIENT</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 text-center whitespace-nowrap">
-                  <div className="flex items-center justify-center gap-1"><span>PRIORITY</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 text-center whitespace-nowrap">
-                  <div className="flex items-center justify-center gap-1"><span>STATUS</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 text-center whitespace-nowrap">
-                  <div className="flex items-center justify-center gap-1"><span>CREATED AT</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 text-center whitespace-nowrap">
-                  <div className="flex items-center justify-center gap-1"><span>COMPANY NAME</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 whitespace-nowrap">
-                  <div className="flex items-center gap-1"><span>BUSINESS TYPE</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 text-center whitespace-nowrap">
-                  <div className="flex items-center justify-center gap-1"><span>JOB TYPE</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 text-center whitespace-nowrap">
-                  <div className="flex items-center justify-center gap-1"><span>CITY</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 text-center whitespace-nowrap">
-                  <div className="flex items-center justify-center gap-1"><span>PINCODE</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 min-w-[160px]">
-                  <div className="flex items-center gap-1"><span>REQUIREMENT</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 min-w-[150px]">
-                  <div className="flex items-center gap-1"><span>ADDRESS</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 text-center whitespace-nowrap">
-                  <div className="flex items-center justify-center gap-1"><span>CLIENT RATING</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-              </tr>
-            </thead>
-
-            <tbody className="divide-y divide-slate-100 bg-white">
-              {paginatedData.length > 0 ? (
-                paginatedData.map((item, index) => {
-                  const serialNumber = (currentPage - 1) * rowsPerPage + index + 1;
-
-                  return (
-                    <tr key={item.id} className="hover:bg-slate-50/90 transition-colors group">
-                      
-                      {/* 1. S. NO. */}
-                      <td className="py-3.5 px-3 text-center font-mono font-bold text-slate-800">
-                        {serialNumber}
-                      </td>
-
-                      {/* 2. ACTIONS (Orange Eye Button matching screenshot) */}
-                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                        <button
-                          type="button"
-                          onClick={() => setDetailModalLead(item)}
-                          className="w-7 h-7 rounded-lg border border-orange-400 text-orange-600 hover:bg-orange-500 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs mx-auto"
-                          title="View Lead Details"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                          </svg>
-                        </button>
-                      </td>
-
-                      {/* 3. AMOUNT (Light Green Pill Badge) */}
-                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                        <span className="inline-block px-3 py-1 rounded-md text-emerald-800 bg-emerald-50 border border-emerald-300 font-mono font-bold text-xs">
-                          ₹{item.amount.toLocaleString("en-IN")}
-                        </span>
-                      </td>
-
-                      {/* 4. CLIENT ID */}
-                      <td className="py-3.5 px-3 font-mono font-bold text-slate-700 whitespace-nowrap text-xs">
-                        {item.clientId}
-                      </td>
-
-                      {/* 5. CLIENT */}
-                      <td className="py-3.5 px-3">
-                        <div
-                          onClick={() => setDetailModalLead(item)}
-                          className="font-bold text-slate-900 text-sm sm:text-base cursor-pointer hover:text-blue-600 hover:underline leading-tight"
-                        >
-                          {item.clientName}
-                        </div>
-                        <div className="text-xs text-slate-600 font-mono font-medium mt-0.5">{item.phoneNumber}</div>
-                        {item.emailAddress && item.emailAddress !== "--" && (
-                          <div className="text-xs text-slate-400 truncate max-w-[160px]">{item.emailAddress}</div>
-                        )}
-                      </td>
-
-                      {/* 6. PRIORITY (Screenshot pill: red, yellow, green) */}
-                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-extrabold uppercase ${getPriorityBadge(item.priority)}`}>
-                          {item.priority}
-                        </span>
-                      </td>
-
-                      {/* 7. STATUS */}
-                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-extrabold uppercase ${getStatusBadge(item.status)}`}>
-                          {item.status}
-                        </span>
-                      </td>
-
-                      {/* 8. CREATED AT */}
-                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                        <div className="font-semibold text-slate-700 text-xs">{item.createdAt}</div>
-                        <div className="text-[10px] text-slate-400 font-mono">{item.createdTime}</div>
-                      </td>
-
-                      {/* 9. COMPANY NAME */}
-                      <td className="py-3.5 px-3 text-center whitespace-nowrap text-slate-600 text-xs">
-                        {item.companyName}
-                      </td>
-
-                      {/* 10. BUSINESS TYPE */}
-                      <td className="py-3.5 px-3 whitespace-nowrap text-slate-700 text-xs font-medium">
-                        {item.businessType}
-                      </td>
-
-                      {/* 11. JOB TYPE */}
-                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                        <span className={`inline-block px-2 py-0.5 rounded text-[11px] font-bold uppercase ${getJobTypeBadge(item.jobType)}`}>
-                          {item.jobType}
-                        </span>
-                      </td>
-
-                      {/* 12. CITY */}
-                      <td className="py-3.5 px-3 text-center whitespace-nowrap font-medium text-slate-800 text-xs">
-                        {item.city}
-                      </td>
-
-                      {/* 13. PINCODE */}
-                      <td className="py-3.5 px-3 text-center font-mono text-slate-600 whitespace-nowrap text-xs">
-                        {item.pincode}
-                      </td>
-
-                      {/* 14. REQUIREMENT */}
-                      <td className="py-3.5 px-3 text-slate-700 max-w-[160px] truncate text-xs" title={item.requirement}>
-                        {item.requirement}
-                      </td>
-
-                      {/* 15. ADDRESS */}
-                      <td className="py-3.5 px-3 text-slate-600 max-w-[150px] truncate text-xs" title={item.address}>
-                        {item.address}
-                      </td>
-
-                      {/* 16. CLIENT RATING */}
-                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-black font-mono bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs">
-                          <span className="text-amber-500">★</span> {item.clientRating ? item.clientRating.toFixed(1) : "4.0"}
-                        </span>
-                      </td>
-
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan={16} className="py-12 text-center text-slate-400">
-                    <div className="text-2xl mb-1">📋</div>
-                    <div className="font-bold text-slate-700 text-sm">No sales records found</div>
-                    <div className="text-xs text-slate-400 mt-0.5">Try clearing or changing your filters.</div>
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* ================= 5. PAGINATION BAR ================= */}
-        {filteredData.length > 0 && (
-          <div className="px-5 py-3.5 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs sm:text-sm bg-slate-50/50">
-            <div className="text-slate-600 font-medium">
-              Showing <span className="font-bold text-slate-900">{(currentPage - 1) * rowsPerPage + 1}</span> to <span className="font-bold text-slate-900">{Math.min(currentPage * rowsPerPage, filteredData.length)}</span> of <span className="font-bold text-slate-900">{filteredData.length}</span> entries
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-                className="px-3.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-bold text-slate-700 cursor-pointer transition-colors shadow-2xs"
-              >
-                Previous
-              </button>
-
-              <span className="px-3.5 py-1.5 rounded-xl bg-slate-900 text-white font-bold shadow-xs">
-                Page {currentPage} of {totalPages}
-              </span>
-
-              <button
-                type="button"
-                disabled={currentPage >= totalPages}
-                onClick={() => setCurrentPage((p) => p + 1)}
-                className="px-3.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-bold text-slate-700 cursor-pointer transition-colors shadow-2xs"
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
+      {/* ================= 4. MAIN DATA TABLE ================= */}
+      <Table
+        data={paginatedData}
+        columnConfig={columnConfig}
+        currentPage={currentPage}
+        totalItems={filteredData.length}
+        itemsPerPage={rowsPerPage}
+        onPageChange={(page) => setCurrentPage(page)}
+      />
 
       {/* ================= MODAL: LEAD DETAIL POPUP ================= */}
       {detailModalLead && (
