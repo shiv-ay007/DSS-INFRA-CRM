@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
+import PageHeader from "../../../../Common/Components/PageHeader";
 import { initialSalesData } from "../../data/salesManagementData";
 
 /**
@@ -118,42 +119,21 @@ const Salse = () => {
     <div className="space-y-5 font-sans select-none pb-16 w-full min-h-screen bg-[#F8FAFC]">
       
       {/* ================= 1. SUB-HEADER BANNER ================= */}
-      <div className="w-full bg-gradient-to-r from-purple-50 via-indigo-50/30 to-white rounded-2xl border border-purple-200/80 shadow-xs px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5">
-          <button
-            type="button"
-            onClick={() => window.history.back()}
-            className="p-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs transition-colors cursor-pointer"
-            title="Go Back"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-          </button>
-          <div>
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
-                Sales Management Sheet
-              </h1>
-              <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-300">
-                Executive Overview
-              </span>
-            </div>
-            <p className="text-xs sm:text-sm text-slate-600 mt-0.5 font-medium">
-              Real-time sales deal tracking, client requirement log, priority matrix, and revenue valuation.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2.5 self-start sm:self-auto">
+      <PageHeader
+        title="Sales Management Sheet"
+        badge="Executive Overview"
+        badgeColor="bg-purple-100 text-purple-800 border-purple-300"
+        description="Real-time sales deal tracking, client requirement log, priority matrix, and revenue valuation."
+        showBackButton={true}
+        rightActions={
           <Link
             to="/sales/leads/add"
             className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs sm:text-sm font-bold shadow-md shadow-emerald-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
           >
             <span>+</span> Add Lead
           </Link>
-        </div>
-      </div>
+        }
+      />
 
       {/* ================= 2. TOP 3 COLORFUL KPI METRIC CARDS (Exact Screenshot Design) ================= */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

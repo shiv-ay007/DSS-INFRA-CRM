@@ -1,4 +1,4 @@
-// Predefined sales persons & work types for Add Lead Form
+// Predefined dropdown lists for Add Lead Form
 export const salesPersonsList = [
   "Sales TL (Current User)",
   "Rahul Sharma",
@@ -8,15 +8,91 @@ export const salesPersonsList = [
   "Sanjay Gupta"
 ];
 
-export const leadModesList = [
-  "Inbound Call",
-  "Outbound Call",
-  "Website Inquiry",
-  "WhatsApp Business",
-  "Direct Referral",
-  "Exhibition / Trade Fair",
-  "Field Visit",
-  "Social Media"
+export const leadSourcesList = [
+  "JUSTDIAL",
+  "WHATSAPP",
+  "WEBSITE",
+  "GOOGLE",
+  "INDIAMART",
+  "INBOUND CALL",
+  "OUTBOUND CALL",
+  "REFERRAL",
+  "EXHIBITION",
+  "SOCIAL MEDIA",
+  "OTHER"
+];
+
+export const channelsList = [
+  "Sales",
+  "Marketing",
+  "Online",
+  "Direct",
+  "Partner",
+  "Telecalling"
+];
+
+export const leadTypesList = [
+  "FRESH",
+  "REPEAT",
+  "OLD",
+  "RE-ENGAGED"
+];
+
+export const jobTypesList = [
+  "NEW",
+  "REPAIR",
+  "AMC",
+  "UPGRADE",
+  "MAINTENANCE"
+];
+
+export const clientTypesList = [
+  "Individual",
+  "Corporate",
+  "Government",
+  "Retail",
+  "Wholesale",
+  "Partnership"
+];
+
+export const leadLabelsList = [
+  "HOT",
+  "WARM",
+  "COLD",
+  "VIP",
+  "HIGH VALUE"
+];
+
+export const indianStatesList = [
+  "Andhra Pradesh",
+  "Arunachal Pradesh",
+  "Assam",
+  "Bihar",
+  "Chhattisgarh",
+  "Delhi NCR",
+  "Goa",
+  "Gujarat",
+  "Haryana",
+  "Himachal Pradesh",
+  "Jharkhand",
+  "Karnataka",
+  "Kerala",
+  "Madhya Pradesh",
+  "Maharashtra",
+  "Manipur",
+  "Meghalaya",
+  "Mizoram",
+  "Nagaland",
+  "Odisha",
+  "Punjab",
+  "Rajasthan",
+  "Sikkim",
+  "Tamil Nadu",
+  "Telangana",
+  "Tripura",
+  "Uttar Pradesh",
+  "Uttarakhand",
+  "West Bengal"
 ];
 
 export const availableWorkTypes = [

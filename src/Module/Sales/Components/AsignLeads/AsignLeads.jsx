@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import PageHeader from "../../../../Common/Components/PageHeader";
 import {
   initialAssignedLeads,
   leadTypeOptions,
@@ -170,34 +171,18 @@ const AsignLeads = () => {
     <div className="space-y-5 font-sans select-none pb-12 w-full min-h-screen bg-[#F8FAFC]">
       
       {/* 1. SUB-HEADER BAR */}
-      <div className="w-full bg-gradient-to-r from-blue-50 via-indigo-50/30 to-white rounded-2xl border border-blue-200/80 shadow-xs px-5 py-4 flex items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5">
-          <button
-            type="button"
-            onClick={() => window.history.back()}
-            className="p-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs transition-colors cursor-pointer"
-            title="Go Back"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-          </button>
-          <div>
-            <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight flex items-center gap-2">
-              <span>Assigned Leads</span>
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-300 font-bold font-mono">
-                Pipeline
-              </span>
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-600 mt-0.5 font-medium">
-              Manage self and team assigned leads, filter by source, status, or re-assign reps.
-            </p>
+      <PageHeader
+        title="Assigned Leads"
+        badge="Pipeline"
+        badgeColor="bg-blue-100 text-blue-800 border-blue-300"
+        description="Manage self and team assigned leads, filter by source, status, or re-assign reps."
+        showBackButton={true}
+        rightActions={
+          <div className="text-xs sm:text-sm text-slate-600 font-semibold px-3 py-1.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
+            Total: <span className="font-black text-blue-700 font-mono">{filteredLeads.length}</span> Leads
           </div>
-        </div>
-        <div className="text-xs sm:text-sm text-slate-600 font-semibold px-3 py-1.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
-          Total: <span className="font-black text-blue-700 font-mono">{filteredLeads.length}</span> Leads
-        </div>
-      </div>
+        }
+      />
 
       {/* 2. TAB BUTTONS (All Assigned | + Self Assigned | 👥 Team Assigned) */}
       <div className="flex justify-center w-full">

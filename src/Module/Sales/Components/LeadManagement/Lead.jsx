@@ -1,5 +1,7 @@
 import React, { useState, useMemo, useRef } from "react";
 import { Link } from "react-router-dom";
+import PageHeader from "../../../../Common/Components/PageHeader";
+import Table from "../../../../Common/Components/Table";
 import { initialLeadsData } from "../../data/leadManagementData";
 
 /**
@@ -48,7 +50,8 @@ const Lead = () => {
     }
   };
 
-  // Filters
+  // Filters & Collapsible Filter State
+  const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
   const [filterLeadType, setFilterLeadType] = useState("All");
@@ -56,6 +59,195 @@ const Lead = () => {
   const [filterLeadLabel, setFilterLeadLabel] = useState("All");
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
+
+  // Table Column Configuration for common Table component matching exact screenshot design
+  const columnConfig = useMemo(() => ({
+    actions: {
+      label: "ACTIONS",
+      render: (val, row) => {
+        const phone = row.phoneNumber || row.contact || row.whatsappNumber || "";
+        return (
+          <div className="flex items-center justify-center gap-1.5">
+            {/* Orange Square Eye Button matching screenshot */}
+            <button
+              type="button"
+              onClick={() => setDetailModalLead(row)}
+              className="w-7 h-7 rounded-lg border border-orange-400 text-orange-500 hover:bg-orange-500 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
+              title="View Lead Details"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+            </button>
+
+            {/* Green Phone Call Icon */}
+            <a
+              href={phone ? `tel:${phone}` : "#"}
+              className={`w-7 h-7 rounded-lg border border-emerald-400 text-emerald-600 hover:bg-emerald-600 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs ${!phone && "opacity-40 pointer-events-none"}`}
+              title={phone ? `Call ${phone}` : "No phone available"}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+              </svg>
+            </a>
+          </div>
+        );
+      }
+    },
+    createdDate: {
+      label: "CREATED DATE",
+      render: (val, row) => (
+        <span className="text-slate-700 text-xs font-sans font-medium">
+          {val || row.createdDate || row.date || "18/7/2026, 12:45:35 pm"}
+          {row.createdTime && `, ${row.createdTime}`}
+        </span>
+      )
+    },
+    leadAge: {
+      label: "LEAD AGE",
+      render: (val, row) => (
+        <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-600 font-bold italic text-xs border border-blue-200 inline-block">
+          {val || row.leadAge || "33 Days"}
+        </span>
+      )
+    },
+    status: {
+      label: "STATUS",
+      render: (val, row) => {
+        const s = (val || row.status || row.leadStatus || "").toString().toUpperCase();
+        const isNew = s === "NEW" || s === "FRESH" || row.jobType === "NEW" || (row.leadType && row.leadType.toUpperCase() === "FRESH");
+        const displayStatus = isNew ? "NEW" : "OLD";
+
+        return (
+          <span
+            className={`px-3 py-0.5 rounded-full text-xs font-extrabold uppercase border ${
+              displayStatus === "NEW"
+                ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                : "bg-slate-100 text-slate-700 border-slate-300"
+            }`}
+          >
+            {displayStatus}
+          </span>
+        );
+      }
+    },
+    concernPersonName: {
+      label: "CONCERN PERSON NAME",
+      render: (val, row) => (
+        <div className="text-left font-medium text-slate-800 text-xs">
+          {row.concernPersonName || row.clientName || "--"}
+        </div>
+      )
+    },
+    phoneNumber: {
+      label: "PHONE",
+      render: (val, row) => {
+        const phone = row.phoneNumber || row.contact || row.whatsappNumber || "--";
+        return (
+          <div className="text-left font-sans text-slate-800 text-xs font-medium">
+            {phone}
+          </div>
+        );
+      }
+    },
+    email: {
+      label: "EMAIL",
+      render: (val, row) => (
+        <span className="text-xs font-mono text-slate-600">
+          {val || row.emailAddress || row.email || "--"}
+        </span>
+      )
+    },
+    leadType: {
+      label: "LEAD TYPE",
+      render: (val, row) => (
+        <span className="px-2 py-0.5 rounded text-xs font-bold bg-slate-100 text-slate-800 border border-slate-200">
+          {val || row.leadType || "FRESH"}
+        </span>
+      )
+    },
+    jobType: {
+      label: "JOB TYPE",
+      render: (val, row) => (
+        <span className="px-2 py-0.5 rounded text-xs font-bold uppercase bg-emerald-50 text-emerald-800 border border-emerald-200">
+          {val || row.jobType || "NEW"}
+        </span>
+      )
+    },
+    leadLabel: {
+      label: "LEAD LABEL",
+      render: (val, row) => {
+        const lbl = (val || row.leadLabel || row.leadStatus || "WARM").toUpperCase();
+        const colors = {
+          HOT: "bg-rose-100 text-rose-800 border-rose-200",
+          WARM: "bg-amber-100 text-amber-800 border-amber-200",
+          COLD: "bg-sky-100 text-sky-800 border-sky-200",
+          NEW: "bg-purple-100 text-purple-800 border-purple-200"
+        };
+        return (
+          <span className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold uppercase border ${colors[lbl] || "bg-slate-100 text-slate-700 border-slate-200"}`}>
+            {lbl}
+          </span>
+        );
+      }
+    },
+    leadSource: {
+      label: "LEAD SOURCE",
+      render: (val, row) => (
+        <span className="text-xs font-bold text-slate-700 uppercase">
+          {val || row.leadSource || row.leadMode || "WEBSITE"}
+        </span>
+      )
+    },
+    requirement: {
+      label: "REQUIREMENTS",
+      render: (val, row) => (
+        <div className="max-w-[200px] truncate text-xs text-slate-700 font-medium" title={val || row.requirement || row.projectDetails}>
+          {val || row.requirement || row.projectDetails || "--"}
+        </div>
+      )
+    },
+    addressPincode: {
+      label: "ADDRESS & PIN CODE",
+      render: (val, row) => (
+        <div className="text-left text-xs max-w-[180px]">
+          <div className="truncate text-slate-800 font-medium" title={row.address || row.siteAddress || row.city}>
+            {row.address || row.siteAddress || row.city || "--"}
+          </div>
+          {row.pincode && (
+            <div className="text-[11px] font-mono text-slate-500 font-bold">
+              PIN: {row.pincode}
+            </div>
+          )}
+        </div>
+      )
+    },
+    assignTo: {
+      label: "ASSIGN PERSON",
+      render: (val, row) => (
+        <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-800 text-xs font-semibold border border-slate-200">
+          {val || row.assignTo || row.salesPerson || "--"}
+        </span>
+      )
+    },
+    priority: {
+      label: "PRIORITY",
+      render: (val, row) => {
+        const p = (val || row.priority || (row.leadLabel === "HOT" || row.leadStatus === "Hot" ? "HIGH" : row.leadLabel === "WARM" || row.leadStatus === "Warm" ? "MEDIUM" : "LOW")).toUpperCase();
+        const badges = {
+          HIGH: "bg-red-50 text-red-700 border-red-200",
+          MEDIUM: "bg-amber-50 text-amber-700 border-amber-200",
+          LOW: "bg-emerald-50 text-emerald-700 border-emerald-200"
+        };
+        return (
+          <span className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold uppercase border ${badges[p] || "bg-slate-100 text-slate-700 border-slate-200"}`}>
+            {p === "HIGH" ? "🔴 High" : p === "MEDIUM" ? "🟡 Medium" : "🟢 Low"}
+          </span>
+        );
+      }
+    }
+  }), []);
 
   // Modals
   const [detailModalLead, setDetailModalLead] = useState(null);
@@ -355,42 +547,21 @@ const Lead = () => {
     <div className="space-y-5 font-sans select-none pb-16 w-full min-h-screen bg-[#F8FAFC]">
       
       {/* ================= 1. SUB-HEADER BANNER ================= */}
-      <div className="w-full bg-gradient-to-r from-emerald-50 via-teal-50/30 to-white rounded-2xl border border-emerald-200/80 shadow-xs px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5">
-          <button
-            type="button"
-            onClick={() => window.history.back()}
-            className="p-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs transition-colors cursor-pointer"
-            title="Go Back"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-          </button>
-          <div>
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
-                Lead Management Sheet
-              </h1>
-              <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
-                Master Sheet
-              </span>
-            </div>
-            <p className="text-xs sm:text-sm text-slate-600 mt-0.5 font-medium">
-              Complete overview of all leads, conversion metrics, expected revenue, and customer interactions.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2.5 self-start sm:self-auto">
+      <PageHeader
+        title="Lead Management Sheet"
+        badge="Master Sheet"
+        badgeColor="bg-emerald-100 text-emerald-800 border-emerald-300"
+        description="Complete overview of all leads, conversion metrics, expected revenue, and customer interactions."
+        showBackButton={true}
+        rightActions={
           <Link
             to="/sales/leads/add"
             className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs sm:text-sm font-bold shadow-md shadow-emerald-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
           >
             <span>+</span> Add Lead
           </Link>
-        </div>
-      </div>
+        }
+      />
 
       {/* ================= 2. TOP 9 COLORFUL KPI STAT CARDS (Exact Screenshot Match) ================= */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-3">
@@ -478,394 +649,126 @@ const Lead = () => {
 
       </div>
 
-      {/* ================= 3. FILTER CONTROLS & SEARCH BAR ================= */}
-      <div className="w-full bg-white rounded-2xl border border-slate-200/90 shadow-xs p-4 sm:p-5 space-y-3.5">
-        <div className="flex flex-wrap items-center justify-between gap-3.5">
-          
-          {/* Rows Per Page Dropdown */}
-          <div className="flex items-center gap-2">
-            <span className="text-xs sm:text-sm font-bold text-slate-600">Show:</span>
-            <div className="relative w-20">
-              <select
-                value={rowsPerPage}
-                onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-                className="w-full appearance-none px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-bold text-slate-800 focus:outline-hidden focus:border-black cursor-pointer pr-6 shadow-2xs"
-              >
-                <option value={10}>10</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
-                <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+      {/* ================= 3. COLLAPSIBLE FILTER TOGGLE BAR ================= */}
+      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 flex items-center justify-between gap-4">
+        <div className="text-xs sm:text-sm font-semibold text-slate-600">
+          Showing <strong className="font-bold text-slate-900">{filteredLeads.length}</strong> of <strong className="font-bold text-slate-900">{leads.length}</strong> Leads
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowFilters((prev) => !prev)}
+          className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 shadow-2xs"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+          </svg>
+          <span>{showFilters ? "Hide Filter Options ✕" : "Filter Options 🔍"}</span>
+        </button>
+      </div>
+
+      {/* COLLAPSIBLE FILTER PANEL (Opens on click) */}
+      {showFilters && (
+        <div className="w-full bg-white rounded-2xl border border-slate-200/90 shadow-xs p-4 sm:p-5 space-y-3.5 animate-in fade-in duration-200">
+          <div className="flex flex-wrap items-center justify-between gap-3.5">
+            {/* Rows Per Page Dropdown */}
+            <div className="flex items-center gap-2">
+              <span className="text-xs sm:text-sm font-bold text-slate-600">Show:</span>
+              <div className="relative w-20">
+                <select
+                  value={rowsPerPage}
+                  onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}
+                  className="w-full appearance-none px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-bold text-slate-800 focus:outline-hidden focus:border-black cursor-pointer pr-6 shadow-2xs"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Real-time Search */}
-          <div className="relative flex-1 min-w-[220px] max-w-md">
-            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
-            <input
-              type="text"
-              placeholder="Search Client Name, Phone, Requirement..."
-              value={searchTerm}
-              onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-              className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-hidden focus:border-black transition-all placeholder:text-slate-400 font-medium shadow-2xs"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-black text-xs cursor-pointer font-bold"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-
-          {/* Quick Filters */}
-          <div className="flex flex-wrap items-center gap-2">
-            
-            {/* Status Filter */}
-            <select
-              value={filterStatus}
-              onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }}
-              className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 cursor-pointer shadow-2xs hover:border-slate-300"
-            >
-              <option value="All">All Status</option>
-              <option value="INTERESTED">Interested</option>
-              <option value="CONVERTED">Converted</option>
-              <option value="LOST">Lost</option>
-            </select>
-
-            {/* Lead Type */}
-            <select
-              value={filterLeadType}
-              onChange={(e) => { setFilterLeadType(e.target.value); setCurrentPage(1); }}
-              className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 cursor-pointer shadow-2xs hover:border-slate-300"
-            >
-              <option value="All">All Lead Types</option>
-              <option value="FRESH">Fresh</option>
-              <option value="REPEAT">Repeat</option>
-              <option value="RENEWAL">Renewal</option>
-            </select>
-
-            {/* Job Type */}
-            <select
-              value={filterJobType}
-              onChange={(e) => { setFilterJobType(e.target.value); setCurrentPage(1); }}
-              className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 cursor-pointer shadow-2xs hover:border-slate-300"
-            >
-              <option value="All">All Job Types</option>
-              <option value="NEW">New</option>
-              <option value="EXISTING">Existing</option>
-            </select>
-
-            {/* Reset Button */}
-            <button
-              type="button"
-              onClick={handleResetFilters}
-              className="p-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white cursor-pointer shadow-xs transition-colors"
-              title="Reset Filters"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-            </button>
-
-          </div>
-
-        </div>
-      </div>
-
-      {/* ================= 4. MAIN DATA TABLE (Exact Screenshot Columns) ================= */}
-      <div className="w-full bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs sm:text-sm">
-            <thead>
-              <tr className="bg-slate-900 text-white text-xs font-bold uppercase tracking-wider select-none border-b border-slate-800">
-                <th className="py-3.5 px-3 text-center w-12">
-                  <div className="flex items-center justify-center gap-1"><span>S. NO.</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 text-center whitespace-nowrap w-28">
-                  <div className="flex items-center justify-center gap-1"><span>ACTIONS</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 min-w-[170px]">
-                  <div className="flex items-center gap-1"><span>CONCERN PERSON</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 text-center whitespace-nowrap">
-                  <div className="flex items-center justify-center gap-1"><span>STATUS</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 text-center whitespace-nowrap">
-                  <div className="flex items-center justify-center gap-1"><span>NEXT FOLLOW-UP</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 text-center whitespace-nowrap">
-                  <div className="flex items-center justify-center gap-1"><span>FOLLOW-UP REMARK</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 text-center whitespace-nowrap">
-                  <div className="flex items-center justify-center gap-1"><span>CREATED DATE</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 text-center whitespace-nowrap">
-                  <div className="flex items-center justify-center gap-1"><span>LEAD AGE</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 text-center whitespace-nowrap">
-                  <div className="flex items-center justify-center gap-1"><span>LEAD LABEL</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 whitespace-nowrap">
-                  <div className="flex items-center gap-1"><span>LEAD TYPE</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 text-center whitespace-nowrap">
-                  <div className="flex items-center justify-center gap-1"><span>JOB TYPE</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 min-w-[160px]">
-                  <div className="flex items-center gap-1"><span>REQUIREMENT</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 text-right whitespace-nowrap">
-                  <div className="flex items-center justify-end gap-1"><span>EXPECTED BUSINESS</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 text-center whitespace-nowrap">
-                  <div className="flex items-center justify-center gap-1"><span>PIN CODE</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 whitespace-nowrap">
-                  <div className="flex items-center gap-1"><span>LEAD SOURCE</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 whitespace-nowrap">
-                  <div className="flex items-center gap-1"><span>LEAD BY</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 text-center whitespace-nowrap">
-                  <div className="flex items-center justify-center gap-1"><span>ASSIGN TO</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-                <th className="py-3.5 px-3 min-w-[140px]">
-                  <div className="flex items-center gap-1"><span>ADDRESS</span><span className="text-[10px] text-slate-400">↕</span></div>
-                </th>
-              </tr>
-            </thead>
-
-            <tbody className="divide-y divide-slate-100 bg-white">
-              {paginatedLeads.length > 0 ? (
-                paginatedLeads.map((item, index) => {
-                  const serialNumber = (currentPage - 1) * rowsPerPage + index + 1;
-
-                  return (
-                    <tr key={item.id} className="hover:bg-slate-50/90 transition-colors group">
-                      
-                      {/* 1. S. NO. */}
-                      <td className="py-3.5 px-3 text-center font-mono font-bold text-slate-800">
-                        {serialNumber}
-                      </td>
-
-                      {/* 2. ACTIONS (2x2 Grid of Square Buttons: Eye, Calendar, Check, Info) */}
-                      <td className="py-2.5 px-3 text-center whitespace-nowrap">
-                        <div className="grid grid-cols-2 gap-1.5 w-14 mx-auto">
-                          
-                          {/* 1. Orange Eye Button (View Detail) */}
-                          <button
-                            type="button"
-                            onClick={() => setDetailModalLead(item)}
-                            className="w-6 h-6 rounded-lg border border-orange-400 text-orange-600 hover:bg-orange-500 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
-                            title="View Lead Details"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            </svg>
-                          </button>
-
-                          {/* 2. Blue Calendar Button (Schedule Follow-up) */}
-                          <button
-                            type="button"
-                            onClick={() => handleOpenScheduleModal(item)}
-                            className="w-6 h-6 rounded-lg border border-blue-400 text-blue-600 hover:bg-blue-600 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
-                            title="Schedule Follow-up"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                            </svg>
-                          </button>
-
-                          {/* 3. Emerald Check Button (Complete Activity) */}
-                          <button
-                            type="button"
-                            onClick={() => setCompleteModalLead(item)}
-                            className="w-6 h-6 rounded-lg border border-emerald-400 text-emerald-600 hover:bg-emerald-600 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
-                            title="Mark Activity Complete"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                          </button>
-
-                          {/* 4. Purple Info Button (Remarks History) */}
-                          <button
-                            type="button"
-                            onClick={() => setRemarksModalLead(item)}
-                            className="w-6 h-6 rounded-lg border border-purple-400 text-purple-600 hover:bg-purple-600 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
-                            title="View Follow-up Remarks & History"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                          </button>
-
-                        </div>
-                      </td>
-
-                      {/* 3. CONCERN PERSON */}
-                      <td className="py-3.5 px-3">
-                        <div
-                          onClick={() => setDetailModalLead(item)}
-                          className="font-bold text-slate-900 text-sm sm:text-base cursor-pointer hover:text-blue-600 hover:underline leading-tight"
-                        >
-                          {item.concernPersonName}
-                        </div>
-                        <div className="text-xs text-slate-600 font-mono font-medium mt-0.5">{item.phoneNumber}</div>
-                        <div className="text-xs text-slate-400 truncate max-w-[160px]">{item.emailAddress}</div>
-                      </td>
-
-                      {/* 4. STATUS */}
-                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                        <span className={`inline-block px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wide ${getStatusBadgeClass(item.status)}`}>
-                          {item.status}
-                        </span>
-                      </td>
-
-                      {/* 5. NEXT FOLLOW-UP */}
-                      <td className="py-3.5 px-3 text-center whitespace-nowrap text-xs">
-                        <span className={item.nextFollowupDate === "No Schedule" ? "text-slate-400 italic" : "text-emerald-700 font-bold"}>
-                          {item.nextFollowupDate}
-                        </span>
-                      </td>
-
-                      {/* 6. FOLLOW-UP REMARK */}
-                      <td className="py-3.5 px-3 text-center whitespace-nowrap text-xs">
-                        {item.followupRemarksCount > 0 ? (
-                          <button
-                            type="button"
-                            onClick={() => setRemarksModalLead(item)}
-                            className="px-3 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 font-bold hover:bg-blue-100 cursor-pointer shadow-2xs"
-                          >
-                            {item.followupRemarksCount} Follow-up{item.followupRemarksCount > 1 ? "s" : ""}
-                          </button>
-                        ) : (
-                          <span className="text-slate-400 italic">No follow-ups</span>
-                        )}
-                      </td>
-
-                      {/* 7. CREATED DATE */}
-                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                        <div className="font-semibold text-slate-700 text-xs">{item.createdDate}</div>
-                        <div className="text-[10px] text-slate-400 font-mono">{item.createdTime}</div>
-                      </td>
-
-                      {/* 8. LEAD AGE */}
-                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                        <span className="inline-block px-3 py-1 rounded-md text-blue-700 bg-blue-50 border border-blue-200 text-xs font-bold italic">
-                          {item.leadAge}
-                        </span>
-                      </td>
-
-                      {/* 9. LEAD LABEL */}
-                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                        <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-extrabold uppercase ${getLeadLabelBadgeClass(item.leadLabel)}`}>
-                          {item.leadLabel}
-                        </span>
-                      </td>
-
-                      {/* 10. LEAD TYPE */}
-                      <td className="py-3.5 px-3 whitespace-nowrap font-bold text-slate-700 text-xs">
-                        {item.leadType}
-                      </td>
-
-                      {/* 11. JOB TYPE */}
-                      <td className="py-3.5 px-3 text-center whitespace-nowrap">
-                        <span className="inline-block px-2.5 py-0.5 rounded text-[11px] font-bold uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
-                          {item.jobType}
-                        </span>
-                      </td>
-
-                      {/* 12. REQUIREMENT */}
-                      <td className="py-3.5 px-3 text-slate-700 max-w-[160px] truncate text-xs" title={item.requirement}>
-                        {item.requirement}
-                      </td>
-
-                      {/* 13. EXPECTED BUSINESS */}
-                      <td className="py-3.5 px-3 text-right font-mono font-bold text-slate-900 whitespace-nowrap text-xs sm:text-sm">
-                        ₹{Number(item.expectedBusiness).toLocaleString("en-IN")}
-                      </td>
-
-                      {/* 14. PIN CODE */}
-                      <td className="py-3.5 px-3 text-center font-mono text-slate-600 whitespace-nowrap text-xs">
-                        {item.pincode}
-                      </td>
-
-                      {/* 15. LEAD SOURCE */}
-                      <td className="py-3.5 px-3 whitespace-nowrap font-bold text-slate-700 uppercase text-xs">
-                        {item.leadSource}
-                      </td>
-
-                      {/* 16. LEAD BY */}
-                      <td className="py-3.5 px-3 whitespace-nowrap text-slate-700 text-xs">
-                        {item.leadBy}
-                      </td>
-
-                      {/* 17. ASSIGN TO */}
-                      <td className="py-3.5 px-3 text-center whitespace-nowrap text-slate-400 text-xs">
-                        {item.assignTo}
-                      </td>
-
-                      {/* 18. ADDRESS */}
-                      <td className="py-3.5 px-3 text-slate-600 truncate max-w-[140px] text-xs" title={item.address}>
-                        {item.address}
-                      </td>
-
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan={18} className="py-12 text-center text-slate-400">
-                    <div className="text-2xl mb-1">📋</div>
-                    <div className="font-bold text-slate-700 text-sm">No leads found in this sheet</div>
-                    <div className="text-xs text-slate-400 mt-0.5">Try changing or resetting your search filters.</div>
-                  </td>
-                </tr>
+            {/* Real-time Search */}
+            <div className="relative flex-1 min-w-[220px] max-w-md">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">🔍</span>
+              <input
+                type="text"
+                placeholder="Search Client Name, Phone, Requirement..."
+                value={searchTerm}
+                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                className="w-full pl-10 pr-4 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-hidden focus:border-black transition-all placeholder:text-slate-400 font-medium shadow-2xs"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-black text-xs cursor-pointer font-bold"
+                >
+                  ✕
+                </button>
               )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* ================= 5. PAGINATION BAR ================= */}
-        {filteredLeads.length > 0 && (
-          <div className="px-5 py-3.5 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs sm:text-sm bg-slate-50/50">
-            <div className="text-slate-600 font-medium">
-              Showing <span className="font-bold text-slate-900">{(currentPage - 1) * rowsPerPage + 1}</span> to <span className="font-bold text-slate-900">{Math.min(currentPage * rowsPerPage, filteredLeads.length)}</span> of <span className="font-bold text-slate-900">{filteredLeads.length}</span> entries
             </div>
 
-            <div className="flex items-center gap-1.5">
+            {/* Quick Filters */}
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                value={filterStatus}
+                onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }}
+                className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 cursor-pointer shadow-2xs hover:border-slate-300"
+              >
+                <option value="All">All Status</option>
+                <option value="INTERESTED">Interested</option>
+                <option value="CONVERTED">Converted</option>
+                <option value="LOST">Lost</option>
+              </select>
+
+              <select
+                value={filterLeadType}
+                onChange={(e) => { setFilterLeadType(e.target.value); setCurrentPage(1); }}
+                className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 cursor-pointer shadow-2xs hover:border-slate-300"
+              >
+                <option value="All">All Lead Types</option>
+                <option value="FRESH">Fresh</option>
+                <option value="REPEAT">Repeat</option>
+                <option value="RENEWAL">Renewal</option>
+              </select>
+
+              <select
+                value={filterJobType}
+                onChange={(e) => { setFilterJobType(e.target.value); setCurrentPage(1); }}
+                className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 cursor-pointer shadow-2xs hover:border-slate-300"
+              >
+                <option value="All">All Job Types</option>
+                <option value="NEW">New</option>
+                <option value="EXISTING">Existing</option>
+              </select>
+
               <button
                 type="button"
-                disabled={currentPage === 1}
-                onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-                className="px-3.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-bold text-slate-700 cursor-pointer transition-colors shadow-2xs"
+                onClick={handleResetFilters}
+                className="p-2 rounded-xl bg-orange-500 hover:bg-orange-600 text-white cursor-pointer shadow-xs transition-colors"
+                title="Reset Filters"
               >
-                Previous
-              </button>
-
-              <span className="px-3.5 py-1.5 rounded-xl bg-slate-900 text-white font-bold shadow-xs">
-                Page {currentPage} of {totalPages}
-              </span>
-
-              <button
-                type="button"
-                disabled={currentPage >= totalPages}
-                onClick={() => setCurrentPage((p) => p + 1)}
-                className="px-3.5 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed font-bold text-slate-700 cursor-pointer transition-colors shadow-2xs"
-              >
-                Next
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
               </button>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* ================= 4. REUSABLE COMMON TABLE COMPONENT ================= */}
+      <Table
+        data={paginatedLeads}
+        columnConfig={columnConfig}
+        currentPage={currentPage}
+        totalItems={filteredLeads.length}
+        itemsPerPage={rowsPerPage}
+        onPageChange={(page) => setCurrentPage(page)}
+      />
 
       {/* ================= MODAL 1: SCHEDULE FOLLOW-UP MODAL ================= */}
       {scheduleModalLead && (

@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import PageHeader from "../../../../Common/Components/PageHeader";
+import Table from "../../../../Common/Components/Table";
 import { initialTotalLeads as initialLeadsData } from "../../data/totalLeadsData";
 
 const salesPersonsList = [
@@ -56,6 +58,7 @@ const SalseTotalLeads = () => {
   };
 
   // Search & Filter States
+  const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("ALL");
   const [filterSalesPerson, setFilterSalesPerson] = useState("ALL");
@@ -63,6 +66,195 @@ const SalseTotalLeads = () => {
   const [filterCity, setFilterCity] = useState("ALL");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
+
+  // Table Column Configuration for common Table component matching exact screenshot design
+  const columnConfig = useMemo(() => ({
+    actions: {
+      label: "ACTIONS",
+      render: (val, row) => {
+        const phone = row.phoneNumber || row.contact || row.whatsappNumber || "";
+        return (
+          <div className="flex items-center justify-center gap-1.5">
+            {/* Orange Square Eye Button matching screenshot */}
+            <button
+              type="button"
+              onClick={() => setActiveLeadModal(row)}
+              className="w-7 h-7 rounded-lg border border-orange-400 text-orange-500 hover:bg-orange-500 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
+              title="View Lead Details"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+            </button>
+
+            {/* Green Phone Call Icon */}
+            <a
+              href={phone ? `tel:${phone}` : "#"}
+              className={`w-7 h-7 rounded-lg border border-emerald-400 text-emerald-600 hover:bg-emerald-600 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs ${!phone && "opacity-40 pointer-events-none"}`}
+              title={phone ? `Call ${phone}` : "No phone available"}
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+              </svg>
+            </a>
+          </div>
+        );
+      }
+    },
+    createdDate: {
+      label: "CREATED DATE",
+      render: (val, row) => (
+        <span className="text-slate-700 text-xs font-sans font-medium">
+          {val || row.createdDate || row.date || "18/7/2026, 12:45:35 pm"}
+          {row.createdTime && `, ${row.createdTime}`}
+        </span>
+      )
+    },
+    leadAge: {
+      label: "LEAD AGE",
+      render: (val, row) => (
+        <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-600 font-bold italic text-xs border border-blue-200 inline-block">
+          {val || row.leadAge || "33 Days"}
+        </span>
+      )
+    },
+    status: {
+      label: "STATUS",
+      render: (val, row) => {
+        const s = (val || row.status || row.leadStatus || "").toString().toUpperCase();
+        const isNew = s === "NEW" || s === "FRESH" || row.jobType === "NEW" || (row.leadType && row.leadType.toUpperCase() === "FRESH");
+        const displayStatus = isNew ? "NEW" : "OLD";
+
+        return (
+          <span
+            className={`px-3 py-0.5 rounded-full text-xs font-extrabold uppercase border ${
+              displayStatus === "NEW"
+                ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                : "bg-slate-100 text-slate-700 border-slate-300"
+            }`}
+          >
+            {displayStatus}
+          </span>
+        );
+      }
+    },
+    concernPersonName: {
+      label: "CONCERN PERSON NAME",
+      render: (val, row) => (
+        <div className="text-left font-medium text-slate-800 text-xs">
+          {row.concernPersonName || row.clientName || "--"}
+        </div>
+      )
+    },
+    phoneNumber: {
+      label: "PHONE",
+      render: (val, row) => {
+        const phone = row.phoneNumber || row.contact || row.whatsappNumber || "--";
+        return (
+          <div className="text-left font-sans text-slate-800 text-xs font-medium">
+            {phone}
+          </div>
+        );
+      }
+    },
+    email: {
+      label: "EMAIL",
+      render: (val, row) => (
+        <span className="text-xs font-mono text-slate-600">
+          {val || row.emailAddress || row.email || "--"}
+        </span>
+      )
+    },
+    leadType: {
+      label: "LEAD TYPE",
+      render: (val, row) => (
+        <span className="px-2 py-0.5 rounded text-xs font-bold bg-slate-100 text-slate-800 border border-slate-200">
+          {val || row.leadType || "FRESH"}
+        </span>
+      )
+    },
+    jobType: {
+      label: "JOB TYPE",
+      render: (val, row) => (
+        <span className="px-2 py-0.5 rounded text-xs font-bold uppercase bg-emerald-50 text-emerald-800 border border-emerald-200">
+          {val || row.jobType || "NEW"}
+        </span>
+      )
+    },
+    leadLabel: {
+      label: "LEAD LABEL",
+      render: (val, row) => {
+        const lbl = (val || row.leadLabel || row.leadStatus || "WARM").toUpperCase();
+        const colors = {
+          HOT: "bg-rose-100 text-rose-800 border-rose-200",
+          WARM: "bg-amber-100 text-amber-800 border-amber-200",
+          COLD: "bg-sky-100 text-sky-800 border-sky-200",
+          NEW: "bg-purple-100 text-purple-800 border-purple-200"
+        };
+        return (
+          <span className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold uppercase border ${colors[lbl] || "bg-slate-100 text-slate-700 border-slate-200"}`}>
+            {lbl}
+          </span>
+        );
+      }
+    },
+    leadSource: {
+      label: "LEAD SOURCE",
+      render: (val, row) => (
+        <span className="text-xs font-bold text-slate-700 uppercase">
+          {val || row.leadSource || row.leadMode || "WEBSITE"}
+        </span>
+      )
+    },
+    requirement: {
+      label: "REQUIREMENTS",
+      render: (val, row) => (
+        <div className="max-w-[200px] truncate text-xs text-slate-700 font-medium" title={val || row.requirement || row.projectDetails}>
+          {val || row.requirement || row.projectDetails || "--"}
+        </div>
+      )
+    },
+    addressPincode: {
+      label: "ADDRESS & PIN CODE",
+      render: (val, row) => (
+        <div className="text-left text-xs max-w-[180px]">
+          <div className="truncate text-slate-800 font-medium" title={row.address || row.siteAddress || row.city}>
+            {row.address || row.siteAddress || row.city || "--"}
+          </div>
+          {row.pincode && (
+            <div className="text-[11px] font-mono text-slate-500 font-bold">
+              PIN: {row.pincode}
+            </div>
+          )}
+        </div>
+      )
+    },
+    assignTo: {
+      label: "ASSIGN PERSON",
+      render: (val, row) => (
+        <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-800 text-xs font-semibold border border-slate-200">
+          {val || row.assignTo || row.salesPerson || "--"}
+        </span>
+      )
+    },
+    priority: {
+      label: "PRIORITY",
+      render: (val, row) => {
+        const p = (val || row.priority || (row.leadLabel === "HOT" || row.leadStatus === "Hot" ? "HIGH" : row.leadLabel === "WARM" || row.leadStatus === "Warm" ? "MEDIUM" : "LOW")).toUpperCase();
+        const badges = {
+          HIGH: "bg-red-50 text-red-700 border-red-200",
+          MEDIUM: "bg-amber-50 text-amber-700 border-amber-200",
+          LOW: "bg-emerald-50 text-emerald-700 border-emerald-200"
+        };
+        return (
+          <span className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold uppercase border ${badges[p] || "bg-slate-100 text-slate-700 border-slate-200"}`}>
+            {p === "HIGH" ? "🔴 High" : p === "MEDIUM" ? "🟡 Medium" : "🟢 Low"}
+          </span>
+        );
+      }
+    }
+  }), []);
 
   // Sort State
   const [sortConfig, setSortConfig] = useState({
@@ -292,559 +484,221 @@ const SalseTotalLeads = () => {
     <div className="space-y-4 font-sans select-none pb-16">
       
       {/* ================= 1. SUB-HEADER / ACTIONS ================= */}
-      <div className="bg-gradient-to-r from-blue-50 via-indigo-50/20 to-white rounded-2xl border border-blue-200/80 shadow-xs p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5">
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            className="p-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs transition-colors cursor-pointer"
-            title="Back"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-          </button>
-          <div>
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
-                Total Leads Directory
-              </h1>
-              <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-300">
-                Master Directory
-              </span>
-            </div>
-            <p className="text-xs sm:text-sm text-slate-600 mt-0.5 font-medium">
-              Showing <span className="font-bold text-slate-900">{filteredLeads.length}</span> of <span className="font-bold text-slate-900">{leads.length}</span> registered pipeline leads
-            </p>
+      <PageHeader
+        title="Total Leads Directory"
+        badge="Master Directory"
+        badgeColor="bg-blue-100 text-blue-800 border-blue-300"
+        description={`Showing ${filteredLeads.length} of ${leads.length} registered pipeline leads`}
+        showBackButton={true}
+        rightActions={
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={handleExportCSV}
+              className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-bold shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
+              title="Export CSV"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+              </svg>
+              <span>Export CSV</span>
+            </button>
+
+            <Link
+              to="/sales/leads/add"
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs sm:text-sm font-bold shadow-md shadow-emerald-600/20 transition-all shrink-0 flex items-center gap-1.5 cursor-pointer"
+            >
+              <span>+</span> Add Lead
+            </Link>
           </div>
+        }
+      />
+
+      {/* ================= 2. COLLAPSIBLE FILTER TOGGLE BAR ================= */}
+      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 flex items-center justify-between gap-4">
+        <div className="text-xs sm:text-sm font-semibold text-slate-600">
+          Showing <strong className="font-bold text-slate-900">{filteredLeads.length}</strong> of <strong className="font-bold text-slate-900">{leads.length}</strong> Total Leads
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex items-center gap-2.5 self-start sm:self-auto">
-          <button
-            type="button"
-            onClick={handleExportCSV}
-            className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-bold shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
-            title="Export CSV"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            <span>Export CSV</span>
-          </button>
-
-          <Link
-            to="/sales/leads/add"
-            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs sm:text-sm font-bold shadow-md shadow-emerald-600/20 transition-all shrink-0 flex items-center gap-1.5 cursor-pointer"
-          >
-            <span>+</span> Add Lead
-          </Link>
-        </div>
+        <button
+          type="button"
+          onClick={() => setShowFilters((prev) => !prev)}
+          className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 shadow-2xs"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+          </svg>
+          <span>{showFilters ? "Hide Filter Options ✕" : "Filter Options 🔍"}</span>
+        </button>
       </div>
 
-      {/* ================= 2. SEARCH & FILTER CONTROLS ================= */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 space-y-3.5">
-        
-        {/* Top Search & Status Tabs */}
-        <div className="flex flex-col lg:flex-row items-center justify-between gap-3.5">
-          
-          {/* Real-time Search */}
-          <div className="relative w-full lg:w-96">
-            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">
-              🔍
-            </span>
-            <input
-              type="text"
-              placeholder="Search Client Name, Project Details, City..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-hidden focus:border-black transition-all placeholder:text-slate-400 font-medium shadow-2xs"
-            />
-            {searchTerm && (
-              <button
-                onClick={() => setSearchTerm("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-black text-xs cursor-pointer font-bold"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-
-          {/* Quick Status Tabs */}
-          <div className="flex items-center gap-2 overflow-x-auto w-full lg:w-auto pb-1 lg:pb-0">
-            {["ALL", "HOT", "WARM", "COLD", "NEW", "CONVERTED"].map((st) => (
-              <button
-                key={st}
-                type="button"
-                onClick={() => {
-                  setFilterStatus(st);
+      {/* COLLAPSIBLE FILTER PANEL (Opens on click) */}
+      {showFilters && (
+        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 space-y-3.5 transition-all">
+          {/* Top Search & Status Tabs */}
+          <div className="flex flex-col lg:flex-row items-center justify-between gap-3.5">
+            {/* Real-time Search */}
+            <div className="relative w-full lg:w-96">
+              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">
+                🔍
+              </span>
+              <input
+                type="text"
+                placeholder="Search Client Name, Project Details, City..."
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
                   setCurrentPage(1);
                 }}
-                className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
-                  filterStatus === st
-                    ? "bg-slate-900 text-white shadow-md"
-                    : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                }`}
-              >
-                {st !== "ALL" && (
-                  <span className={`w-2 h-2 rounded-full ${getStatusDot(st)}`} />
-                )}
-                <span>{st}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Secondary Filter Dropdowns */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 pt-3 border-t border-slate-100 text-xs sm:text-sm">
-          
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
-              Sales Person
-            </label>
-            <select
-              value={filterSalesPerson}
-              onChange={(e) => {
-                setFilterSalesPerson(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white focus:outline-hidden focus:border-black cursor-pointer font-semibold shadow-2xs"
-            >
-              {salesPersonsList.map((p) => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
-              Work Type
-            </label>
-            <select
-              value={filterWorkType}
-              onChange={(e) => {
-                setFilterWorkType(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white focus:outline-hidden focus:border-black cursor-pointer font-semibold shadow-2xs"
-            >
-              {workTypesList.map((w) => (
-                <option key={w} value={w}>{w}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
-              City
-            </label>
-            <select
-              value={filterCity}
-              onChange={(e) => {
-                setFilterCity(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white focus:outline-hidden focus:border-black cursor-pointer font-semibold shadow-2xs"
-            >
-              {citiesList.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
-              Date From
-            </label>
-            <input
-              type="date"
-              value={filterDateFrom}
-              onChange={(e) => setFilterDateFrom(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white focus:outline-hidden focus:border-black font-semibold shadow-2xs"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-bold text-slate-500 uppercase mb-1">
-              Date To
-            </label>
-            <input
-              type="date"
-              value={filterDateTo}
-              onChange={(e) => setFilterDateTo(e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white focus:outline-hidden focus:border-black font-semibold shadow-2xs"
-            />
-          </div>
-
-        </div>
-
-        {/* Selected Rows Batch Bar */}
-        {selectedIds.length > 0 && (
-          <div className="p-3 bg-slate-900 text-white rounded-xl flex items-center justify-between animate-in fade-in duration-200">
-            <div className="flex items-center gap-2 text-xs sm:text-sm">
-              <span className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-xs">
-                {selectedIds.length}
-              </span>
-              <span className="font-bold">Leads Selected</span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setBulkStatusModal(true)}
-                className="px-3.5 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white text-xs sm:text-sm font-bold transition-colors cursor-pointer"
-              >
-                Change Status
-              </button>
-
-              <button
-                type="button"
-                onClick={handleBulkDelete}
-                className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs sm:text-sm font-bold transition-colors cursor-pointer shadow-xs"
-              >
-                Delete Selected
-              </button>
-            </div>
-          </div>
-        )}
-
-      </div>
-
-      {/* ================= 3. LEADS TABLE (ACTIONS COLUMN NEXT TO SR. NO.) ================= */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse text-xs sm:text-sm">
-            <thead>
-              <tr className="bg-slate-900 text-xs font-bold uppercase tracking-wider text-slate-200 border-b border-slate-800 select-none">
-                
-                {/* 1. Checkbox */}
-                <th className="py-3 px-3 w-8">
-                  <input
-                    type="checkbox"
-                    onChange={handleSelectAll}
-                    checked={paginatedLeads.length > 0 && selectedIds.length === paginatedLeads.length}
-                    className="w-3.5 h-3.5 rounded cursor-pointer accent-black"
-                  />
-                </th>
-
-                {/* 2. Sr. No. */}
-                <th
-                  onClick={() => handleSort("id")}
-                  className="py-3 px-3 font-bold cursor-pointer hover:text-black whitespace-nowrap"
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-hidden focus:border-black transition-all placeholder:text-slate-400 font-medium shadow-2xs"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-black text-xs cursor-pointer font-bold"
                 >
-                  <div className="flex items-center gap-1">
-                    <span>Sr.</span>
-                    {sortConfig.key === "id" && <span>{sortConfig.direction === "asc" ? "▲" : "▼"}</span>}
-                  </div>
-                </th>
-
-                {/* 3. ACTIONS (POSITIONED RIGHT NEXT TO SR. NO.) */}
-                <th className="py-3 px-3 font-bold text-center whitespace-nowrap bg-slate-100/70 border-x border-slate-200/60 min-w-[140px]">
-                  ⚡ Actions
-                </th>
-
-                {/* 4. Date */}
-                <th
-                  onClick={() => handleSort("date")}
-                  className="py-3 px-3 font-bold cursor-pointer hover:text-black whitespace-nowrap"
-                >
-                  <div className="flex items-center gap-1">
-                    <span>Date</span>
-                    {sortConfig.key === "date" && <span>{sortConfig.direction === "asc" ? "▲" : "▼"}</span>}
-                  </div>
-                </th>
-
-                {/* 5. Sales Person */}
-                <th
-                  onClick={() => handleSort("salesPerson")}
-                  className="py-3 px-3 font-bold cursor-pointer hover:text-black whitespace-nowrap"
-                >
-                  <div className="flex items-center gap-1">
-                    <span>Sales Person</span>
-                    {sortConfig.key === "salesPerson" && <span>{sortConfig.direction === "asc" ? "▲" : "▼"}</span>}
-                  </div>
-                </th>
-
-                {/* 6. Client Name */}
-                <th
-                  onClick={() => handleSort("clientName")}
-                  className="py-3 px-3 font-bold cursor-pointer hover:text-black min-w-[150px]"
-                >
-                  <div className="flex items-center gap-1">
-                    <span>Client Name</span>
-                    {sortConfig.key === "clientName" && <span>{sortConfig.direction === "asc" ? "▲" : "▼"}</span>}
-                  </div>
-                </th>
-
-                {/* 7. Contact */}
-                <th className="py-3 px-3 font-bold whitespace-nowrap">Contact</th>
-
-                {/* 8. Project Details */}
-                <th className="py-3 px-3 font-bold min-w-[200px] max-w-[260px]">
-                  Project Details
-                </th>
-
-                {/* 9. Work Type */}
-                <th className="py-3 px-3 font-bold whitespace-nowrap">Work Type</th>
-
-                {/* 10. Expected Revenue */}
-                <th
-                  onClick={() => handleSort("expectedRevenue")}
-                  className="py-3 px-3 font-bold cursor-pointer hover:text-black whitespace-nowrap"
-                >
-                  <div className="flex items-center gap-1">
-                    <span>Revenue (₹)</span>
-                    {sortConfig.key === "expectedRevenue" && <span>{sortConfig.direction === "asc" ? "▲" : "▼"}</span>}
-                  </div>
-                </th>
-
-                {/* 11. City */}
-                <th
-                  onClick={() => handleSort("city")}
-                  className="py-3 px-3 font-bold cursor-pointer hover:text-black whitespace-nowrap"
-                >
-                  <div className="flex items-center gap-1">
-                    <span>City</span>
-                    {sortConfig.key === "city" && <span>{sortConfig.direction === "asc" ? "▲" : "▼"}</span>}
-                  </div>
-                </th>
-
-                {/* 12. Lead Status */}
-                <th
-                  onClick={() => handleSort("leadStatus")}
-                  className="py-3 px-3 font-bold cursor-pointer hover:text-black whitespace-nowrap"
-                >
-                  <div className="flex items-center gap-1">
-                    <span>Status</span>
-                    {sortConfig.key === "leadStatus" && <span>{sortConfig.direction === "asc" ? "▲" : "▼"}</span>}
-                  </div>
-                </th>
-
-                {/* 13. Next Follow-up */}
-                <th
-                  onClick={() => handleSort("nextFollowup")}
-                  className="py-3 px-3 font-bold cursor-pointer hover:text-black whitespace-nowrap"
-                >
-                  <div className="flex items-center gap-1">
-                    <span>Follow-up</span>
-                    {sortConfig.key === "nextFollowup" && <span>{sortConfig.direction === "asc" ? "▲" : "▼"}</span>}
-                  </div>
-                </th>
-              </tr>
-            </thead>
-
-            <tbody className="divide-y divide-slate-100">
-              {paginatedLeads.length > 0 ? (
-                paginatedLeads.map((item, index) => {
-                  const isSelected = selectedIds.includes(item.id);
-                  const isConvertible = ["hot", "warm"].includes(item.leadStatus?.toLowerCase());
-
-                  return (
-                    <tr
-                      key={item.id}
-                      className={`hover:bg-slate-50/80 transition-colors ${
-                        isSelected ? "bg-slate-50" : ""
-                      }`}
-                    >
-                      {/* 1. Checkbox */}
-                      <td className="py-3 px-3">
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => handleSelectRow(item.id)}
-                          className="w-3.5 h-3.5 rounded cursor-pointer accent-black"
-                        />
-                      </td>
-
-                      {/* 2. Sr No */}
-                      <td className="py-3 px-3 font-mono font-bold text-slate-800 whitespace-nowrap">
-                        {(currentPage - 1) * rowsPerPage + index + 1}
-                      </td>
-
-                      {/* 3. BEAUTIFULLY STYLED ACTIONS ROW (NEXT TO SR. NO.) */}
-                      <td className="py-2.5 px-3 bg-slate-50/50 border-x border-slate-100 whitespace-nowrap text-center">
-                        <div className="flex items-center justify-center gap-1.5">
-                          
-                          {/* 1. View Button (Eye Icon) */}
-                          <button
-                            type="button"
-                            onClick={() => setActiveLeadModal(item)}
-                            className="w-7 h-7 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50/50 flex items-center justify-center transition-all cursor-pointer shadow-2xs"
-                            title="View Lead Details"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                            </svg>
-                          </button>
-
-                          {/* 2. Follow-up Button (Phone Icon) */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setFollowupModal(item);
-                              setFollowupDate(item.nextFollowup || "");
-                            }}
-                            className="w-7 h-7 rounded-lg bg-white border border-slate-200 text-slate-600 hover:text-amber-600 hover:border-amber-300 hover:bg-amber-50/50 flex items-center justify-center transition-all cursor-pointer shadow-2xs"
-                            title="Schedule Follow-up"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-                            </svg>
-                          </button>
-
-                          {/* 3. Convert Button (Clean Badge) */}
-                          {isConvertible && (
-                            <button
-                              type="button"
-                              onClick={() => handleConvertLead(item)}
-                              className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-extrabold flex items-center gap-1 transition-all shadow-2xs cursor-pointer"
-                              title="Convert Lead to Deal"
-                            >
-                              <span>Convert</span>
-                            </button>
-                          )}
-
-                          {/* 4. Delete Button (Trash Icon) */}
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteRow(item.id)}
-                            className="w-7 h-7 rounded-lg bg-white border border-slate-200 text-slate-400 hover:text-rose-600 hover:border-rose-300 hover:bg-rose-50/50 flex items-center justify-center transition-all cursor-pointer shadow-2xs"
-                            title="Delete Lead"
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-
-                        </div>
-                      </td>
-
-                      {/* 4. Date */}
-                      <td className="py-3 px-3 font-mono text-slate-500 whitespace-nowrap">
-                        {item.date}
-                      </td>
-
-                      {/* 5. Sales Person */}
-                      <td className="py-3 px-3 font-medium text-slate-800 whitespace-nowrap">
-                        {item.salesPerson}
-                      </td>
-
-                      {/* 6. Client Name */}
-                      <td className="py-3 px-3 font-bold text-slate-900">
-                        <div className="truncate max-w-[160px]" title={item.clientName}>
-                          {item.clientName}
-                        </div>
-                      </td>
-
-                      {/* 7. Contact */}
-                      <td className="py-3 px-3 font-mono text-slate-700 whitespace-nowrap">
-                        +91 {item.contact || item.phoneNumber}
-                      </td>
-
-                      {/* 8. Project Details */}
-                      <td className="py-3 px-3 text-slate-600">
-                        <div
-                          className="truncate max-w-[220px] cursor-help text-[11px]"
-                          title={item.projectDetails}
-                        >
-                          {item.projectDetails || "—"}
-                        </div>
-                      </td>
-
-                      {/* 9. Work Type */}
-                      <td className="py-3 px-3 whitespace-nowrap">
-                        <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[10px] font-semibold border border-slate-200">
-                          {Array.isArray(item.workType) ? item.workType[0] : item.workType || "Display"}
-                        </span>
-                      </td>
-
-                      {/* 10. Revenue */}
-                      <td className="py-3 px-3 font-mono font-black text-slate-900 whitespace-nowrap">
-                        ₹ {Number(item.expectedRevenue || item.expectedBusinessAmount || 0).toLocaleString("en-IN")}
-                      </td>
-
-                      {/* 11. City */}
-                      <td className="py-3 px-3 text-slate-700 font-medium whitespace-nowrap">
-                        {item.city}
-                      </td>
-
-                      {/* 12. Lead Status */}
-                      <td className="py-3 px-3 whitespace-nowrap">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${getStatusBadge(item.leadStatus)}`}>
-                          <span className={`w-1.5 h-1.5 rounded-full ${getStatusDot(item.leadStatus)}`} />
-                          <span>{item.leadStatus || "New"}</span>
-                        </span>
-                      </td>
-
-                      {/* 13. Next Followup */}
-                      <td className="py-3 px-3 font-mono text-[11px] text-slate-600 whitespace-nowrap">
-                        {item.nextFollowup || "—"}
-                      </td>
-
-                    </tr>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td colSpan={13} className="py-12 text-center text-slate-400 text-xs">
-                    No leads found matching your filters.
-                  </td>
-                </tr>
+                  ✕
+                </button>
               )}
-            </tbody>
-          </table>
-        </div>
+            </div>
 
-        {/* ================= 4. PAGINATION FOOTER ================= */}
-        <div className="p-4 border-t border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-          
-          <div className="flex items-center gap-2 text-slate-600">
-            <span>Rows per page:</span>
-            <select
-              value={rowsPerPage}
-              onChange={(e) => {
-                setRowsPerPage(Number(e.target.value));
-                setCurrentPage(1);
-              }}
-              className="px-2 py-1 rounded-lg border border-slate-200 bg-white text-xs font-bold cursor-pointer"
-            >
-              <option value={20}>20</option>
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-            </select>
+            {/* Quick Status Tabs */}
+            <div className="flex items-center gap-2 overflow-x-auto w-full lg:w-auto pb-1 lg:pb-0">
+              {["ALL", "HOT", "WARM", "COLD", "NEW", "CONVERTED"].map((st) => (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => {
+                    setFilterStatus(st);
+                    setCurrentPage(1);
+                  }}
+                  className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                    filterStatus === st
+                      ? "bg-slate-900 text-white shadow-md"
+                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                  }`}
+                >
+                  {st !== "ALL" && (
+                    <span className={`w-2 h-2 rounded-full ${getStatusDot(st)}`} />
+                  )}
+                  <span>{st}</span>
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              disabled={currentPage === 1}
-              onClick={() => setCurrentPage((p) => Math.max(p - 1, 1))}
-              className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 font-bold cursor-pointer"
-            >
-              Prev
-            </button>
+          {/* Secondary Filter Dropdowns */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 pt-3 border-t border-slate-100 text-xs sm:text-sm">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Sales Person</label>
+              <select
+                value={filterSalesPerson}
+                onChange={(e) => {
+                  setFilterSalesPerson(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white focus:outline-hidden focus:border-black cursor-pointer font-semibold shadow-2xs"
+              >
+                {salesPersonsList.map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+            </div>
 
-            <span className="px-3 py-1 font-mono font-bold text-slate-700">
-              Page {currentPage} of {totalPages}
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Work Type</label>
+              <select
+                value={filterWorkType}
+                onChange={(e) => {
+                  setFilterWorkType(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white focus:outline-hidden focus:border-black cursor-pointer font-semibold shadow-2xs"
+              >
+                {workTypesList.map((w) => (
+                  <option key={w} value={w}>{w}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">City</label>
+              <select
+                value={filterCity}
+                onChange={(e) => {
+                  setFilterCity(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white focus:outline-hidden focus:border-black cursor-pointer font-semibold shadow-2xs"
+              >
+                {citiesList.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Date From</label>
+              <input
+                type="date"
+                value={filterDateFrom}
+                onChange={(e) => setFilterDateFrom(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white focus:outline-hidden focus:border-black font-semibold shadow-2xs"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Date To</label>
+              <input
+                type="date"
+                value={filterDateTo}
+                onChange={(e) => setFilterDateTo(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white focus:outline-hidden focus:border-black font-semibold shadow-2xs"
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Selected Rows Batch Bar */}
+      {selectedIds.length > 0 && (
+        <div className="p-3 bg-slate-900 text-white rounded-xl flex items-center justify-between animate-in fade-in duration-200">
+          <div className="flex items-center gap-2 text-xs sm:text-sm">
+            <span className="w-6 h-6 rounded-full bg-emerald-500 text-white flex items-center justify-center font-bold text-xs">
+              {selectedIds.length}
             </span>
+            <span className="font-bold">Leads Selected</span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setBulkStatusModal(true)}
+              className="px-3.5 py-1.5 rounded-lg bg-white/20 hover:bg-white/30 text-white text-xs sm:text-sm font-bold transition-colors cursor-pointer"
+            >
+              Change Status
+            </button>
 
             <button
               type="button"
-              disabled={currentPage === totalPages}
-              onClick={() => setCurrentPage((p) => Math.min(p + 1, totalPages))}
-              className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50 font-bold cursor-pointer"
+              onClick={handleBulkDelete}
+              className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs sm:text-sm font-bold transition-colors cursor-pointer shadow-xs"
             >
-              Next
+              Delete Selected
             </button>
           </div>
-
         </div>
+      )}
 
-      </div>
+      {/* ================= 3. REUSABLE COMMON TABLE COMPONENT ================= */}
+      <Table
+        data={paginatedLeads}
+        columnConfig={columnConfig}
+        currentPage={currentPage}
+        totalItems={filteredLeads.length}
+        itemsPerPage={rowsPerPage}
+        onPageChange={(page) => setCurrentPage(page)}
+      />
 
       {/* ================= 5. VIEW DETAIL MODAL ================= */}
       {activeLeadModal && (

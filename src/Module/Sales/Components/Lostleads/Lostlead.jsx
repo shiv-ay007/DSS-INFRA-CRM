@@ -1,4 +1,5 @@
 import React, { useState, useMemo } from "react";
+import PageHeader from "../../../../Common/Components/PageHeader";
 import { initialLostLeads } from "../../data/lostLeadsData";
 
 const leadTypeOptions = ["Lead Type", "FRESH", "EXISTING CLIENT", "RENEWAL", "CROSS-SELL"];
@@ -182,43 +183,21 @@ const Lostlead = () => {
     <div className="space-y-5 font-sans select-none pb-12 w-full min-h-screen bg-[#F8FAFC]">
       
       {/* 1. SUB-HEADER BAR */}
-      <div className="w-full bg-gradient-to-r from-rose-50 via-red-50/30 to-white rounded-2xl border border-rose-200/80 shadow-xs px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5">
-          <button
-            type="button"
-            onClick={() => window.history.back()}
-            className="p-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs transition-colors cursor-pointer"
-            title="Go Back"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-          </button>
-
-          <div>
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
-                Lost Leads Directory
-              </h1>
-              <span className="text-xs font-mono font-bold px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 border border-rose-300">
-                Closed / Lost
-              </span>
-            </div>
-            <p className="text-xs sm:text-sm text-slate-600 mt-0.5 font-medium">
-              Analyze lost deal reasons and revive opportunities back into the active pipeline.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="Lost Leads Directory"
+        badge="Closed / Lost"
+        badgeColor="bg-rose-100 text-rose-800 border-rose-300"
+        description="Analyze lost deal reasons and revive opportunities back into the active pipeline."
+        showBackButton={true}
+        rightActions={
           <div className="px-4 py-2 rounded-xl bg-white border border-rose-200 shadow-2xs text-xs sm:text-sm font-bold flex items-center gap-2">
             <span className="text-rose-600">📉 Lost Value:</span>
             <span className="font-mono font-black text-rose-800 text-sm sm:text-base">
               ₹ {totalLostAmount.toLocaleString("en-IN")}
             </span>
           </div>
-        </div>
-      </div>
+        }
+      />
 
       {/* 2. TAB BUTTONS */}
       <div className="flex justify-center w-full">

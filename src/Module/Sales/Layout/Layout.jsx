@@ -41,21 +41,21 @@ const Layout = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex w-full relative">
+    <div className="h-screen bg-slate-100 flex w-full relative overflow-hidden">
       {/* 1. Fixed Left Sidebar */}
       <SalseSidebar />
 
       {/* 2. Right Side Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-screen">
-        {/* Top Header */}
+      <div className="flex-1 flex flex-col min-w-0 h-screen overflow-hidden">
+        {/* Top Fixed Header */}
         <SalesHeader />
 
-        {/* Dynamic Page Content via Outlet */}
+        {/* Dynamic Page Content (Scrollable Middle Section) */}
         <main className="flex-1 p-4 sm:p-6 overflow-y-auto scroll-smooth">
           <Outlet />
         </main>
 
-        {/* Bottom Footer */}
+        {/* Bottom Fixed Footer */}
         <SalseFooter />
       </div>
 

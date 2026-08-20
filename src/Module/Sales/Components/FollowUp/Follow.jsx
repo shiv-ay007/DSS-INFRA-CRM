@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useRef } from "react";
+import PageHeader from "../../../../Common/Components/PageHeader";
 import {
   getOffsetDateString,
   teamMembers,
@@ -332,38 +333,19 @@ const Follow = () => {
     <div className="w-full min-h-screen bg-[#F8FAFC] font-sans antialiased text-slate-900 p-3 sm:p-5 select-none pb-12">
       
       {/* ================= 1. TOP HEADER ================= */}
-      <div className="w-full bg-gradient-to-r from-amber-50 via-orange-50/30 to-white rounded-2xl border border-amber-200/80 shadow-xs px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5">
-        <div className="flex items-center gap-3.5">
-          <button
-            type="button"
-            onClick={() => window.history.back?.()}
-            className="p-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs transition-colors cursor-pointer"
-            title="Go Back"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-            </svg>
-          </button>
-
-          <div>
-            <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight flex items-center gap-2 flex-wrap">
-              <span>Scheduled Leads & Follow-ups</span>
-              <span className="text-xs px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-900 border border-amber-300 font-bold font-mono">
-                Daily Calls
-              </span>
-            </h1>
-            <p className="text-xs sm:text-sm text-slate-600 mt-0.5 font-medium">
-              View upcoming, today's and overdue customer follow-ups and log activity notes.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
+      <PageHeader
+        title="Scheduled Leads & Follow-ups"
+        badge="Daily Calls"
+        badgeColor="bg-amber-100 text-amber-900 border-amber-300"
+        description="View upcoming, today's and overdue customer follow-ups and log activity notes."
+        showBackButton={true}
+        className="mb-5"
+        rightActions={
           <span className="px-3.5 py-1.5 rounded-xl bg-white border border-slate-200 shadow-2xs text-xs sm:text-sm font-bold text-slate-700">
             Total: <span className="font-mono text-amber-700 font-black">{filteredLeads.length}</span> Scheduled
           </span>
-        </div>
-      </div>
+        }
+      />
 
       {/* ================= 2. FILTER CONTROLS TOOLBAR ================= */}
       <div className="w-full bg-white rounded-2xl border border-slate-200/90 shadow-xs p-4 sm:p-5 mb-5 space-y-3.5">
