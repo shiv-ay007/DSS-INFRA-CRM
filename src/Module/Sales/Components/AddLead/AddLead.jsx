@@ -1,36 +1,6 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-
-// Predefined sales persons & work types
-const salesPersonsList = [
-  "Sales TL (Current User)",
-  "Rahul Sharma",
-  "Pooja Verma",
-  "Vikram Malhotra",
-  "Ankit Patel",
-  "Sanjay Gupta"
-];
-
-const leadModesList = [
-  "Inbound Call",
-  "Outbound Call",
-  "Website Inquiry",
-  "WhatsApp Business",
-  "Direct Referral",
-  "Exhibition / Trade Fair",
-  "Field Visit",
-  "Social Media"
-];
-
-const availableWorkTypes = [
-  "Digital Signage",
-  "LED Video Wall",
-  "Indoor Display",
-  "Outdoor Billboard",
-  "Interactive Kiosk",
-  "Software / CMS",
-  "Maintenance & AMC"
-];
+import { salesPersonsList, leadModesList, availableWorkTypes } from "../../data/addLeadData";
 
 const Addlead = () => {
   const navigate = useNavigate();
@@ -235,21 +205,21 @@ const Addlead = () => {
       </div>
 
       {/* ================= 2. LEAD FORM CARD ================= */}
-      <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-6 sm:p-8 space-y-7">
+      <form onSubmit={handleSubmit} className="bg-white rounded-2xl border border-slate-200/60 shadow-xs p-4 sm:p-6 space-y-4">
         
         {/* SECTION 1: LEAD METADATA & CONTACT */}
         <div>
-          <h2 className="text-xs sm:text-sm font-extrabold text-blue-700 uppercase tracking-wider mb-4 flex items-center gap-2">
+          <h2 className="text-xs sm:text-sm font-extrabold text-blue-700 uppercase tracking-wider mb-2.5 flex items-center gap-2">
             <span className="w-6 h-6 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center font-black text-xs">1</span>
             <span>Basic & Assignment Details</span>
-            <span className="flex-1 h-px bg-slate-200" />
+            <span className="flex-1 h-px bg-slate-200/60" />
           </h2>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
             
             {/* 1. Date */}
             <div>
-              <label className="block text-xs sm:text-sm font-bold text-slate-800 mb-1.5">
+              <label className="block text-xs sm:text-sm font-bold text-slate-800 mb-1">
                 Lead Date <span className="text-rose-500">*</span>
               </label>
               <input
@@ -257,8 +227,8 @@ const Addlead = () => {
                 name="date"
                 value={formData.date}
                 onChange={handleChange}
-                className={`w-full px-4 py-2.5 rounded-xl border text-sm font-medium text-slate-900 bg-slate-50/50 focus:bg-white focus:outline-hidden focus:ring-2 transition-all ${
-                  errors.date ? "border-rose-300 focus:ring-rose-200 bg-rose-50/30" : "border-slate-200 focus:border-blue-500 focus:ring-blue-100"
+                className={`w-full px-3.5 py-1.5 rounded-lg border text-sm font-medium text-slate-900 bg-slate-50/50 focus:bg-white focus:outline-hidden focus:ring-2 transition-all ${
+                  errors.date ? "border-rose-300 focus:ring-rose-200 bg-rose-50/30" : "border-slate-200/80 focus:border-blue-500 focus:ring-blue-100"
                 }`}
               />
               {errors.date && <p className="text-xs text-rose-500 font-semibold mt-1">{errors.date}</p>}
@@ -266,15 +236,15 @@ const Addlead = () => {
 
             {/* 2. Sales Person */}
             <div>
-              <label className="block text-xs sm:text-sm font-bold text-slate-800 mb-1.5">
+              <label className="block text-xs sm:text-sm font-bold text-slate-800 mb-1">
                 Sales Person <span className="text-rose-500">*</span>
               </label>
               <select
                 name="salesPerson"
                 value={formData.salesPerson}
                 onChange={handleChange}
-                className={`w-full px-4 py-2.5 rounded-xl border text-sm font-semibold text-slate-900 bg-slate-50/50 focus:bg-white focus:outline-hidden focus:ring-2 transition-all cursor-pointer ${
-                  errors.salesPerson ? "border-rose-300 focus:ring-rose-200 bg-rose-50/30" : "border-slate-200 focus:border-blue-500 focus:ring-blue-100"
+                className={`w-full px-3.5 py-1.5 rounded-lg border text-sm font-semibold text-slate-900 bg-slate-50/50 focus:bg-white focus:outline-hidden focus:ring-2 transition-all cursor-pointer ${
+                  errors.salesPerson ? "border-rose-300 focus:ring-rose-200 bg-rose-50/30" : "border-slate-200/80 focus:border-blue-500 focus:ring-blue-100"
                 }`}
               >
                 {salesPersonsList.map((person) => (
@@ -288,15 +258,15 @@ const Addlead = () => {
 
             {/* 3. Lead Mode */}
             <div>
-              <label className="block text-xs sm:text-sm font-bold text-slate-800 mb-1.5">
+              <label className="block text-xs sm:text-sm font-bold text-slate-800 mb-1">
                 Lead Mode <span className="text-rose-500">*</span>
               </label>
               <select
                 name="leadMode"
                 value={formData.leadMode}
                 onChange={handleChange}
-                className={`w-full px-4 py-2.5 rounded-xl border text-sm font-medium text-slate-900 bg-slate-50/50 focus:bg-white focus:outline-hidden focus:ring-2 transition-all cursor-pointer ${
-                  errors.leadMode ? "border-rose-300 focus:ring-rose-200 bg-rose-50/30" : "border-slate-200 focus:border-blue-500 focus:ring-blue-100"
+                className={`w-full px-3.5 py-1.5 rounded-lg border text-sm font-medium text-slate-900 bg-slate-50/50 focus:bg-white focus:outline-hidden focus:ring-2 transition-all cursor-pointer ${
+                  errors.leadMode ? "border-rose-300 focus:ring-rose-200 bg-rose-50/30" : "border-slate-200/80 focus:border-blue-500 focus:ring-blue-100"
                 }`}
               >
                 <option value="">-- Select Lead Source / Mode --</option>
@@ -314,17 +284,17 @@ const Addlead = () => {
 
         {/* SECTION 2: CLIENT DETAILS */}
         <div>
-          <h2 className="text-xs sm:text-sm font-extrabold text-amber-700 uppercase tracking-wider mb-4 flex items-center gap-2">
+          <h2 className="text-xs sm:text-sm font-extrabold text-amber-700 uppercase tracking-wider mb-2.5 flex items-center gap-2">
             <span className="w-6 h-6 rounded-lg bg-amber-100 text-amber-800 flex items-center justify-center font-black text-xs">2</span>
             <span>Client & Contact Information</span>
-            <span className="flex-1 h-px bg-slate-200" />
+            <span className="flex-1 h-px bg-slate-200/60" />
           </h2>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
             
             {/* 4. Client Name */}
             <div>
-              <label className="block text-xs sm:text-sm font-bold text-slate-800 mb-1.5">
+              <label className="block text-xs sm:text-sm font-bold text-slate-800 mb-1">
                 Client / Company Name <span className="text-rose-500">*</span>
               </label>
               <input
@@ -333,8 +303,8 @@ const Addlead = () => {
                 placeholder="e.g. Acme Corporation / Rajesh Kumar"
                 value={formData.clientName}
                 onChange={handleChange}
-                className={`w-full px-4 py-2.5 rounded-xl border text-sm font-medium text-slate-900 bg-slate-50/50 focus:bg-white focus:outline-hidden focus:ring-2 transition-all ${
-                  errors.clientName ? "border-rose-300 focus:ring-rose-200 bg-rose-50/30" : "border-slate-200 focus:border-amber-500 focus:ring-amber-100"
+                className={`w-full px-3.5 py-1.5 rounded-lg border text-sm font-medium text-slate-900 bg-slate-50/50 focus:bg-white focus:outline-hidden focus:ring-2 transition-all ${
+                  errors.clientName ? "border-rose-300 focus:ring-rose-200 bg-rose-50/30" : "border-slate-200/80 focus:border-amber-500 focus:ring-amber-100"
                 }`}
               />
               {errors.clientName && <p className="text-xs text-rose-500 font-semibold mt-1">{errors.clientName}</p>}
@@ -342,11 +312,11 @@ const Addlead = () => {
 
             {/* 5. Primary Contact No */}
             <div>
-              <label className="block text-xs sm:text-sm font-bold text-slate-800 mb-1.5">
+              <label className="block text-xs sm:text-sm font-bold text-slate-800 mb-1">
                 Primary Contact No. <span className="text-rose-500">*</span>
               </label>
               <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-mono font-bold text-slate-500">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-mono font-bold text-slate-500">
                   +91
                 </span>
                 <input
@@ -359,8 +329,8 @@ const Addlead = () => {
                     const val = e.target.value.replace(/\D/g, "");
                     handleChange({ target: { name: "contactNo", value: val } });
                   }}
-                  className={`w-full pl-12 pr-4 py-2.5 rounded-xl border text-sm font-mono font-medium text-slate-900 bg-slate-50/50 focus:bg-white focus:outline-hidden focus:ring-2 transition-all ${
-                    errors.contactNo ? "border-rose-300 focus:ring-rose-200 bg-rose-50/30" : "border-slate-200 focus:border-amber-500 focus:ring-amber-100"
+                  className={`w-full pl-11 pr-3.5 py-1.5 rounded-lg border text-sm font-mono font-medium text-slate-900 bg-slate-50/50 focus:bg-white focus:outline-hidden focus:ring-2 transition-all ${
+                    errors.contactNo ? "border-rose-300 focus:ring-rose-200 bg-rose-50/30" : "border-slate-200/80 focus:border-amber-500 focus:ring-amber-100"
                   }`}
                 />
               </div>
@@ -369,11 +339,11 @@ const Addlead = () => {
 
             {/* 6. Alternate Contact No (Optional) */}
             <div>
-              <label className="block text-xs sm:text-sm font-bold text-slate-800 mb-1.5">
+              <label className="block text-xs sm:text-sm font-bold text-slate-800 mb-1">
                 Alternate Contact No. <span className="text-slate-400 font-normal">(Optional)</span>
               </label>
               <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-xs font-mono font-bold text-slate-500">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-mono font-bold text-slate-500">
                   +91
                 </span>
                 <input
@@ -386,8 +356,8 @@ const Addlead = () => {
                     const val = e.target.value.replace(/\D/g, "");
                     handleChange({ target: { name: "alternateNo", value: val } });
                   }}
-                  className={`w-full pl-12 pr-4 py-2.5 rounded-xl border text-sm font-mono font-medium text-slate-900 bg-slate-50/50 focus:bg-white focus:outline-hidden focus:ring-2 transition-all ${
-                    errors.alternateNo ? "border-rose-300 focus:ring-rose-200 bg-rose-50/30" : "border-slate-200 focus:border-amber-500 focus:ring-amber-100"
+                  className={`w-full pl-11 pr-3.5 py-1.5 rounded-lg border text-sm font-mono font-medium text-slate-900 bg-slate-50/50 focus:bg-white focus:outline-hidden focus:ring-2 transition-all ${
+                    errors.alternateNo ? "border-rose-300 focus:ring-rose-200 bg-rose-50/30" : "border-slate-200/80 focus:border-amber-500 focus:ring-amber-100"
                   }`}
                 />
               </div>
@@ -399,22 +369,22 @@ const Addlead = () => {
 
         {/* SECTION 3: PROJECT SCOPE & COMMERCIALS */}
         <div>
-          <h2 className="text-xs sm:text-sm font-extrabold text-emerald-700 uppercase tracking-wider mb-4 flex items-center gap-2">
+          <h2 className="text-xs sm:text-sm font-extrabold text-emerald-700 uppercase tracking-wider mb-2.5 flex items-center gap-2">
             <span className="w-6 h-6 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-black text-xs">3</span>
             <span>Scope of Work & Commercials</span>
-            <span className="flex-1 h-px bg-slate-200" />
+            <span className="flex-1 h-px bg-slate-200/60" />
           </h2>
 
-          <div className="space-y-5">
+          <div className="space-y-3.5">
             
             {/* 7. Work Type (Multi-Select Pills) */}
             <div>
-              <label className="block text-xs sm:text-sm font-bold text-slate-800 mb-2">
+              <label className="block text-xs sm:text-sm font-bold text-slate-800 mb-1.5">
                 Work Type / Categories <span className="text-rose-500">*</span>{" "}
                 <span className="text-slate-500 font-normal">(Select all that apply)</span>
               </label>
               
-              <div className="flex flex-wrap gap-2.5 pt-1">
+              <div className="flex flex-wrap gap-2 pt-0.5">
                 {availableWorkTypes.map((type) => {
                   const isSelected = formData.workType.includes(type);
                   return (
@@ -422,36 +392,36 @@ const Addlead = () => {
                       key={type}
                       type="button"
                       onClick={() => toggleWorkType(type)}
-                      className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 ${
+                      className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
                         isSelected
                           ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/20 scale-102"
-                          : "bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200"
+                          : "bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-200/70"
                       }`}
                     >
                       <span>{type}</span>
                       {isSelected ? (
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
                       ) : (
-                        <span className="text-slate-400 text-base leading-none font-bold">+</span>
+                        <span className="text-slate-400 text-sm leading-none font-bold">+</span>
                       )}
                     </button>
                   );
                 })}
               </div>
-              {errors.workType && <p className="text-xs text-rose-500 font-semibold mt-2">{errors.workType}</p>}
+              {errors.workType && <p className="text-xs text-rose-500 font-semibold mt-1">{errors.workType}</p>}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
               
               {/* 8. Expected Revenue */}
               <div>
-                <label className="block text-xs sm:text-sm font-bold text-slate-800 mb-1.5">
+                <label className="block text-xs sm:text-sm font-bold text-slate-800 mb-1">
                   Expected Revenue (₹) <span className="text-rose-500">*</span>
                 </label>
                 <div className="relative">
-                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-sm font-black text-emerald-700">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-black text-emerald-700">
                     ₹
                   </span>
                   <input
@@ -461,8 +431,8 @@ const Addlead = () => {
                     placeholder="e.g. 500000"
                     value={formData.expectedRevenue}
                     onChange={handleChange}
-                    className={`w-full pl-9 pr-4 py-2.5 rounded-xl border text-sm font-mono font-bold text-slate-900 bg-slate-50/50 focus:bg-white focus:outline-hidden focus:ring-2 transition-all ${
-                      errors.expectedRevenue ? "border-rose-300 focus:ring-rose-200 bg-rose-50/30" : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-100"
+                    className={`w-full pl-7 pr-3.5 py-1.5 rounded-lg border text-sm font-mono font-bold text-slate-900 bg-slate-50/50 focus:bg-white focus:outline-hidden focus:ring-2 transition-all ${
+                      errors.expectedRevenue ? "border-rose-300 focus:ring-rose-200 bg-rose-50/30" : "border-slate-200/80 focus:border-emerald-500 focus:ring-emerald-100"
                     }`}
                   />
                 </div>
@@ -471,7 +441,7 @@ const Addlead = () => {
 
               {/* 9. City */}
               <div>
-                <label className="block text-xs sm:text-sm font-bold text-slate-800 mb-1.5">
+                <label className="block text-xs sm:text-sm font-bold text-slate-800 mb-1">
                   City / Location <span className="text-rose-500">*</span>
                 </label>
                 <input
@@ -480,8 +450,8 @@ const Addlead = () => {
                   placeholder="e.g. Noida, Delhi NCR, Mumbai"
                   value={formData.city}
                   onChange={handleChange}
-                  className={`w-full px-4 py-2.5 rounded-xl border text-sm font-medium text-slate-900 bg-slate-50/50 focus:bg-white focus:outline-hidden focus:ring-2 transition-all ${
-                    errors.city ? "border-rose-300 focus:ring-rose-200 bg-rose-50/30" : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-100"
+                  className={`w-full px-3.5 py-1.5 rounded-lg border text-sm font-medium text-slate-900 bg-slate-50/50 focus:bg-white focus:outline-hidden focus:ring-2 transition-all ${
+                    errors.city ? "border-rose-300 focus:ring-rose-200 bg-rose-50/30" : "border-slate-200/80 focus:border-emerald-500 focus:ring-emerald-100"
                   }`}
                 />
                 {errors.city && <p className="text-xs text-rose-500 font-semibold mt-1">{errors.city}</p>}
@@ -491,7 +461,7 @@ const Addlead = () => {
 
             {/* 10. Project Details (Textarea - Min 10 chars) */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center justify-between mb-1">
                 <label className="text-xs sm:text-sm font-bold text-slate-800">
                   Project Details / Requirements <span className="text-rose-500">*</span>
                 </label>
@@ -500,13 +470,13 @@ const Addlead = () => {
                 </span>
               </div>
               <textarea
-                rows={3}
+                rows={2}
                 name="projectDetails"
                 placeholder="Describe screen dimensions, display requirements, hardware specifications, or client notes (minimum 10 characters)..."
                 value={formData.projectDetails}
                 onChange={handleChange}
-                className={`w-full px-4 py-2.5 rounded-xl border text-sm font-medium text-slate-900 bg-slate-50/50 focus:bg-white focus:outline-hidden focus:ring-2 transition-all resize-y ${
-                  errors.projectDetails ? "border-rose-300 focus:ring-rose-200 bg-rose-50/30" : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-100"
+                className={`w-full px-3.5 py-1.5 rounded-lg border text-sm font-medium text-slate-900 bg-slate-50/50 focus:bg-white focus:outline-hidden focus:ring-2 transition-all resize-y ${
+                  errors.projectDetails ? "border-rose-300 focus:ring-rose-200 bg-rose-50/30" : "border-slate-200/80 focus:border-emerald-500 focus:ring-emerald-100"
                 }`}
               />
               {errors.projectDetails && <p className="text-xs text-rose-500 font-semibold mt-1">{errors.projectDetails}</p>}
@@ -514,7 +484,7 @@ const Addlead = () => {
 
             {/* 11. Address (Textarea - Min 5 chars) */}
             <div>
-              <div className="flex items-center justify-between mb-1.5">
+              <div className="flex items-center justify-between mb-1">
                 <label className="text-xs sm:text-sm font-bold text-slate-800">
                   Site / Client Address <span className="text-rose-500">*</span>
                 </label>
@@ -528,8 +498,8 @@ const Addlead = () => {
                 placeholder="Complete office, store, or installation site address (minimum 5 characters)..."
                 value={formData.address}
                 onChange={handleChange}
-                className={`w-full px-4 py-2.5 rounded-xl border text-sm font-medium text-slate-900 bg-slate-50/50 focus:bg-white focus:outline-hidden focus:ring-2 transition-all resize-y ${
-                  errors.address ? "border-rose-300 focus:ring-rose-200 bg-rose-50/30" : "border-slate-200 focus:border-emerald-500 focus:ring-emerald-100"
+                className={`w-full px-3.5 py-1.5 rounded-lg border text-sm font-medium text-slate-900 bg-slate-50/50 focus:bg-white focus:outline-hidden focus:ring-2 transition-all resize-y ${
+                  errors.address ? "border-rose-300 focus:ring-rose-200 bg-rose-50/30" : "border-slate-200/80 focus:border-emerald-500 focus:ring-emerald-100"
                 }`}
               />
               {errors.address && <p className="text-xs text-rose-500 font-semibold mt-1">{errors.address}</p>}

@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from "react";
 import { Link } from "react-router-dom";
+import { initialLeadsData } from "../../data/leadManagementData";
 
 /**
  * Component: Lead (Lead Management Sheet)
@@ -12,190 +13,13 @@ const formatLakhs = (val) => {
   return `₹${(num / 100000).toFixed(2)}L`;
 };
 
-// Initial Lead Dataset
-const initialLeadsData = [
-  {
-    id: "LM-001",
-    concernPersonName: "Aarav Sharma",
-    phoneNumber: "9876544434",
-    emailAddress: "aarav.sharma@codecrafter.in",
-    status: "INTERESTED",
-    nextFollowupDate: "22 Aug 2026",
-    nextFollowupDateRaw: "2026-08-22",
-    nextFollowupTime: "11:00 am",
-    channelType: "Call",
-    followupRemarksCount: 2,
-    followupHistory: [
-      { date: "18 Aug 2026", time: "11:00 am", notes: "Shared P3 LED screen quotation and site layout.", rep: "Sales TL", status: "Followup Done" }
-    ],
-    createdDate: "25 Jun 2026",
-    createdTime: "12:12 pm",
-    leadAge: "55 Days",
-    leadLabel: "WARM",
-    leadType: "REPEAT",
-    jobType: "NEW",
-    requirement: "P3 Indoor Interactive LED Video Wall 12x8 ft",
-    expectedBusiness: "245000",
-    pincode: "273001",
-    leadSource: "JUSTDIAL",
-    leadBy: "Sales TL",
-    assignTo: "John (Sales TL)",
-    address: "Golghar, Park Road, Gorakhpur",
-    clientDesignation: "Managing Director"
-  },
-  {
-    id: "LM-002",
-    concernPersonName: "Pooja Verma",
-    phoneNumber: "9876559088",
-    emailAddress: "pooja@vermajewellers.com",
-    status: "INTERESTED",
-    nextFollowupDate: "25 Aug 2026",
-    nextFollowupDateRaw: "2026-08-25",
-    nextFollowupTime: "03:30 pm",
-    channelType: "Meeting",
-    followupRemarksCount: 1,
-    followupHistory: [
-      { date: "15 Aug 2026", time: "03:30 pm", notes: "Sample acrylic lettering shown at showroom.", rep: "Pooja Verma", status: "Interested" }
-    ],
-    createdDate: "16 Jun 2026",
-    createdTime: "05:34 pm",
-    leadAge: "64 Days",
-    leadLabel: "HOT",
-    leadType: "FRESH",
-    jobType: "NEW",
-    requirement: "Outdoor Golden Acrylic LED Backlit Glow Signboard",
-    expectedBusiness: "380000",
-    pincode: "226001",
-    leadSource: "WHATSAPP",
-    leadBy: "Sales TL",
-    assignTo: "Pooja Verma",
-    address: "Hazratganj Main Market, Lucknow",
-    clientDesignation: "Proprietor"
-  },
-  {
-    id: "LM-003",
-    concernPersonName: "Rajesh Singhania",
-    phoneNumber: "9988888989",
-    emailAddress: "singhania.finance@gmail.com",
-    status: "CONVERTED",
-    nextFollowupDate: "Completed",
-    nextFollowupDateRaw: "2026-06-20",
-    nextFollowupTime: "11:00 am",
-    channelType: "Call",
-    followupRemarksCount: 3,
-    followupHistory: [
-      { date: "20 Jun 2026", time: "11:00 am", notes: "Final advance received, converted deal.", rep: "Sales TL", status: "Converted" },
-      { date: "15 Jun 2026", time: "03:00 pm", notes: "Demo completed successfully.", rep: "Sales TL", status: "Completed" }
-    ],
-    createdDate: "10 Jun 2026",
-    createdTime: "10:15 am",
-    leadAge: "70 Days",
-    leadLabel: "HOT",
-    leadType: "FRESH",
-    jobType: "NEW",
-    requirement: "Facade P10 LED Display Repair & SMPS Replacement",
-    expectedBusiness: "150000",
-    pincode: "221002",
-    leadSource: "JUSTDIAL",
-    leadBy: "Sales TL",
-    assignTo: "John (Sales TL)",
-    address: "Rathyatra Crossing, Varanasi",
-    clientDesignation: "Director"
-  },
-  {
-    id: "LM-004",
-    concernPersonName: "Dr. Sunita Tripathi",
-    phoneNumber: "9839090889",
-    emailAddress: "contact@citycarehospital.org",
-    status: "INTERESTED",
-    nextFollowupDate: "28 Aug 2026",
-    nextFollowupDateRaw: "2026-08-28",
-    nextFollowupTime: "02:00 pm",
-    channelType: "Call",
-    followupRemarksCount: 1,
-    followupHistory: [
-      { date: "12 Aug 2026", time: "02:00 pm", notes: "Hospital reception kiosk specs finalized.", rep: "Sanjay Srivastava", status: "In Discussion" }
-    ],
-    createdDate: "19 May 2026",
-    createdTime: "06:54 pm",
-    leadAge: "92 Days",
-    leadLabel: "HOT",
-    leadType: "FRESH",
-    jobType: "NEW",
-    requirement: "55-inch Touchscreen Reception Info Kiosk (2 Units)",
-    expectedBusiness: "285000",
-    pincode: "273004",
-    leadSource: "DIRECT",
-    leadBy: "Sanjay Srivastava",
-    assignTo: "Sanjay Srivastava",
-    address: "Medical College Road, Asuran, Gorakhpur",
-    clientDesignation: "Medical Superintendent"
-  },
-  {
-    id: "LM-005",
-    concernPersonName: "Mohd. Irshad Khan",
-    phoneNumber: "9878080889",
-    emailAddress: "irshad.banquet@outlook.com",
-    status: "CONVERTED",
-    nextFollowupDate: "Completed",
-    nextFollowupDateRaw: "2026-06-15",
-    nextFollowupTime: "05:00 pm",
-    channelType: "Call",
-    followupRemarksCount: 4,
-    followupHistory: [
-      { date: "15 Jun 2026", time: "05:00 pm", notes: "Curved stage display deal closed with 50% advance.", rep: "Sales TL", status: "Converted" }
-    ],
-    createdDate: "19 May 2026",
-    createdTime: "12:29 pm",
-    leadAge: "92 Days",
-    leadLabel: "HOT",
-    leadType: "FRESH",
-    jobType: "NEW",
-    requirement: "Grand Stage Curved LED Video Wall 20x10 ft P3.91",
-    expectedBusiness: "560000",
-    pincode: "224001",
-    leadSource: "INSTAGRAM",
-    leadBy: "Sales TL",
-    assignTo: "John (Sales TL)",
-    address: "NH-28 Bypass Road, Faizabad, Ayodhya",
-    clientDesignation: "Owner"
-  },
-  {
-    id: "LM-006",
-    concernPersonName: "Vikramaditya Roy",
-    phoneNumber: "9129985581",
-    emailAddress: "accessauthority@gmail.com",
-    status: "INTERESTED",
-    nextFollowupDate: "No Schedule",
-    nextFollowupDateRaw: "",
-    nextFollowupTime: "",
-    channelType: "",
-    followupRemarksCount: 0,
-    followupHistory: [],
-    createdDate: "16 May 2026",
-    createdTime: "06:23 pm",
-    leadAge: "95 Days",
-    leadLabel: "WARM",
-    leadType: "REPEAT",
-    jobType: "NEW",
-    requirement: "Reception 3D Stainless Steel Backlit Letter Board",
-    expectedBusiness: "84000",
-    pincode: "274405",
-    leadSource: "OTHER",
-    leadBy: "Sales TL",
-    assignTo: "--",
-    address: "Civil Lines Main Road, Deoria",
-    clientDesignation: "Operations Head"
-  }
-];
-
 const teamMembers = [
   "Sales TL",
   "John (Sales TL)",
   "Sanjay Srivastava",
   "Rahul Sharma",
   "Pooja Verma",
-  "Vikram Malhotra"
+  "Vikram Malhotra" 
 ];
 
 const timeOptions = [
@@ -204,7 +28,7 @@ const timeOptions = [
   "04:00 pm", "04:30 pm", "05:00 pm", "05:30 pm", "06:00 pm"
 ];
 
-const Lead = () => {
+const   Lead = () => {
   // Leads state with localStorage cache
   const [leads, setLeads] = useState(() => {
     try {
