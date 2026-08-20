@@ -32,6 +32,7 @@ const AsignLeads = () => {
   };
 
   // Filter States
+  const [showFilters, setShowFilters] = useState(false);
   const [assignmentTab, setAssignmentTab] = useState("all");
   const [filterLeadType, setFilterLeadType] = useState("Lead Type");
   const [filterLeadSource, setFilterLeadSource] = useState("Lead Source");
@@ -336,113 +337,133 @@ const AsignLeads = () => {
         </div>
       </div>
 
-      {/* 3. FILTER CONTROLS */}
-      <div className="w-full bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 space-y-3.5">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
-          {/* Dropdown 1: Lead Type */}
-          <div className="relative">
-            <select
-              value={filterLeadType}
-              onChange={(e) => { setFilterLeadType(e.target.value); setCurrentPage(1); }}
-              className="w-full appearance-none px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white hover:border-slate-300 focus:outline-hidden focus:border-black cursor-pointer pr-8 font-semibold shadow-2xs"
-            >
-              {leadTypeOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
-            </select>
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-            </div>
-          </div>
-
-          {/* Dropdown 2: Lead Source */}
-          <div className="relative">
-            <select
-              value={filterLeadSource}
-              onChange={(e) => { setFilterLeadSource(e.target.value); setCurrentPage(1); }}
-              className="w-full appearance-none px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white hover:border-slate-300 focus:outline-hidden focus:border-black cursor-pointer pr-8 font-semibold shadow-2xs"
-            >
-              {leadSourceOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
-            </select>
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-            </div>
-          </div>
-
-          {/* Dropdown 3: Lead Status */}
-          <div className="relative">
-            <select
-              value={filterLeadStatus}
-              onChange={(e) => { setFilterLeadStatus(e.target.value); setCurrentPage(1); }}
-              className="w-full appearance-none px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white hover:border-slate-300 focus:outline-hidden focus:border-black cursor-pointer pr-8 font-semibold shadow-2xs"
-            >
-              {leadStatusOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
-            </select>
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-            </div>
-          </div>
-
-          {/* Dropdown 4: Lead Label */}
-          <div className="relative">
-            <select
-              value={filterLeadLabel}
-              onChange={(e) => { setFilterLeadLabel(e.target.value); setCurrentPage(1); }}
-              className="w-full appearance-none px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white hover:border-slate-300 focus:outline-hidden focus:border-black cursor-pointer pr-8 font-semibold shadow-2xs"
-            >
-              {leadLabelOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
-            </select>
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-            </div>
-          </div>
-
-          {/* Dropdown 5: Job Type */}
-          <div className="relative">
-            <select
-              value={filterJobType}
-              onChange={(e) => { setFilterJobType(e.target.value); setCurrentPage(1); }}
-              className="w-full appearance-none px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white hover:border-slate-300 focus:outline-hidden focus:border-black cursor-pointer pr-8 font-semibold shadow-2xs"
-            >
-              {jobTypeOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
-            </select>
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-            </div>
-          </div>
+      {/* 3. COLLAPSIBLE FILTER TOGGLE BAR */}
+      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3.5 sm:p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="text-xs sm:text-sm font-semibold text-slate-600 text-center sm:text-left">
+          Showing <strong className="font-bold text-slate-900">{filteredLeads.length}</strong> of <strong className="font-bold text-slate-900">{leads.length}</strong> Assigned Leads
         </div>
 
-        {/* Date Filter & Orange Refresh Button */}
-        <div className="flex items-center gap-3 pt-1">
-          <div className="relative w-56 sm:w-64">
-            <input
-              type={showDatePicker ? "date" : "text"}
-              value={filterDate}
-              onFocus={() => setShowDatePicker(true)}
-              onBlur={(e) => { if (!e.target.value) setShowDatePicker(false); }}
-              onChange={(e) => { setFilterDate(e.target.value); setCurrentPage(1); }}
-              placeholder="All Dates"
-              className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white hover:border-slate-300 focus:outline-hidden focus:border-black cursor-pointer pr-9 shadow-2xs font-semibold placeholder:text-slate-700"
-            />
-            <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                <line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-              </svg>
-            </span>
-          </div>
-
-          <button
-            type="button"
-            onClick={handleResetFilters}
-            className="h-10 px-4 rounded-xl bg-orange-500 hover:bg-orange-600 active:scale-95 text-white flex items-center gap-2 text-xs sm:text-sm font-bold transition-all cursor-pointer shadow-xs shrink-0"
-            title="Reset All Filters"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-            <span>Reset Filters</span>
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => setShowFilters((prev) => !prev)}
+          className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 shadow-2xs"
+        >
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+          </svg>
+          <span>{showFilters ? "Hide Filter Options ✕" : "Filter Options 🔍"}</span>
+        </button>
       </div>
+
+      {/* COLLAPSIBLE FILTER PANEL (Opens on click) */}
+      {showFilters && (
+        <div className="w-full bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 space-y-3.5 animate-in fade-in duration-150">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
+            {/* Dropdown 1: Lead Type */}
+            <div className="relative">
+              <select
+                value={filterLeadType}
+                onChange={(e) => { setFilterLeadType(e.target.value); setCurrentPage(1); }}
+                className="w-full appearance-none px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white hover:border-slate-300 focus:outline-hidden focus:border-black cursor-pointer pr-8 font-semibold shadow-2xs"
+              >
+                {leadTypeOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+              </div>
+            </div>
+
+            {/* Dropdown 2: Lead Source */}
+            <div className="relative">
+              <select
+                value={filterLeadSource}
+                onChange={(e) => { setFilterLeadSource(e.target.value); setCurrentPage(1); }}
+                className="w-full appearance-none px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white hover:border-slate-300 focus:outline-hidden focus:border-black cursor-pointer pr-8 font-semibold shadow-2xs"
+              >
+                {leadSourceOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+              </div>
+            </div>
+
+            {/* Dropdown 3: Lead Status */}
+            <div className="relative">
+              <select
+                value={filterLeadStatus}
+                onChange={(e) => { setFilterLeadStatus(e.target.value); setCurrentPage(1); }}
+                className="w-full appearance-none px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white hover:border-slate-300 focus:outline-hidden focus:border-black cursor-pointer pr-8 font-semibold shadow-2xs"
+              >
+                {leadStatusOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+              </div>
+            </div>
+
+            {/* Dropdown 4: Lead Label */}
+            <div className="relative">
+              <select
+                value={filterLeadLabel}
+                onChange={(e) => { setFilterLeadLabel(e.target.value); setCurrentPage(1); }}
+                className="w-full appearance-none px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white hover:border-slate-300 focus:outline-hidden focus:border-black cursor-pointer pr-8 font-semibold shadow-2xs"
+              >
+                {leadLabelOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+              </div>
+            </div>
+
+            {/* Dropdown 5: Job Type */}
+            <div className="relative">
+              <select
+                value={filterJobType}
+                onChange={(e) => { setFilterJobType(e.target.value); setCurrentPage(1); }}
+                className="w-full appearance-none px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white hover:border-slate-300 focus:outline-hidden focus:border-black cursor-pointer pr-8 font-semibold shadow-2xs"
+              >
+                {jobTypeOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+              </select>
+              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
+              </div>
+            </div>
+          </div>
+
+          {/* Date Filter & Orange Refresh Button */}
+          <div className="flex items-center gap-3 pt-1">
+            <div className="relative w-56 sm:w-64">
+              <input
+                type={showDatePicker ? "date" : "text"}
+                value={filterDate}
+                onFocus={() => setShowDatePicker(true)}
+                onBlur={(e) => { if (!e.target.value) setShowDatePicker(false); }}
+                onChange={(e) => { setFilterDate(e.target.value); setCurrentPage(1); }}
+                placeholder="All Dates"
+                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white hover:border-slate-300 focus:outline-hidden focus:border-black cursor-pointer pr-9 shadow-2xs font-semibold placeholder:text-slate-700"
+              />
+              <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                  <line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
+              </span>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleResetFilters}
+              className="h-10 px-4 rounded-xl bg-orange-500 hover:bg-orange-600 active:scale-95 text-white flex items-center gap-2 text-xs sm:text-sm font-bold transition-all cursor-pointer shadow-xs shrink-0"
+              title="Reset All Filters"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span>Reset Filters</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 4. ROWS PER PAGE */}
       <div className="flex items-center gap-2">
