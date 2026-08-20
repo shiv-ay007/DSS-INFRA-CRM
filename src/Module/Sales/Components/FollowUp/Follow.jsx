@@ -803,80 +803,121 @@ const Follow = () => {
         </div>
       )}
 
-      {/* ================= MODAL 2: FOLLOW-UP REMARKS & HISTORY MODAL ================= */}
+      {/* ================= MODAL 2: DISCUSSION LOGS / FOLLOW-UP REMARKS MODAL ================= */}
       {remarksModalLead && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-300 overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-150">
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150">
+          <div className="bg-white rounded-3xl max-w-xl w-full shadow-2xl border border-slate-100 overflow-hidden my-8 animate-in zoom-in-95 duration-150">
             
-            <div className="bg-black text-white px-6 py-4 flex items-center justify-between">
+            {/* Modal Header */}
+            <div className="p-5 sm:p-6 pb-4 flex items-center justify-between border-b border-slate-100">
               <div>
-                <h3 className="text-sm font-bold flex items-center gap-2">
-                  <span>ℹ️</span> Follow-up Remarks & History
-                </h3>
-                <p className="text-xs text-neutral-400 mt-0.5">
-                  Client: {remarksModalLead.concernPersonName} ({remarksModalLead.phoneNumber})
+                <h2 className="text-xl font-extrabold text-slate-900 tracking-tight">
+                  Discussion Logs
+                </h2>
+                <p className="text-xs text-slate-500 font-medium mt-0.5">
+                  Client: <strong className="text-slate-800">{remarksModalLead.concernPersonName}</strong> ({remarksModalLead.phoneNumber})
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setRemarksModalLead(null)}
-                className="text-neutral-400 hover:text-white text-lg cursor-pointer"
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold flex items-center justify-center transition-colors cursor-pointer text-sm shrink-0"
               >
                 ✕
               </button>
             </div>
 
-            <div className="p-6 space-y-4 text-xs">
-              
-              <div className="space-y-3">
-                {remarksModalLead.followupHistory && remarksModalLead.followupHistory.length > 0 ? (
-                  remarksModalLead.followupHistory.map((hist, idx) => (
-                    <div
-                      key={idx}
-                      className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5 shadow-2xs"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-slate-800">
-                          📅 {hist.date} at {hist.time}
-                        </span>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700">
-                          {hist.status || "Logged"}
-                        </span>
+            {/* Timeline Body */}
+            <div className="p-5 sm:p-6 max-h-[65vh] overflow-y-auto space-y-6">
+              {remarksModalLead.followupHistory && remarksModalLead.followupHistory.length > 0 ? (
+                remarksModalLead.followupHistory.map((hist, idx) => {
+                  const isLast = idx === remarksModalLead.followupHistory.length - 1;
+                  return (
+                    <div key={idx} className="relative flex gap-4">
+                      {/* Left Timeline Avatar & Connecting Vertical Line */}
+                      <div className="flex flex-col items-center shrink-0">
+                        <div className="w-10 h-10 rounded-full border border-slate-200 bg-white flex items-center justify-center text-slate-400 shrink-0 shadow-2xs z-10">
+                          <svg className="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" strokeWidth="1.8" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          </svg>
+                        </div>
+                        {!isLast && (
+                          <div className="w-0.5 bg-slate-200 flex-1 my-1" />
+                        )}
                       </div>
-                      <p className="text-slate-700 text-xs">{hist.notes}</p>
-                      <div className="text-[10px] text-slate-400">
-                        Follow-up by: <span className="font-semibold text-slate-600">{hist.rep || "Sales Rep"}</span>
+
+                      {/* Right Log Content */}
+                      <div className="flex-1 pb-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
+                            REPRESENTATIVE NAME
+                          </span>
+                          <span className="text-xs text-slate-500 font-medium">
+                            Commented {hist.date ? hist.date : "recently"}
+                          </span>
+                        </div>
+
+                        <h3 className="text-base font-bold text-slate-900 mt-0.5">
+                          {hist.rep || "Sales"}
+                        </h3>
+
+                        {/* Status Change Tag */}
+                        <div className="flex items-center gap-2.5 mt-1.5 flex-wrap">
+                          <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-slate-100/90 text-slate-700 border border-slate-200/80">
+                            <svg className="w-3.5 h-3.5 text-slate-500" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M7 7h10M7 12h10M7 17h10" />
+                            </svg>
+                            <span>{hist.status || "Status Change"}</span>
+                          </span>
+                          <span className="text-xs text-slate-400 font-medium">
+                            {hist.date} at {hist.time}
+                          </span>
+                        </div>
+
+                        {/* Speech Bubble / Remarks Card */}
+                        <div className="mt-3 p-4 rounded-2xl bg-slate-50/80 border border-slate-200/60 shadow-2xs relative space-y-1">
+                          <div className="text-[10px] font-extrabold text-blue-600 uppercase tracking-wider flex items-center gap-1">
+                            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
+                            </svg>
+                            <span>REMARKS</span>
+                          </div>
+                          <p className="text-sm font-semibold text-slate-700 italic">
+                            "{hist.notes}"
+                          </p>
+                        </div>
+
                       </div>
                     </div>
-                  ))
-                ) : (
-                  <div className="text-center py-6 text-slate-400 bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                    No past follow-up remarks recorded for this lead.
-                  </div>
-                )}
-              </div>
+                  );
+                })
+              ) : (
+                <div className="text-center py-10 text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200 font-medium text-sm">
+                  No discussion logs or follow-up remarks recorded yet.
+                </div>
+              )}
+            </div>
 
-              <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const lead = remarksModalLead;
-                    setRemarksModalLead(null);
-                    handleOpenScheduleModal(lead);
-                  }}
-                  className="px-4 py-2 rounded-xl bg-black text-white font-bold text-xs hover:bg-neutral-800 cursor-pointer shadow-xs"
-                >
-                  + Schedule Next Follow-up
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRemarksModalLead(null)}
-                  className="px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-bold transition-colors cursor-pointer"
-                >
-                  Close
-                </button>
-              </div>
-
+            {/* Modal Footer */}
+            <div className="p-4 px-6 border-t border-slate-100 flex items-center justify-between bg-slate-50/40">
+              <button
+                type="button"
+                onClick={() => {
+                  const lead = remarksModalLead;
+                  setRemarksModalLead(null);
+                  handleOpenScheduleModal(lead);
+                }}
+                className="px-4 py-2 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-black transition-all cursor-pointer shadow-xs"
+              >
+                + Schedule Next Follow-up
+              </button>
+              <button
+                type="button"
+                onClick={() => setRemarksModalLead(null)}
+                className="px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+              >
+                Close
+              </button>
             </div>
 
           </div>
