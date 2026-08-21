@@ -10,7 +10,6 @@ const SalesHeader = ({
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const dropdownRef = useRef(null);
 
-  // Click outside hone par dropdown apne aap close ho jaye
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -22,29 +21,29 @@ const SalesHeader = ({
   }, []);
 
   return (
-    <header className="w-full bg-white font-sans antialiased h-16 px-4 sm:px-6 flex items-center justify-between border-b border-slate-100 sticky top-0 z-40">
+    <header className="w-full bg-white font-sans antialiased h-13 px-3 sm:px-4 flex items-center justify-between border-b border-slate-100 sticky top-0 z-40">
       
       {/* Left Space: Mobile Menu Toggle */}
       <div className="flex items-center gap-2">
         <button
           type="button"
           onClick={toggleSidebar}
-          className="p-2 rounded-xl text-slate-700 hover:bg-slate-100 lg:hidden transition-colors cursor-pointer flex items-center justify-center"
+          className="p-1.5 rounded-lg text-slate-700 hover:bg-slate-100 lg:hidden transition-colors cursor-pointer flex items-center justify-center"
           title="Toggle Navigation Menu"
         >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
       </div>
 
       {/* Right Action Icons (Notification + Profile) */}
-      <div className="flex items-center gap-3 relative" ref={dropdownRef}>
+      <div className="flex items-center gap-2.5 relative" ref={dropdownRef}>
         
         {/* 1. Notification Bell with Orange Dot */}
         <button
           type="button"
-          className="relative w-9 h-9 rounded-full bg-slate-100/90 hover:bg-slate-200/80 flex items-center justify-center text-slate-700 transition-colors cursor-pointer"
+          className="relative w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200/80 flex items-center justify-center text-slate-700 transition-colors cursor-pointer"
           title="Notifications"
         >
           <svg
@@ -63,7 +62,7 @@ const SalesHeader = ({
 
           {/* Orange Badge Dot */}
           {unreadNotification && (
-            <span className="absolute top-0 right-0 w-2.5 h-2.5 rounded-full bg-orange-500 ring-2 ring-white" />
+            <span className="absolute top-0 right-0 w-2 h-2 rounded-full bg-orange-500 ring-2 ring-white" />
           )}
         </button>
 
@@ -71,11 +70,11 @@ const SalesHeader = ({
         <button
           type="button"
           onClick={() => setIsProfileOpen(!isProfileOpen)}
-          className="w-9 h-9 rounded-full bg-black text-white flex items-center justify-center hover:opacity-90 transition-opacity cursor-pointer shadow-xs"
+          className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center hover:opacity-90 transition-opacity cursor-pointer shadow-xs"
           title="Profile"
         >
           <svg
-            className="w-4 h-4"
+            className="w-3.5 h-3.5"
             fill="currentColor"
             viewBox="0 0 24 24"
           >
@@ -83,14 +82,14 @@ const SalesHeader = ({
           </svg>
         </button>
 
-        {/* 3. Profile Dropdown Box (Exact Screenshot Match) */}
+        {/* 3. Profile Dropdown Box */}
         {isProfileOpen && (
-          <div className="absolute right-0 top-12 w-56 bg-white rounded-2xl border border-slate-200/90 shadow-xl p-3 z-50 animate-in fade-in zoom-in-95 duration-100">
+          <div className="absolute right-0 top-11 w-52 bg-white rounded-xl border border-slate-200 shadow-xl p-2.5 z-50 animate-in fade-in zoom-in-95 duration-100">
             
             {/* User Info Header */}
-            <div className="flex items-center gap-3 pb-3 border-b border-slate-100">
-              <div className="w-10 h-10 rounded-full bg-black text-white flex items-center justify-center shrink-0">
-                <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+            <div className="flex items-center gap-2.5 pb-2.5 border-b border-slate-100">
+              <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center shrink-0">
+                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                   <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
                 </svg>
               </div>
@@ -98,24 +97,24 @@ const SalesHeader = ({
                 <div className="text-xs font-bold text-slate-900">
                   {department}
                 </div>
-                <div className="text-[11px] text-slate-400 font-medium mt-0.5">
+                <div className="text-[10px] text-slate-400 font-medium mt-0.5">
                   {role}
                 </div>
               </div>
             </div>
 
             {/* Logout Option */}
-            <div className="pt-2">
+            <div className="pt-1.5">
               <button
                 type="button"
                 onClick={() => {
                   setIsProfileOpen(false);
                   if (onLogout) onLogout();
                 }}
-                className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-xs font-bold text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-bold text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
               >
                 <svg
-                  className="w-4 h-4 text-red-500"
+                  className="w-3.5 h-3.5 text-red-500"
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="2.2"

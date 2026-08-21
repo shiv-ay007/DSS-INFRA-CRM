@@ -11,7 +11,7 @@ const menuItems = [
     activeGradient: "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-600/30",
     iconColor: "text-blue-400 group-hover:text-blue-300",
     icon: (
-      <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
+      <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
         <rect x="3" y="3" width="7" height="7" rx="1.5" />
         <rect x="14" y="3" width="7" height="7" rx="1.5" />
         <rect x="14" y="14" width="7" height="7" rx="1.5" />
@@ -26,7 +26,7 @@ const menuItems = [
     activeGradient: "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/30",
     iconColor: "text-emerald-400 group-hover:text-emerald-300",
     icon: (
-      <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
+      <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
         <path strokeLinecap="round" strokeLinejoin="round" d="M15 7h6m-3-3v6" />
       </svg>
@@ -38,7 +38,7 @@ const menuItems = [
     activeGradient: "bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-md shadow-amber-600/30",
     iconColor: "text-amber-400 group-hover:text-amber-300",
     icon: (
-      <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
+      <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
       </svg>
     ),
@@ -57,7 +57,7 @@ const menuItems = [
     activeGradient: "bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-md shadow-purple-600/30",
     iconColor: "text-purple-400 group-hover:text-purple-300",
     icon: (
-      <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
+      <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h18M3 14h18m-9-4v8m-7 4h14a2 2 0 002-2V6a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
       </svg>
     )
@@ -93,19 +93,19 @@ const SalseSidebar = ({ isOpen = true, setIsOpen }) => {
     <aside
       className={`h-screen bg-[#0F172A] text-white flex flex-col shrink-0 transition-all duration-300 ease-in-out select-none sticky top-0 z-50 overflow-x-hidden border-r border-slate-800/80 shadow-xl max-lg:fixed max-lg:inset-y-0 max-lg:left-0 ${
         isSidebarOpen
-          ? "w-64 sm:w-72 max-lg:translate-x-0"
-          : "max-lg:-translate-x-full lg:w-20"
+          ? "w-60 sm:w-64 max-lg:translate-x-0"
+          : "max-lg:-translate-x-full lg:w-16"
       }`}
     >
       {/* ================= TOP HEADER (LOGO & HAMBURGER) ================= */}
       <div
-        className={`h-16 flex items-center border-b border-slate-800/80 shrink-0 px-3.5 bg-slate-950/60 backdrop-blur-xs ${
+        className={`h-13 flex items-center border-b border-slate-800/80 shrink-0 px-3 bg-slate-950/60 backdrop-blur-xs ${
           isSidebarOpen ? "justify-between" : "justify-center"
         }`}
       >
         {/* LOGO (Only when expanded) */}
         {isSidebarOpen && (
-          <div className="bg-white px-2.5 py-1 rounded-xl flex items-center justify-center shrink-0 border border-white shadow-xs max-w-[170px] h-10">
+          <div className="bg-white px-2 py-0.5 rounded-lg flex items-center justify-center shrink-0 border border-white shadow-xs max-w-[150px] h-8">
             <img
               src={salesLogo}
               alt="DSS Logo"
@@ -118,17 +118,17 @@ const SalseSidebar = ({ isOpen = true, setIsOpen }) => {
         <button
           type="button"
           onClick={toggle}
-          className="p-2 rounded-xl text-slate-300 hover:text-white hover:bg-slate-800/90 transition-colors cursor-pointer flex items-center justify-center shrink-0"
+          className="p-1.5 rounded-lg text-slate-300 hover:text-white hover:bg-slate-800/90 transition-colors cursor-pointer flex items-center justify-center shrink-0"
           title={isSidebarOpen ? "Collapse Sidebar" : "Expand Sidebar"}
         >
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
           </svg>
         </button>
       </div>
 
       {/* ================= NAVIGATION MENU ================= */}
-      <nav className="flex-1 overflow-y-auto py-3.5 px-3 space-y-1.5 scrollbar-thin scrollbar-thumb-slate-800">
+      <nav className="flex-1 overflow-y-auto py-2 px-2 space-y-1 scrollbar-thin scrollbar-thumb-slate-800">
         
         {/* 1. Dashboard */}
         <div className="relative group">
@@ -136,7 +136,7 @@ const SalseSidebar = ({ isOpen = true, setIsOpen }) => {
             to="/sales/dashboard"
             className={({ isActive }) =>
               `w-full flex items-center transition-all duration-200 cursor-pointer ${
-                isSidebarOpen ? "px-3.5 py-2.5 rounded-xl gap-3.5" : "p-3 rounded-xl justify-center"
+                isSidebarOpen ? "px-3 py-2 rounded-lg gap-2.5" : "p-2 rounded-lg justify-center"
               } ${
                 isActive
                   ? menuItems[0].activeGradient + " font-bold"
@@ -150,7 +150,7 @@ const SalseSidebar = ({ isOpen = true, setIsOpen }) => {
                   {menuItems[0].icon}
                 </div>
                 {isSidebarOpen && (
-                  <span className="text-sm sm:text-base font-semibold tracking-tight truncate">
+                  <span className="text-xs sm:text-sm font-semibold tracking-tight truncate">
                     Dashboard
                   </span>
                 )}
@@ -158,7 +158,7 @@ const SalseSidebar = ({ isOpen = true, setIsOpen }) => {
             )}
           </NavLink>
           {!isSidebarOpen && (
-            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 bg-slate-900 text-white text-xs sm:text-sm font-semibold rounded-lg shadow-2xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 border border-slate-700">
+            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2.5 py-1 bg-slate-900 text-white text-xs font-semibold rounded-md shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 border border-slate-700">
               Dashboard
             </div>
           )}
@@ -170,7 +170,7 @@ const SalseSidebar = ({ isOpen = true, setIsOpen }) => {
             to="/sales/leads/add"
             className={({ isActive }) =>
               `w-full flex items-center transition-all duration-200 cursor-pointer ${
-                isSidebarOpen ? "px-3.5 py-2.5 rounded-xl gap-3.5" : "p-3 rounded-xl justify-center"
+                isSidebarOpen ? "px-3 py-2 rounded-lg gap-2.5" : "p-2 rounded-lg justify-center"
               } ${
                 isActive
                   ? menuItems[1].activeGradient + " font-bold"
@@ -184,7 +184,7 @@ const SalseSidebar = ({ isOpen = true, setIsOpen }) => {
                   {menuItems[1].icon}
                 </div>
                 {isSidebarOpen && (
-                  <span className="text-sm sm:text-base font-semibold tracking-tight truncate">
+                  <span className="text-xs sm:text-sm font-semibold tracking-tight truncate">
                     Add Lead
                   </span>
                 )}
@@ -192,7 +192,7 @@ const SalseSidebar = ({ isOpen = true, setIsOpen }) => {
             )}
           </NavLink>
           {!isSidebarOpen && (
-            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 bg-slate-900 text-white text-xs sm:text-sm font-semibold rounded-lg shadow-2xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 border border-slate-700">
+            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2.5 py-1 bg-slate-900 text-white text-xs font-semibold rounded-md shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 border border-slate-700">
               Add Lead
             </div>
           )}
@@ -210,7 +210,7 @@ const SalseSidebar = ({ isOpen = true, setIsOpen }) => {
               setIsLeadOpen(!isLeadOpen);
             }}
             className={`w-full flex items-center transition-all duration-200 cursor-pointer ${
-              isSidebarOpen ? "px-3.5 py-2.5 rounded-xl justify-between" : "p-3 rounded-xl justify-center"
+              isSidebarOpen ? "px-3 py-2 rounded-lg justify-between" : "p-2 rounded-lg justify-center"
             } ${
               isLeadSubActive && !isLeadOpen
                 ? menuItems[2].activeGradient + " font-bold"
@@ -219,12 +219,12 @@ const SalseSidebar = ({ isOpen = true, setIsOpen }) => {
                 : "text-slate-300 hover:text-white hover:bg-slate-800/60 font-medium"
             }`}
           >
-            <div className="flex items-center gap-3.5 min-w-0">
+            <div className="flex items-center gap-2.5 min-w-0">
               <div className={isLeadSubActive ? "text-amber-400" : menuItems[2].iconColor}>
                 {menuItems[2].icon}
               </div>
               {isSidebarOpen && (
-                <span className="text-sm sm:text-base font-semibold tracking-tight truncate">
+                <span className="text-xs sm:text-sm font-semibold tracking-tight truncate">
                   Lead Management
                 </span>
               )}
@@ -233,7 +233,7 @@ const SalseSidebar = ({ isOpen = true, setIsOpen }) => {
             {/* Chevron Arrow */}
             {isSidebarOpen && (
               <svg
-                className={`w-4 h-4 text-slate-400 transition-transform duration-200 shrink-0 ${
+                className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 shrink-0 ${
                   isLeadOpen ? "rotate-0 text-amber-400" : "rotate-180"
                 }`}
                 fill="none"
@@ -247,20 +247,20 @@ const SalseSidebar = ({ isOpen = true, setIsOpen }) => {
           </button>
 
           {!isSidebarOpen && (
-            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 bg-slate-900 text-white text-xs sm:text-sm font-semibold rounded-lg shadow-2xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 border border-slate-700">
+            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2.5 py-1 bg-slate-900 text-white text-xs font-semibold rounded-md shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 border border-slate-700">
               Lead Management
             </div>
           )}
 
-          {/* Sub-items with colorful highlights */}
+          {/* Sub-items */}
           {isSidebarOpen && isLeadOpen && (
-            <div className="mt-1.5 ml-4 pl-3 border-l-2 border-slate-800 space-y-1 py-1">
+            <div className="mt-1 ml-3 pl-2 border-l border-slate-800 space-y-0.5 py-0.5">
               {menuItems[2].subItems.map((sub) => (
                 <NavLink
                   key={sub.id}
                   to={sub.path}
                   className={({ isActive }) =>
-                    `w-full text-left py-2 px-3 rounded-xl text-xs sm:text-sm transition-all duration-150 cursor-pointer flex items-center justify-between truncate ${
+                    `w-full text-left py-1.5 px-2.5 rounded-lg text-xs transition-all duration-150 cursor-pointer flex items-center justify-between truncate ${
                       isActive
                         ? "text-emerald-300 font-bold bg-emerald-950/50 border border-emerald-800/60 shadow-xs"
                         : "text-slate-400 hover:text-slate-100 hover:bg-slate-800/50 font-medium"
@@ -269,12 +269,12 @@ const SalseSidebar = ({ isOpen = true, setIsOpen }) => {
                 >
                   {({ isActive }) => (
                     <>
-                      <div className="flex items-center gap-2 truncate">
+                      <div className="flex items-center gap-1.5 truncate">
                         <span className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-emerald-400" : "bg-slate-600"}`} />
                         <span className="truncate">{sub.label}</span>
                       </div>
                       {isActive && (
-                        <span className="text-[10px] uppercase font-mono font-bold px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        <span className="text-[9px] uppercase font-mono font-bold px-1 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                           Active
                         </span>
                       )}
@@ -292,7 +292,7 @@ const SalseSidebar = ({ isOpen = true, setIsOpen }) => {
             to="/sales/management-sheet"
             className={({ isActive }) =>
               `w-full flex items-center transition-all duration-200 cursor-pointer ${
-                isSidebarOpen ? "px-3.5 py-2.5 rounded-xl gap-3.5" : "p-3 rounded-xl justify-center"
+                isSidebarOpen ? "px-3 py-2 rounded-lg gap-2.5" : "p-2 rounded-lg justify-center"
               } ${
                 isActive
                   ? menuItems[3].activeGradient + " font-bold"
@@ -306,7 +306,7 @@ const SalseSidebar = ({ isOpen = true, setIsOpen }) => {
                   {menuItems[3].icon}
                 </div>
                 {isSidebarOpen && (
-                  <span className="text-sm sm:text-base font-semibold tracking-tight truncate">
+                  <span className="text-xs sm:text-sm font-semibold tracking-tight truncate">
                     Sales Management Sheet
                   </span>
                 )}
@@ -314,7 +314,7 @@ const SalseSidebar = ({ isOpen = true, setIsOpen }) => {
             )}
           </NavLink>
           {!isSidebarOpen && (
-            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-3 px-3 py-1.5 bg-slate-900 text-white text-xs sm:text-sm font-semibold rounded-lg shadow-2xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 border border-slate-700">
+            <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2.5 py-1 bg-slate-900 text-white text-xs font-semibold rounded-md shadow-xl whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-50 border border-slate-700">
               Sales Management Sheet
             </div>
           )}

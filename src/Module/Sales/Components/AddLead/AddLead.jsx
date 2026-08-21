@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import {
@@ -12,6 +12,7 @@ import {
   indianStatesList,
   availableWorkTypes
 } from "../../data/addLeadData";
+import { FaPlus, FaMicrophone, FaImage, FaVideo, FaFileAudio, FaTimes } from "react-icons/fa";
 
 const Addlead = () => {
   const navigate = useNavigate();
@@ -25,29 +26,50 @@ const Addlead = () => {
     return `${year}-${month}-${day}`;
   };
 
-  // Initial Form State (All 22 fields included)
+  // Lead Mode options
+  const leadModeList = ["Online", "Offline", "Reference", "Walk-in", "Call"];
+
+  // Lead Status options (Hot, Warm, Cold)
+  const leadStatusList = ["Hot", "Warm", "Cold"];
+
+  // Work Type options for multi-select
+  const workTypeOptions = [
+    "Architectural Planning",
+    "Construction",
+    "Interior Design",
+    "Fabrication Works",
+    "Consultancy"
+  ];
+
+  // Initial Form State
   const initialFormState = {
     date: getTodayDate(),
-    leadSource: "",
-    channel: "Sales",
+    leadMode: "",
     leadType: "FRESH",
-    jobType: "NEW",
-    clientType: "Individual",
+    workType: [],
+    leadStatus: "",
     clientName: "",
-    clientDesignation: "",
-    leadLabel: "",
     phoneNumber: "",
     alternateNumber: "",
-    whatsappNumber: "",
     emailAddress: "",
-    pincode: "",
+    address: "",
     city: "",
+    pincode: "",
     state: "",
     expectedBusiness: "",
+    projectDetail: "",
+    remark: "",
+    remarkAttachments: [],
+    // Keeping other fields for completeness
+    leadSource: "",
+    channel: "Sales",
+    jobType: "NEW",
+    clientType: "Individual",
+    clientDesignation: "",
+    leadLabel: "",
+    whatsappNumber: "",
     googleLocation: "",
     salesPerson: "Sales TL (Current User)",
-    workType: [],
-    address: "",
     requirement: ""
   };
 
@@ -55,6 +77,17 @@ const Addlead = () => {
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showUploadOptions, setShowUploadOptions] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioURL, setAudioURL] = useState(null);
+  const [mediaRecorder, setMediaRecorder] = useState(null);
+  const [audioChunks, setAudioChunks] = useState([]);
+  
+  // Refs for file inputs
+  const imageInputRef = useRef(null);
+  const videoInputRef = useRef(null);
+  const audioInputRef = useRef(null);
+  const remarkTextareaRef = useRef(null);
 
   // Handle Input & Select Changes
   const handleChange = (e) => {
@@ -64,17 +97,12 @@ const Addlead = () => {
       [name]: value
     }));
 
-    // Auto sync WhatsApp number with Phone number if WhatsApp is empty
-    if (name === "phoneNumber" && !formData.whatsappNumber) {
-      setFormData((prev) => ({ ...prev, whatsappNumber: value }));
-    }
-
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: "" }));
     }
   };
 
-  // Toggle Work Types
+  // Toggle Work Types (Multi-select)
   const toggleWorkType = (type) => {
     setFormData((prev) => {
       const exists = prev.workType.includes(type);
@@ -85,25 +113,108 @@ const Addlead = () => {
     });
   };
 
+  // Handle File Upload
+  const handleFileUpload = (e, type) => {
+    const files = Array.from(e.target.files);
+    if (files.length === 0) return;
+
+    const newAttachments = files.map(file => ({
+      id: Date.now() + Math.random(),
+      file,
+      type,
+      name: file.name,
+      size: file.size,
+      url: URL.createObjectURL(file)
+    }));
+
+    setFormData(prev => ({
+      ...prev,
+      remarkAttachments: [...prev.remarkAttachments, ...newAttachments]
+    }));
+
+    // Reset file input
+    e.target.value = '';
+    setShowUploadOptions(false);
+  };
+
+  // Remove Attachment
+  const removeAttachment = (id) => {
+    setFormData(prev => ({
+      ...prev,
+      remarkAttachments: prev.remarkAttachments.filter(item => item.id !== id)
+    }));
+  };
+
+  // Start Audio Recording
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunks.push(e.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        const url = URL.createObjectURL(blob);
+        const file = new File([blob], `audio-${Date.now()}.webm`, { type: 'audio/webm' });
+        
+        const newAttachment = {
+          id: Date.now() + Math.random(),
+          file,
+          type: 'audio',
+          name: `Audio-${Date.now()}.webm`,
+          size: blob.size,
+          url: url
+        };
+
+        setFormData(prev => ({
+          ...prev,
+          remarkAttachments: [...prev.remarkAttachments, newAttachment]
+        }));
+
+        setAudioURL(url);
+        setIsRecording(false);
+        setAudioChunks([]);
+        
+        // Stop all tracks
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+      setAudioChunks(chunks);
+    } catch (err) {
+      console.error("Error accessing microphone:", err);
+      alert("Please allow microphone access to record audio.");
+    }
+  };
+
+  // Stop Audio Recording
+  const stopRecording = () => {
+    if (mediaRecorder && mediaRecorder.state === 'recording') {
+      mediaRecorder.stop();
+      setIsRecording(false);
+    }
+  };
+
   // Form Validation
   const validateForm = () => {
     const newErrors = {};
 
-    if (!formData.leadSource) newErrors.leadSource = "Please select lead source";
-    if (!formData.channel) newErrors.channel = "Please select channel";
+    if (!formData.leadMode) newErrors.leadMode = "Please select lead mode";
     if (!formData.leadType) newErrors.leadType = "Please select lead type";
-    if (!formData.jobType) newErrors.jobType = "Please select job type";
-    if (!formData.clientType) newErrors.clientType = "Please select client type";
+    if (formData.workType.length === 0) newErrors.workType = "Please select at least one work type";
+    if (!formData.leadStatus) newErrors.leadStatus = "Please select lead status";
 
     if (!formData.clientName.trim()) {
       newErrors.clientName = "Client name is required";
     }
-
-    if (!formData.clientDesignation.trim()) {
-      newErrors.clientDesignation = "Client designation is required";
-    }
-
-    if (!formData.leadLabel) newErrors.leadLabel = "Please select lead label";
 
     // Phone validation
     const phoneRegex = /^\d{10}$/;
@@ -113,24 +224,22 @@ const Addlead = () => {
       newErrors.phoneNumber = "Please enter valid 10-digit phone number";
     }
 
-    if (!formData.whatsappNumber.trim()) {
-      newErrors.whatsappNumber = "WhatsApp number is required";
-    } else if (!phoneRegex.test(formData.whatsappNumber.trim())) {
-      newErrors.whatsappNumber = "Please enter valid 10-digit WhatsApp number";
-    }
-
     if (formData.alternateNumber.trim() && !phoneRegex.test(formData.alternateNumber.trim())) {
       newErrors.alternateNumber = "Alternate number must be 10 digits";
     }
 
-    // Pincode validation
+    // Email validation (optional but if provided should be valid)
+    if (formData.emailAddress.trim() && !/\S+@\S+\.\S+/.test(formData.emailAddress.trim())) {
+      newErrors.emailAddress = "Please enter a valid email address";
+    }
+
+    if (!formData.address.trim()) newErrors.address = "Address is required";
+    if (!formData.city.trim()) newErrors.city = "City is required";
     if (!formData.pincode.trim()) {
       newErrors.pincode = "Pincode is required";
     } else if (!/^\d{6}$/.test(formData.pincode.trim())) {
       newErrors.pincode = "Pincode must be 6 digits";
     }
-
-    if (!formData.city.trim()) newErrors.city = "City is required";
     if (!formData.state) newErrors.state = "Please select state";
 
     setErrors(newErrors);
@@ -158,34 +267,43 @@ const Addlead = () => {
         concernPersonName: formData.clientName,
         phoneNumber: formData.phoneNumber,
         alternateNumber: formData.alternateNumber,
-        whatsappNumber: formData.whatsappNumber,
         emailAddress: formData.emailAddress,
-        status: "NEW",
+        status: formData.leadStatus || "NEW",
         nextFollowupDate: formattedDate,
         nextFollowupDateRaw: formData.date || today.toISOString().split("T")[0],
         nextFollowupTime: "11:00 am",
-        channelType: formData.channel,
+        channelType: formData.channel || "Sales",
         followupRemarksCount: 0,
         followupHistory: [],
         createdDate: formattedDate,
         createdTime: today.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         leadAge: "0 Days",
-        leadLabel: formData.leadLabel,
+        leadLabel: formData.leadLabel || "",
         leadType: formData.leadType,
-        jobType: formData.jobType,
-        clientType: formData.clientType,
+        jobType: formData.jobType || "NEW",
+        clientType: formData.clientType || "Individual",
         workType: formData.workType,
-        requirement: formData.requirement || "New Lead Registration",
+        requirement: formData.remark || "New Lead Registration",
         expectedBusiness: formData.expectedBusiness || "0",
         pincode: formData.pincode,
         city: formData.city,
         state: formData.state,
-        leadSource: formData.leadSource,
-        leadBy: formData.salesPerson,
-        assignTo: formData.salesPerson,
-        address: formData.address || `${formData.city}, ${formData.state} - ${formData.pincode}`,
-        clientDesignation: formData.clientDesignation,
-        googleLocation: formData.googleLocation
+        leadSource: formData.leadSource || "",
+        leadBy: formData.salesPerson || "Sales TL (Current User)",
+        assignTo: formData.salesPerson || "Sales TL (Current User)",
+        address: formData.address,
+        clientDesignation: formData.clientDesignation || "",
+        googleLocation: formData.googleLocation || "",
+        leadMode: formData.leadMode,
+        leadStatus: formData.leadStatus,
+        projectDetail: formData.projectDetail || "",
+        remark: formData.remark || "",
+        remarkAttachments: formData.remarkAttachments.map(att => ({
+          name: att.name,
+          type: att.type,
+          size: att.size
+        })),
+        whatsappNumber: formData.whatsappNumber || formData.phoneNumber
       };
 
       try {
@@ -206,61 +324,61 @@ const Addlead = () => {
   const handleReset = () => {
     setFormData(initialFormState);
     setErrors({});
+    setShowUploadOptions(false);
+    setIsRecording(false);
+    setAudioURL(null);
+    setAudioChunks([]);
+  };
+
+  // Format file size
+  const formatFileSize = (bytes) => {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
+  // Get file icon
+  const getFileIcon = (type) => {
+    switch(type) {
+      case 'image': return <FaImage className="text-green-500" />;
+      case 'video': return <FaVideo className="text-purple-500" />;
+      case 'audio': return <FaFileAudio className="text-red-500" />;
+      default: return <FaFileAudio className="text-gray-500" />;
+    }
   };
 
   return (
-    <div className="max-w-7xl mx-auto space-y-4 font-sans select-none pb-12">
+    <div className="max-w-7xl mx-auto space-y-4 font-sans pb-12">
       
-      {/* 1. TOP HEADER BANNER CARD */}
+      {/* TOP HEADER BANNER CARD */}
       <PageHeader
         title="!! Capture New Lead !!"
         showBackButton={true}
       />
 
-      {/* 2. MAIN FORM CARD (Border removed, compact side padding & side gaps) */}
+      {/* MAIN FORM CARD */}
       <form onSubmit={handleSubmit} autoComplete="off" className="bg-white rounded-2xl shadow-2xs px-2.5 sm:px-4 py-5 space-y-3.5">
         
-        {/* 3-COLUMN GRID LAYOUT (Reduced side gaps, bottom spacing preserved) */}
+        {/* ROW 1: Lead Mode | Lead Type | Lead Status */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-x-2.5 sm:gap-x-3 gap-y-3">
-          
-          {/* ROW 1: Lead Source | Channel | Lead Type */}
           <div>
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
-              Lead Source <span className="text-red-500">*</span>
+              Lead Mode <span className="text-red-500">*</span>
             </label>
             <select
-              name="leadSource"
-              value={formData.leadSource}
+              name="leadMode"
+              value={formData.leadMode}
               onChange={handleChange}
               className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all cursor-pointer ${
-                errors.leadSource ? "border-red-400 bg-red-50/20" : "border-black/20"
+                errors.leadMode ? "border-red-400 bg-red-50/20" : "border-black/20"
               }`}
             >
-              <option value="">Select Lead Source</option>
-              {leadSourcesList.map((source) => (
-                <option key={source} value={source}>{source}</option>
+              <option value="">Select Lead Mode</option>
+              {leadModeList.map((mode) => (
+                <option key={mode} value={mode}>{mode}</option>
               ))}
             </select>
-            {errors.leadSource && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.leadSource}</p>}
-          </div>
-
-          <div>
-            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
-              Channel <span className="text-red-500">*</span>
-            </label>
-            <select
-              name="channel"
-              value={formData.channel}
-              onChange={handleChange}
-              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all cursor-pointer ${
-                errors.channel ? "border-red-400 bg-red-50/20" : "border-black/20"
-              }`}
-            >
-              {channelsList.map((ch) => (
-                <option key={ch} value={ch}>{ch}</option>
-              ))}
-            </select>
-            {errors.channel && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.channel}</p>}
+            {errors.leadMode && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.leadMode}</p>}
           </div>
 
           <div>
@@ -275,52 +393,35 @@ const Addlead = () => {
                 errors.leadType ? "border-red-400 bg-red-50/20" : "border-black/20"
               }`}
             >
-              {leadTypesList.map((type) => (
-                <option key={type} value={type}>{type}</option>
-              ))}
+              <option value="FRESH">Fresh</option>
+              <option value="REPEAT">Repeat</option>
             </select>
             {errors.leadType && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.leadType}</p>}
           </div>
 
-          {/* ROW 2: Job Type | Client Type | Client Name */}
           <div>
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
-              Job Type <span className="text-red-500">*</span>
+              Lead Status <span className="text-red-500">*</span>
             </label>
             <select
-              name="jobType"
-              value={formData.jobType}
+              name="leadStatus"
+              value={formData.leadStatus}
               onChange={handleChange}
               className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all cursor-pointer ${
-                errors.jobType ? "border-red-400 bg-red-50/20" : "border-black/20"
+                errors.leadStatus ? "border-red-400 bg-red-50/20" : "border-black/20"
               }`}
             >
-              {jobTypesList.map((job) => (
-                <option key={job} value={job}>{job}</option>
+              <option value="">Select Lead Status</option>
+              {leadStatusList.map((status) => (
+                <option key={status} value={status}>{status}</option>
               ))}
             </select>
-            {errors.jobType && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.jobType}</p>}
+            {errors.leadStatus && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.leadStatus}</p>}
           </div>
+        </div>
 
-          <div>
-            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
-              Client Type <span className="text-red-500">*</span>
-            </label>
-            <select
-              name="clientType"
-              value={formData.clientType}
-              onChange={handleChange}
-              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all cursor-pointer ${
-                errors.clientType ? "border-red-400 bg-red-50/20" : "border-black/20"
-              }`}
-            >
-              {clientTypesList.map((ct) => (
-                <option key={ct} value={ct}>{ct}</option>
-              ))}
-            </select>
-            {errors.clientType && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.clientType}</p>}
-          </div>
-
+        {/* ROW 2: Client Name | Phone Number | Alternate Number */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-2.5 sm:gap-x-3 gap-y-3">
           <div>
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
               Client Name <span className="text-red-500">*</span>
@@ -336,44 +437,6 @@ const Addlead = () => {
               }`}
             />
             {errors.clientName && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.clientName}</p>}
-          </div>
-
-          {/* ROW 3: Client Designation | Lead Label | Phone Number */}
-          <div>
-            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
-              Client Designation <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              name="clientDesignation"
-              placeholder="Enter Client Designation"
-              value={formData.clientDesignation}
-              onChange={handleChange}
-              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all placeholder:text-slate-400 ${
-                errors.clientDesignation ? "border-red-400 bg-red-50/20" : "border-black/20"
-              }`}
-            />
-            {errors.clientDesignation && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.clientDesignation}</p>}
-          </div>
-
-          <div>
-            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
-              Lead Label <span className="text-red-500">*</span>
-            </label>
-            <select
-              name="leadLabel"
-              value={formData.leadLabel}
-              onChange={handleChange}
-              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all cursor-pointer ${
-                errors.leadLabel ? "border-red-400 bg-red-50/20" : "border-black/20"
-              }`}
-            >
-              <option value="">Select Lead Label</option>
-              {leadLabelsList.map((label) => (
-                <option key={label} value={label}>{label}</option>
-              ))}
-            </select>
-            {errors.leadLabel && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.leadLabel}</p>}
           </div>
 
           <div>
@@ -397,7 +460,6 @@ const Addlead = () => {
             {errors.phoneNumber && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.phoneNumber}</p>}
           </div>
 
-          {/* ROW 4: Alternate Number | WhatsApp Number | Email Address */}
           <div>
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
               Alternate Number
@@ -418,28 +480,10 @@ const Addlead = () => {
             />
             {errors.alternateNumber && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.alternateNumber}</p>}
           </div>
+        </div>
 
-          <div>
-            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
-              WhatsApp Number <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="tel"
-              name="whatsappNumber"
-              maxLength={10}
-              placeholder="Enter WhatsApp Number"
-              value={formData.whatsappNumber}
-              onChange={(e) => {
-                const val = e.target.value.replace(/\D/g, "");
-                handleChange({ target: { name: "whatsappNumber", value: val } });
-              }}
-              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all placeholder:text-slate-400 ${
-                errors.whatsappNumber ? "border-red-400 bg-red-50/20" : "border-black/20"
-              }`}
-            />
-            {errors.whatsappNumber && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.whatsappNumber}</p>}
-          </div>
-
+        {/* ROW 3: Email Address */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-2.5 sm:gap-x-3 gap-y-3">
           <div>
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
               Email Address
@@ -450,11 +494,53 @@ const Addlead = () => {
               placeholder="Enter Email Address"
               value={formData.emailAddress}
               onChange={handleChange}
-              className="w-full px-3 py-1.5 rounded-lg border border-black/20 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all placeholder:text-slate-400"
+              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all placeholder:text-slate-400 ${
+                errors.emailAddress ? "border-red-400 bg-red-50/20" : "border-black/20"
+              }`}
             />
+            {errors.emailAddress && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.emailAddress}</p>}
+          </div>
+          <div></div>
+          <div></div>
+        </div>
+
+        {/* ROW 4: Address (Full Width) */}
+        <div className="pt-1">
+          <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
+            Address <span className="text-red-500">*</span>
+          </label>
+          <textarea
+            rows={2}
+            name="address"
+            placeholder="Enter Address"
+            value={formData.address}
+            onChange={handleChange}
+            className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all placeholder:text-slate-400 resize-y ${
+              errors.address ? "border-red-400 bg-red-50/20" : "border-black/20"
+            }`}
+          />
+          {errors.address && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.address}</p>}
+        </div>
+
+        {/* ROW 5: City | Pincode | State */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-2.5 sm:gap-x-3 gap-y-3 pt-1">
+          <div>
+            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
+              City <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              name="city"
+              placeholder="Enter City"
+              value={formData.city}
+              onChange={handleChange}
+              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all placeholder:text-slate-400 ${
+                errors.city ? "border-red-400 bg-red-50/20" : "border-black/20"
+              }`}
+            />
+            {errors.city && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.city}</p>}
           </div>
 
-          {/* ROW 5: Pincode | City | State */}
           <div>
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
               Pincode <span className="text-red-500">*</span>
@@ -478,23 +564,6 @@ const Addlead = () => {
 
           <div>
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
-              City <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              name="city"
-              placeholder="Enter City"
-              value={formData.city}
-              onChange={handleChange}
-              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all placeholder:text-slate-400 ${
-                errors.city ? "border-red-400 bg-red-50/20" : "border-black/20"
-              }`}
-            />
-            {errors.city && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.city}</p>}
-          </div>
-
-          <div>
-            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
               State <span className="text-red-500">*</span>
             </label>
             <select
@@ -512,75 +581,15 @@ const Addlead = () => {
             </select>
             {errors.state && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.state}</p>}
           </div>
-
-          {/* ROW 6: Expected Business Amount | Google Location | Lead Date */}
-          <div>
-            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
-              Expected Business Amount (₹)
-            </label>
-            <input
-              type="number"
-              name="expectedBusiness"
-              placeholder="Enter Expected Business Amount"
-              value={formData.expectedBusiness}
-              onChange={handleChange}
-              className="w-full px-3 py-1.5 rounded-lg border border-black/20 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all placeholder:text-slate-400"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
-              Google Location
-            </label>
-            <input
-              type="text"
-              name="googleLocation"
-              placeholder="Enter Google Location"
-              value={formData.googleLocation}
-              onChange={handleChange}
-              className="w-full px-3 py-1.5 rounded-lg border border-black/20 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all placeholder:text-slate-400"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
-              Lead Date
-            </label>
-            <input
-              type="date"
-              name="date"
-              value={formData.date}
-              onChange={handleChange}
-              className="w-full px-3 py-1.5 rounded-lg border border-black/20 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all cursor-pointer"
-            />
-          </div>
-
-          {/* ROW 7: Sales Person */}
-          <div className="md:col-span-3">
-            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
-              Sales Person / Assign To
-            </label>
-            <select
-              name="salesPerson"
-              value={formData.salesPerson}
-              onChange={handleChange}
-              className="w-full md:w-1/3 px-3 py-1.5 rounded-lg border border-black/20 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all cursor-pointer"
-            >
-              {salesPersonsList.map((person) => (
-                <option key={person} value={person}>{person}</option>
-              ))}
-            </select>
-          </div>
-
         </div>
 
-        {/* WORK TYPE / CATEGORIES PILLS */}
+        {/* ROW 6: Work Type / Categories (Full Width - Multi-select Pills) */}
         <div className="pt-1">
           <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-            Work Type / Categories <span className="text-slate-500 font-normal">(Select all that apply)</span>
+            Work Type / Categories <span className="text-red-500">*</span> <span className="text-slate-500 font-normal">(Select all that apply)</span>
           </label>
           <div className="flex flex-wrap gap-1.5 pt-0.5">
-            {availableWorkTypes.map((type) => {
+            {workTypeOptions.map((type) => {
               const isSelected = formData.workType.includes(type);
               return (
                 <button
@@ -599,36 +608,187 @@ const Addlead = () => {
               );
             })}
           </div>
+          {errors.workType && <p className="text-xs text-red-500 font-medium mt-1">{errors.workType}</p>}
         </div>
 
-        {/* SITE / CLIENT ADDRESS TEXTAREA */}
-        <div className="pt-1">
-          <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
-            Site / Client Address
-          </label>
-          <textarea
-            rows={2}
-            name="address"
-            placeholder="Enter Site / Client Address"
-            value={formData.address}
-            onChange={handleChange}
-            className="w-full px-3 py-1.5 rounded-lg border border-black/20 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all placeholder:text-slate-400 resize-y"
-          />
+        {/* ROW 7: Expected Business Amount | Lead Date | Project Detail */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-2.5 sm:gap-x-3 gap-y-3 pt-1">
+          <div>
+            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
+              Expected Business Amount (₹)
+            </label>
+            <input
+              type="number"
+              name="expectedBusiness"
+              placeholder="Enter Expected Business Amount"
+              value={formData.expectedBusiness}
+              onChange={handleChange}
+              className="w-full px-3 py-1.5 rounded-lg border border-black/20 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all placeholder:text-slate-400"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
+              Lead Date
+            </label>
+            <input
+              type="date"
+              name="date"
+              value={formData.date}
+              onChange={handleChange}
+              className="w-full px-3 py-1.5 rounded-lg border border-black/20 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all cursor-pointer"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
+              Project Detail
+            </label>
+            <input
+              type="text"
+              name="projectDetail"
+              placeholder="Enter Project Detail"
+              value={formData.projectDetail}
+              onChange={handleChange}
+              className="w-full px-3 py-1.5 rounded-lg border border-black/20 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all placeholder:text-slate-400"
+            />
+          </div>
         </div>
 
-        {/* REQUIREMENT DETAILS TEXTAREA */}
+        {/* ROW 8: Remark (Full Width) with Icons Inside Textarea */}
         <div className="pt-1">
-          <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
-            Requirement Details / Remarks
+          <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
+            Remark
           </label>
-          <textarea
-            rows={2}
-            name="requirement"
-            placeholder="Enter Requirement Details"
-            value={formData.requirement}
-            onChange={handleChange}
-            className="w-full px-3 py-1.5 rounded-lg border border-black/20 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all placeholder:text-slate-400 resize-y"
+          
+          {/* Hidden file inputs */}
+          <input
+            type="file"
+            ref={imageInputRef}
+            accept="image/*"
+            multiple
+            onChange={(e) => handleFileUpload(e, 'image')}
+            className="hidden"
           />
+          <input
+            type="file"
+            ref={videoInputRef}
+            accept="video/*"
+            multiple
+            onChange={(e) => handleFileUpload(e, 'video')}
+            className="hidden"
+          />
+          <input
+            type="file"
+            ref={audioInputRef}
+            accept="audio/*"
+            multiple
+            onChange={(e) => handleFileUpload(e, 'audio')}
+            className="hidden"
+          />
+
+          {/* Textarea with Icons Inside */}
+          <div className="relative">
+            <textarea
+              ref={remarkTextareaRef}
+              rows={3}
+              name="remark"
+              placeholder="Enter Remarks"
+              value={formData.remark}
+              onChange={handleChange}
+              className="w-full px-3 py-1.5 pr-28 rounded-lg border border-black/20 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all placeholder:text-slate-400 resize-y"
+            />
+            
+            {/* Icons positioned inside the textarea */}
+            <div className="absolute right-2 bottom-2 flex items-center gap-1.5 bg-white/90 backdrop-blur-sm rounded-lg px-1.5 py-1 border border-slate-200 shadow-sm">
+              {/* Plus Icon - Upload Options */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowUploadOptions(!showUploadOptions)}
+                  className="p-1 rounded-md hover:bg-blue-50 text-blue-600 transition-colors cursor-pointer"
+                  title="Add Attachment"
+                >
+                  <FaPlus size={13} />
+                </button>
+                
+                {/* Upload Options Dropdown */}
+                {showUploadOptions && (
+                  <div className="absolute right-0 bottom-7 bg-white border border-slate-200 rounded-lg shadow-lg p-1.5 z-10 min-w-[150px]">
+                    <button
+                      type="button"
+                      onClick={() => imageInputRef.current?.click()}
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded-md transition-colors"
+                    >
+                      <FaImage size={12} className="text-green-500" />
+                      Image
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => videoInputRef.current?.click()}
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded-md transition-colors"
+                    >
+                      <FaVideo size={12} className="text-purple-500" />
+                      Video
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => audioInputRef.current?.click()}
+                      className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded-md transition-colors"
+                    >
+                      <FaFileAudio size={12} className="text-red-500" />
+                      Audio
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* Divider */}
+              <div className="w-px h-5 bg-slate-200"></div>
+
+              {/* Mic Icon - Audio Recording */}
+              <button
+                type="button"
+                onClick={isRecording ? stopRecording : startRecording}
+                className={`p-1 rounded-md transition-colors cursor-pointer ${
+                  isRecording 
+                    ? "text-red-500 animate-pulse" 
+                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
+                }`}
+                title={isRecording ? "Stop Recording" : "Start Recording"}
+              >
+                <FaMicrophone size={13} />
+              </button>
+            </div>
+          </div>
+
+          {/* Recording Status */}
+          {isRecording && (
+            <div className="flex items-center gap-2 mt-1 text-xs text-red-500">
+              <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
+              Recording audio... Click mic again to stop
+            </div>
+          )}
+
+          {/* Attachments Preview */}
+          {formData.remarkAttachments.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {formData.remarkAttachments.map((att) => (
+                <div key={att.id} className="flex items-center gap-1.5 bg-slate-100 rounded-lg px-2 py-1 text-xs">
+                  {getFileIcon(att.type)}
+                  <span className="text-slate-700 max-w-[120px] truncate">{att.name}</span>
+                  <span className="text-slate-400">({formatFileSize(att.size)})</span>
+                  <button
+                    type="button"
+                    onClick={() => removeAttachment(att.id)}
+                    className="text-red-400 hover:text-red-600 transition-colors"
+                  >
+                    <FaTimes size={10} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* ACTION BUTTONS */}
@@ -707,4 +867,4 @@ const Addlead = () => {
   );
 };
 
-export default Addlead;
+export default Addlead;

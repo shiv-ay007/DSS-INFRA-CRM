@@ -266,7 +266,7 @@ const Salse = () => {
   };
 
   return (
-    <div className="space-y-5 font-sans select-none pb-16 w-full min-h-screen bg-[#F8FAFC]">
+    <div className="space-y-5 font-sans pb-16 w-full min-h-screen bg-[#F8FAFC]">
       
       {/* ================= 1. SUB-HEADER BANNER ================= */}
       <PageHeader

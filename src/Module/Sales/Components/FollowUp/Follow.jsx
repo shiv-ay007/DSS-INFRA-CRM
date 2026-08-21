@@ -58,7 +58,7 @@ const Follow = () => {
         <div className="grid grid-cols-2 gap-1.5 w-14 mx-auto">
           <button
             type="button"
-            onClick={() => setDetailModalLead(row)}
+            onClick={() => navigate(`/sales/leads/details/${row.id}`, { state: { lead: row } })}
             className="w-6 h-6 rounded-lg border border-orange-400 text-orange-600 hover:bg-orange-500 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
             title="View Lead Details"
           >
@@ -528,7 +528,7 @@ const Follow = () => {
   };
 
   return (
-    <div className="w-full min-h-screen bg-[#F8FAFC] font-sans antialiased text-slate-900 p-3 sm:p-5 select-none pb-12">
+    <div className="w-full min-h-screen bg-[#F8FAFC] font-sans antialiased text-slate-900 p-3 sm:p-5 pb-12">
       
       {/* ================= 1. TOP HEADER ================= */}
       <PageHeader

@@ -70,7 +70,7 @@ const Layout = () => {
         <SalesHeader toggleSidebar={() => setIsSidebarOpen((prev) => !prev)} />
 
         {/* Dynamic Page Content (Scrollable Middle Section) */}
-        <main className="flex-1 p-3 sm:p-6 overflow-y-auto scroll-smooth">
+        <main className="flex-1 p-2.5 sm:p-4 overflow-y-auto scroll-smooth">
           <Outlet />
         </main>
 
@@ -83,13 +83,13 @@ const Layout = () => {
         <button
           type="button"
           onClick={slideToTop}
-          className="fixed bottom-6 right-6 z-50 p-3 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-xl shadow-blue-500/30 hover:shadow-blue-500/50 hover:-translate-y-1 active:scale-95 transition-all duration-200 cursor-pointer flex items-center gap-1.5 group border border-white/20 animate-in fade-in zoom-in-90"
+          className="fixed bottom-5 right-5 z-50 p-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg shadow-blue-500/30 hover:-translate-y-0.5 active:scale-95 transition-all duration-200 cursor-pointer flex items-center gap-1 border border-white/20"
           title="Slide to Top"
         >
-          <svg className="w-5 h-5 group-hover:-translate-y-0.5 transition-transform" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M5 10l7-7m0 0l7 7m-7-7v18" />
           </svg>
-          <span className="text-xs font-bold hidden sm:inline-block pr-1">Top</span>
+          <span className="text-[11px] font-bold hidden sm:inline-block pr-0.5">Top</span>
         </button>
       )}
     </div>

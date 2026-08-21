@@ -63,7 +63,7 @@ const AsignLeads = () => {
           <div className="flex items-center justify-center gap-1.5">
             <button
               type="button"
-              onClick={() => setSelectedLead(row)}
+              onClick={() => navigate(`/sales/leads/details/${row.id}`, { state: { lead: row } })}
               className="w-7 h-7 rounded-lg border border-orange-400 text-orange-500 hover:bg-orange-500 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
               title="View Lead Details"
             >
@@ -282,7 +282,7 @@ const AsignLeads = () => {
   };
 
   return (
-    <div className="space-y-5 font-sans select-none pb-12 w-full min-h-screen bg-[#F8FAFC]">
+    <div className="space-y-5 font-sans pb-12 w-full min-h-screen bg-[#F8FAFC]">
       
       {/* 1. SUB-HEADER BAR */}
       <PageHeader

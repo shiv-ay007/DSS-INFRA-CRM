@@ -9,15 +9,12 @@ import Loss from '../Pages/Loss'
 import Followup from '../Pages/Followup'
 import LeadManagement from '../Pages/LeadManagement'
 import SalseManagment from '../Pages/SalseManagment'
+import LeadDetails from '../Pages/LeadDetails'
 
-const AppRoutes = () => {
+const SalesRoutes = () => {
   return (
     <Routes>
-      {/* 1. Root redirect */}
-      <Route path="/" element={<Navigate to="/sales/dashboard" replace />} />
-
-      {/* 2. Main Sales Layout with Sub-routes */}
-      <Route path="/sales" element={<Layout />}>
+      <Route element={<Layout />}>
         <Route index element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="leads/add" element={<AddLead />} />
@@ -26,10 +23,12 @@ const AppRoutes = () => {
         <Route path="leads/lost" element={<Loss />} />
         <Route path="leads/followup" element={<Followup />} />
         <Route path="leads/all" element={<LeadManagement />} />
+        <Route path="leads/details" element={<LeadDetails />} />
+        <Route path="leads/details/:id" element={<LeadDetails />} />
         <Route path="management-sheet" element={<SalseManagment />} />
       </Route>
     </Routes>
   )
 }
 
-export default AppRoutes
+export default SalesRoutes

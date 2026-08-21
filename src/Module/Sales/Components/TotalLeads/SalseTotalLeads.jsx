@@ -78,7 +78,7 @@ const SalseTotalLeads = () => {
             {/* Orange Square Eye Button matching screenshot */}
             <button
               type="button"
-              onClick={() => setActiveLeadModal(row)}
+              onClick={() => navigate(`/sales/leads/details/${row.id}`, { state: { lead: row } })}
               className="w-7 h-7 rounded-lg border border-orange-400 text-orange-500 hover:bg-orange-500 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
               title="View Lead Details"
             >
@@ -481,7 +481,7 @@ const SalseTotalLeads = () => {
   };
 
   return (
-    <div className="space-y-4 font-sans select-none pb-16">
+    <div className="space-y-4 font-sans pb-16">
       
       {/* ================= 1. SUB-HEADER / ACTIONS ================= */}
       <PageHeader
