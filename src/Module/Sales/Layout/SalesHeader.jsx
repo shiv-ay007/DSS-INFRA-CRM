@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
 
 const SalesHeader = ({
   department = "Sales Department",
@@ -9,6 +11,7 @@ const SalesHeader = ({
 }) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const dropdownRef = useRef(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -19,6 +22,22 @@ const SalesHeader = ({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Handle Logout with Toast
+  const handleLogout = () => {
+    setIsProfileOpen(false);
+    
+    toast.info("Logged out successfully! See you soon 👋", {
+      position: "top-right",
+      autoClose: 2500,
+    });
+
+    // Navigate to home page
+    navigate("/");
+    
+    // Call the onLogout callback if provided
+    if (onLogout) onLogout();
+  };
 
   return (
     <header className="w-full bg-white font-sans antialiased h-13 px-3 sm:px-4 flex items-center justify-between border-b border-slate-100 sticky top-0 z-40">
@@ -107,10 +126,7 @@ const SalesHeader = ({
             <div className="pt-1.5">
               <button
                 type="button"
-                onClick={() => {
-                  setIsProfileOpen(false);
-                  if (onLogout) onLogout();
-                }}
+                onClick={handleLogout}
                 className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-bold text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
               >
                 <svg

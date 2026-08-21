@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { FaUser, FaLock, FaArrowLeft, FaSignInAlt } from "react-icons/fa";
+import { toast } from "react-toastify";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -20,9 +21,13 @@ const Login = () => {
   const handleSubmit = (e) => {
     e.preventDefault();
     setLoading(true);
+    toast.success("Login Successful! Redirecting to Sales Dashboard...", {
+      position: "top-right",
+      autoClose: 2000,
+    });
     setTimeout(() => {
       navigate("/sales/dashboard");
-    }, 400);
+    }, 600);
   };
 
   return (

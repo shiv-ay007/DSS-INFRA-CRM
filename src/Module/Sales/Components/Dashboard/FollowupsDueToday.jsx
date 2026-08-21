@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
+import { toast } from "react-toastify";
 import { initialFollowups } from "../../data/dashboardData";
 
 const FollowupsDueToday = ({ data = initialFollowups }) => {
@@ -57,6 +58,7 @@ const FollowupsDueToday = ({ data = initialFollowups }) => {
                 </span>
                 <a
                   href={`tel:${item.phone.replace(/[^0-9+]/g, "")}`}
+                  onClick={() => toast.info(`Initiating call to ${item.name} (${item.phone})... 📞`)}
                   className="px-3 py-1 rounded-lg bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs font-bold shadow-2xs flex items-center gap-1 transition-all cursor-pointer"
                 >
                   <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">

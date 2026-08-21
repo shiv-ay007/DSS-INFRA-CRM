@@ -1,5 +1,6 @@
 import React, { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import {
   salesPersonsList,
@@ -317,6 +318,10 @@ const Addlead = () => {
 
       setIsSubmitting(false);
       setShowSuccessModal(true);
+      toast.success("Lead Captured Successfully! 🎯", {
+        position: "top-right",
+        autoClose: 3000,
+      });
     }, 500);
   };
 
