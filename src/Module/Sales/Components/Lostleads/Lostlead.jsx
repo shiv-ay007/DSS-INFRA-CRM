@@ -2,30 +2,16 @@ import React, { useState, useMemo } from "react";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import Table from "../../../../Common/Components/Table";
 import { initialLostLeads } from "../../data/lostLeadsData";
+import { availableWorkTypes, workCategoryList, leadTypesList } from "../../data/addLeadData";
+import { FaFilter, FaSearch, FaUserPlus } from "react-icons/fa";
 
-const leadTypeOptions = ["Lead Type", "FRESH", "EXISTING CLIENT", "RENEWAL", "CROSS-SELL"];
-const leadSourceOptions = [
-  "Lead Source",
-  "Direct Call / Inbound",
-  "WhatsApp Business",
-  "Website Inquiry",
-  "Client Referral",
-  "Exhibition / Trade Fair",
-  "Outbound Calling",
-  "Social Media"
+const leadModesList = [
+  "ALL",
+  "Business networking",
+  "By freelancer",
+  "By sales Team",
+  "Customer to customer"
 ];
-const lostReasonOptions = [
-  "Lost Reason",
-  "Price / Budget Constraint",
-  "Competitor (Lower Quote)",
-  "Project Cancelled / Dropped",
-  "Timeline / Delivery Delay",
-  "Specification Mismatch",
-  "No Response / Cold",
-  "Management Postponed"
-];
-const leadLabelOptions = ["Lead Label", "Hot Lead 🔥", "Warm Lead ⚡", "Cold Lead ❄️"];
-const jobTypeOptions = ["Job Type", "NEW", "REPAIR / AMC", "EXPANSION", "UPGRADE"];
 
 const Lostlead = () => {
   const [leads, setLeads] = useState(() => {
@@ -47,33 +33,46 @@ const Lostlead = () => {
   };
 
   // Filter States
-  const [showFilters, setShowFilters] = useState(false);
-  const [reasonTab, setReasonTab] = useState("all");
-  const [filterLeadType, setFilterLeadType] = useState("Lead Type");
-  const [filterLeadSource, setFilterLeadSource] = useState("Lead Source");
-  const [filterLostReason, setFilterLostReason] = useState("Lost Reason");
-  const [filterLeadLabel, setFilterLeadLabel] = useState("Lead Label");
-  const [filterJobType, setFilterJobType] = useState("Job Type");
-  const [filterDate, setFilterDate] = useState("");
+  const [showFilters, setShowFilters] = useState(true);
+  const [filterScope, setFilterScope] = useState("ALL"); // "ALL", "SELF", "TEAM"
   const [searchTerm, setSearchTerm] = useState("");
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [filterLeadMode, setFilterLeadMode] = useState("ALL");
+  const [filterLeadType, setFilterLeadType] = useState("ALL");
+  const [filterWorkCategory, setFilterWorkCategory] = useState("ALL");
+  const [filterWorkType, setFilterWorkType] = useState("ALL");
+  const [filterStatus, setFilterStatus] = useState("ALL");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
 
+  // Pagination States
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
-  const [sortField, setSortField] = useState("id");
-  const [sortDirection, setSortDirection] = useState("asc");
 
+  // Modal States
   const [selectedLead, setSelectedLead] = useState(null);
   const [reviveModalLead, setReviveModalLead] = useState(null);
   const [reviveStatus, setReviveStatus] = useState("Warm");
   const [reviveNotes, setReviveNotes] = useState("");
 
-  // Table Column Configuration for common Table component
+  const handleResetFilters = () => {
+    setSearchTerm("");
+    setFilterLeadMode("ALL");
+    setFilterLeadType("ALL");
+    setFilterWorkCategory("ALL");
+    setFilterWorkType("ALL");
+    setFilterStatus("ALL");
+    setFilterDateFrom("");
+    setFilterScope("ALL");
+    setCurrentPage(1);
+  };
+
+  // Table Column Configuration - Original Lost Leads Columns restored as requested
   const columnConfig = useMemo(() => ({
     actions: {
       label: "ACTIONS",
+      align: "center",
       render: (val, row) => (
         <div className="flex items-center justify-center gap-1.5">
+          {/* View Lost Lead Details Eye Button */}
           <button
             type="button"
             onClick={() => setSelectedLead(row)}
@@ -86,6 +85,7 @@ const Lostlead = () => {
             </svg>
           </button>
 
+          {/* Revive Lead Button */}
           <button
             type="button"
             onClick={() => setReviveModalLead(row)}
@@ -102,8 +102,8 @@ const Lostlead = () => {
     lostDate: {
       label: "LOST DATE",
       render: (val, row) => (
-        <span className="text-slate-700 text-xs font-sans font-medium">
-          {val || row.createdDate || "18/7/2026"}
+        <span className="text-slate-700 text-xs font-sans font-medium whitespace-nowrap">
+          {row.lostDate || val || row.createdDate || row.date || "18/7/2026"}
         </span>
       )
     },
@@ -111,7 +111,7 @@ const Lostlead = () => {
       label: "LOST REASON",
       render: (val, row) => (
         <span className="px-2.5 py-0.5 rounded text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
-          {val || row.lostReason || "Price / Budget Constraint"}
+          {row.lostReason || val || "Client Not Interested"}
         </span>
       )
     },
@@ -127,24 +127,30 @@ const Lostlead = () => {
     phoneNumber: {
       label: "PHONE",
       render: (val, row) => (
-        <div className="text-left font-sans text-slate-800 text-xs font-medium">
+        <a
+          href={`tel:${row.phoneNumber || row.contact || ''}`}
+          className="text-left font-sans text-slate-800 text-xs font-medium hover:text-orange-600 hover:underline"
+        >
           {row.phoneNumber || row.contact || "--"}
-        </div>
+        </a>
       )
     },
     expectedBusinessAmount: {
       label: "EXPECTED REVENUE",
-      render: (val, row) => (
-        <span className="font-mono font-bold text-rose-600 text-xs">
-          ₹ {Number(val || row.expectedBusinessAmount || 0).toLocaleString("en-IN")}
-        </span>
-      )
+      render: (val, row) => {
+        const amt = Number(row.expectedBusinessAmount || row.expectedBusiness || row.expectedRevenue || 0);
+        return (
+          <span className="font-mono font-bold text-rose-600 text-xs">
+            ₹ {amt.toLocaleString("en-IN")}
+          </span>
+        );
+      }
     },
     salesPerson: {
       label: "SALES PERSON",
       render: (val, row) => (
         <span className="text-xs font-semibold text-slate-800">
-          {val || row.salesPerson || "Sales Rep"}
+          {val || row.salesPerson || row.assignedTo || row.assignTo || "Sales TL"}
         </span>
       )
     },
@@ -152,124 +158,92 @@ const Lostlead = () => {
       label: "SOURCE / TYPE",
       render: (val, row) => (
         <span className="text-xs text-slate-700">
-          <strong className="text-slate-800">{row.leadSource || "WEBSITE"}</strong> ({row.leadType || "FRESH"})
+          <strong className="text-slate-800">{row.leadMode || row.leadSource || "WEBSITE"}</strong> ({row.leadType || "FRESH"})
         </span>
       )
     }
   }), []);
 
-  const handleResetFilters = () => {
-    setFilterLeadType("Lead Type");
-    setFilterLeadSource("Lead Source");
-    setFilterLostReason("Lost Reason");
-    setFilterLeadLabel("Lead Label");
-    setFilterJobType("Job Type");
-    setFilterDate("");
-    setSearchTerm("");
-    setReasonTab("all");
-    setCurrentPage(1);
-  };
-
+  // Filter & Search Logic
   const filteredLeads = useMemo(() => {
-    return leads.filter((lead) => {
-      if (reasonTab === "price" && !lead.lostReason?.toLowerCase().includes("price")) return false;
-      if (reasonTab === "competitor" && !lead.lostReason?.toLowerCase().includes("competitor")) return false;
-      if (reasonTab === "cancelled" && !lead.lostReason?.toLowerCase().includes("cancelled") && !lead.lostReason?.toLowerCase().includes("dropped")) return false;
-      if (reasonTab === "no_response" && !lead.lostReason?.toLowerCase().includes("no response") && !lead.lostReason?.toLowerCase().includes("cold")) return false;
+    return leads.filter((item) => {
+      // 1. Search Query Filter
+      const search = searchTerm.toLowerCase();
+      const matchSearch =
+        !searchTerm ||
+        item.clientName?.toLowerCase().includes(search) ||
+        item.concernPersonName?.toLowerCase().includes(search) ||
+        item.phoneNumber?.includes(search) ||
+        item.emailAddress?.toLowerCase().includes(search) ||
+        item.lostReason?.toLowerCase().includes(search) ||
+        item.city?.toLowerCase().includes(search);
 
-      if (filterLeadType !== "Lead Type" && lead.leadType !== filterLeadType) return false;
-      if (filterLeadSource !== "Lead Source" && lead.leadSource !== filterLeadSource) return false;
-      if (filterLostReason !== "Lost Reason" && lead.lostReason !== filterLostReason) return false;
-      if (filterLeadLabel !== "Lead Label" && lead.leadLabel !== filterLeadLabel) return false;
-      if (filterJobType !== "Job Type" && lead.jobType !== filterJobType) return false;
+      if (!matchSearch) return false;
 
-      if (searchTerm) {
-        const query = searchTerm.toLowerCase();
-        const matches =
-          (lead.concernPersonName || "").toLowerCase().includes(query) ||
-          (lead.phoneNumber || "").includes(query) ||
-          (lead.city || "").toLowerCase().includes(query) ||
-          (lead.lostReason || "").toLowerCase().includes(query) ||
-          (lead.id || "").toLowerCase().includes(query);
-        if (!matches) return false;
-      }
+      // 2. Dropdown Filters
+      if (filterLeadMode !== "ALL" && (item.leadMode || item.leadSource) !== filterLeadMode) return false;
+      if (filterLeadType !== "ALL" && item.leadType !== filterLeadType) return false;
+      if (filterWorkCategory !== "ALL" && (item.workCategory || item.leadLabel) !== filterWorkCategory) return false;
+      if (filterWorkType !== "ALL" && (item.workType || item.jobType) !== filterWorkType) return false;
+      if (filterStatus !== "ALL" && item.leadStatus !== filterStatus) return false;
 
-      if (filterDate && !(lead.lostDate || lead.createdDate || "").includes(filterDate)) return false;
+      // 3. Date Filter
+      if (filterDateFrom && !(item.createdDate || item.date || item.lostDate || "").includes(filterDateFrom)) return false;
+
+      // 4. Scope Filter (ALL, SELF, TEAM)
+      if (filterScope === "SELF" && item.assignedType !== "self") return false;
+      if (filterScope === "TEAM" && item.assignedType === "self") return false;
 
       return true;
     });
-  }, [leads, reasonTab, filterLeadType, filterLeadSource, filterLostReason, filterLeadLabel, filterJobType, filterDate, searchTerm]);
+  }, [
+    leads,
+    searchTerm,
+    filterLeadMode,
+    filterLeadType,
+    filterWorkCategory,
+    filterWorkType,
+    filterStatus,
+    filterDateFrom,
+    filterScope
+  ]);
 
   const totalLostAmount = useMemo(() => {
-    return filteredLeads.reduce((sum, item) => sum + (Number(item.expectedBusinessAmount) || 0), 0);
+    return filteredLeads.reduce((sum, item) => sum + (Number(item.expectedBusiness || item.expectedBusinessAmount || item.expectedRevenue) || 0), 0);
   }, [filteredLeads]);
 
-  const sortedLeads = useMemo(() => {
-    const data = [...filteredLeads];
-    if (sortField) {
-      data.sort((a, b) => {
-        let valA = a[sortField] || "";
-        let valB = b[sortField] || "";
-        if (sortField === "expectedBusinessAmount") {
-          valA = Number(valA) || 0;
-          valB = Number(valB) || 0;
-        } else if (typeof valA === "string") {
-          valA = valA.toLowerCase();
-          valB = valB.toLowerCase();
-        }
-        if (valA < valB) return sortDirection === "asc" ? -1 : 1;
-        if (valA > valB) return sortDirection === "asc" ? 1 : -1;
-        return 0;
-      });
-    }
-    return data;
-  }, [filteredLeads, sortField, sortDirection]);
-
-  const totalPages = Math.ceil(sortedLeads.length / rowsPerPage) || 1;
   const paginatedLeads = useMemo(() => {
     const start = (currentPage - 1) * rowsPerPage;
-    return sortedLeads.slice(start, start + rowsPerPage);
-  }, [sortedLeads, currentPage, rowsPerPage]);
+    return filteredLeads.slice(start, start + rowsPerPage);
+  }, [filteredLeads, currentPage, rowsPerPage]);
 
-  const handleSortToggle = (field) => {
-    if (sortField === field) {
-      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
-    } else {
-      setSortField(field);
-      setSortDirection("asc");
-    }
-  };
-
-  const handleConfirmRevive = () => {
+  const handleReviveSubmit = () => {
     if (!reviveModalLead) return;
+
+    const revivedItem = {
+      ...reviveModalLead,
+      leadStatus: reviveStatus,
+      isAssigned: false,
+      nextFollowup: "Re-opened - Followup Scheduled",
+      remark: `${reviveModalLead.remark || ""} [Reopened: ${reviveNotes || "Revived lead for fresh negotiation"}]`
+    };
+
+    // 1. Remove from dss_lost_leads
     const updatedLost = leads.filter((l) => l.id !== reviveModalLead.id);
     saveLeads(updatedLost);
 
+    // 2. Add to dss_leads (Total Leads Directory)
     try {
-      const activeLeads = JSON.parse(localStorage.getItem("dss_leads") || "[]");
-      const revivedItem = {
-        ...reviveModalLead,
-        leadStatus: reviveStatus,
-        nextFollowup: "Re-opened - Followup Scheduled",
-        remarks: `${reviveModalLead.remarks || ""} [Reopened: ${reviveNotes || "Revived lead for fresh negotiation"}]`
-      };
-      activeLeads.unshift(revivedItem);
-      localStorage.setItem("dss_leads", JSON.stringify(activeLeads));
-    } catch (e) {}
+      const savedTotal = localStorage.getItem("dss_leads");
+      const currentTotal = savedTotal ? JSON.parse(savedTotal) : [];
+      const filteredTotal = currentTotal.filter((l) => l.id !== reviveModalLead.id);
+      localStorage.setItem("dss_leads", JSON.stringify([revivedItem, ...filteredTotal]));
+    } catch (e) {
+      console.error("Error reviving lead to total leads:", e);
+    }
 
     setReviveModalLead(null);
-    setSelectedLead(null);
     setReviveNotes("");
-    alert(`Lead for "${reviveModalLead.concernPersonName}" revived and moved to Active Pipeline!`);
-  };
-
-  const getReasonBadgeClass = (reason) => {
-    const r = reason?.toLowerCase() || "";
-    if (r.includes("price") || r.includes("budget")) return "bg-rose-50 text-rose-700 border-rose-200";
-    if (r.includes("competitor")) return "bg-amber-50 text-amber-700 border-amber-200";
-    if (r.includes("cancelled") || r.includes("dropped")) return "bg-slate-100 text-slate-700 border-slate-300";
-    if (r.includes("timeline") || r.includes("delay")) return "bg-purple-50 text-purple-700 border-purple-200";
-    return "bg-red-50 text-red-700 border-red-200";
   };
 
   return (
@@ -283,306 +257,244 @@ const Lostlead = () => {
         description="Analyze lost deal reasons and revive opportunities back into the active pipeline."
         showBackButton={true}
         rightActions={
-          <div className="px-4 py-2 rounded-xl bg-white border border-rose-200 shadow-2xs text-xs sm:text-sm font-bold flex items-center gap-2">
-            <span className="text-rose-600">📉 Lost Value:</span>
-            <span className="font-mono font-black text-rose-800 text-sm sm:text-base">
-              ₹ {totalLostAmount.toLocaleString("en-IN")}
-            </span>
-          </div>
+          <button
+            type="button"
+            onClick={() => setShowFilters((prev) => !prev)}
+            className={`h-9 px-3.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs ${
+              showFilters
+                ? "bg-slate-900 text-white border-slate-900"
+                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+            }`}
+          >
+            <FaFilter className="w-3.5 h-3.5" />
+            <span>Filter</span>
+          </button>
         }
       />
 
-      {/* 2. TAB BUTTONS */}
+      {/* 2. TAB BUTTONS (All | + Self | 👥 Team) */}
       <div className="flex justify-center w-full">
-        <div className="inline-flex flex-wrap p-1.5 rounded-2xl bg-slate-200/80 border border-slate-300/80 gap-1.5 shadow-2xs">
+        <div className="inline-flex p-1.5 rounded-2xl bg-emerald-50/80 border border-emerald-200 gap-2 shadow-2xs">
           <button
             type="button"
-            onClick={() => { setReasonTab("all"); setCurrentPage(1); }}
-            className={`px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
-              reasonTab === "all" ? "bg-slate-900 text-white shadow-md" : "bg-transparent text-slate-700 hover:bg-white/80"
+            onClick={() => { setFilterScope("ALL"); setCurrentPage(1); }}
+            className={`px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+              filterScope === "ALL" ? "bg-emerald-600 text-white shadow-md" : "bg-transparent text-emerald-900 hover:bg-white/80"
             }`}
           >
-            All Lost Leads ({leads.length})
+            All
           </button>
 
           <button
             type="button"
-            onClick={() => { setReasonTab("price"); setCurrentPage(1); }}
-            className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              reasonTab === "price" ? "bg-gradient-to-r from-rose-600 to-red-600 text-white shadow-md shadow-rose-600/25" : "bg-transparent text-rose-800 hover:bg-white/80"
+            onClick={() => { setFilterScope("SELF"); setCurrentPage(1); }}
+            className={`px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              filterScope === "SELF" ? "bg-emerald-600 text-white shadow-md" : "bg-transparent text-emerald-900 hover:bg-white/80"
             }`}
           >
-            <span>💰 Budget / Price</span>
+            <FaUserPlus className="w-3.5 h-3.5" />
+            <span>Self</span>
           </button>
 
           <button
             type="button"
-            onClick={() => { setReasonTab("competitor"); setCurrentPage(1); }}
-            className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              reasonTab === "competitor" ? "bg-gradient-to-r from-amber-600 to-orange-600 text-white shadow-md shadow-amber-600/25" : "bg-transparent text-amber-800 hover:bg-white/80"
+            onClick={() => { setFilterScope("TEAM"); setCurrentPage(1); }}
+            className={`px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              filterScope === "TEAM" ? "bg-emerald-600 text-white shadow-md" : "bg-transparent text-emerald-900 hover:bg-white/80"
             }`}
           >
-            <span>⚔️ Competitor Won</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => { setReasonTab("cancelled"); setCurrentPage(1); }}
-            className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              reasonTab === "cancelled" ? "bg-gradient-to-r from-slate-700 to-slate-900 text-white shadow-md shadow-slate-900/25" : "bg-transparent text-slate-800 hover:bg-white/80"
-            }`}
-          >
-            <span>🚫 Dropped / Cancelled</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => { setReasonTab("no_response"); setCurrentPage(1); }}
-            className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              reasonTab === "no_response" ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-600/25" : "bg-transparent text-blue-800 hover:bg-white/80"
-            }`}
-          >
-            <span>❄️ No Response</span>
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+            </svg>
+            <span>Team</span>
           </button>
         </div>
       </div>
 
-      {/* 3. COLLAPSIBLE FILTER TOGGLE BAR */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3.5 sm:p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="text-xs sm:text-sm font-semibold text-slate-600 text-center sm:text-left">
-          Showing <strong className="font-bold text-slate-900">{filteredLeads.length}</strong> of <strong className="font-bold text-slate-900">{leads.length}</strong> Lost Leads
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setShowFilters((prev) => !prev)}
-          className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 shadow-2xs"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-          </svg>
-          <span>{showFilters ? "Hide Filter Options ✕" : "Filter Options 🔍"}</span>
-        </button>
-      </div>
-
-      {/* COLLAPSIBLE FILTER PANEL */}
+      {/* 3. COLLAPSIBLE FILTER PANEL */}
       {showFilters && (
-        <div className="w-full bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 space-y-3.5 animate-in fade-in duration-150">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
-            <div className="relative col-span-2 sm:col-span-1">
+        <div className="w-full bg-white rounded-3xl border border-slate-200/90 shadow-md p-5 space-y-4 animate-in fade-in duration-150">
+          {/* Search & Quick Status Tabs */}
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+            {/* Search Input */}
+            <div className="relative w-full md:w-96">
+              <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
               <input
                 type="text"
                 value={searchTerm}
                 onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-                placeholder="Search Client, Phone, Reason..."
-                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white hover:border-slate-300 focus:outline-hidden focus:border-black pr-8 font-semibold shadow-2xs placeholder:text-slate-400"
+                placeholder="Search Client Name, Project Details, City..."
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold text-slate-800 bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:border-slate-900 transition-all shadow-2xs"
               />
               {searchTerm && (
                 <button
+                  type="button"
                   onClick={() => setSearchTerm("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-black text-xs cursor-pointer"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 text-xs font-bold"
                 >
                   ✕
                 </button>
               )}
             </div>
 
-            <div className="relative">
-              <select
-                value={filterLeadType}
-                onChange={(e) => { setFilterLeadType(e.target.value); setCurrentPage(1); }}
-                className="w-full appearance-none px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-700 bg-white hover:border-slate-300 focus:outline-hidden focus:border-black cursor-pointer pr-7 font-medium shadow-2xs"
-              >
-                {leadTypeOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-              </div>
-            </div>
-
-            <div className="relative">
-              <select
-                value={filterLeadSource}
-                onChange={(e) => { setFilterLeadSource(e.target.value); setCurrentPage(1); }}
-                className="w-full appearance-none px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-700 bg-white hover:border-slate-300 focus:outline-hidden focus:border-black cursor-pointer pr-7 font-medium shadow-2xs"
-              >
-                {leadSourceOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-              </div>
-            </div>
-
-            <div className="relative">
-              <select
-                value={filterLostReason}
-                onChange={(e) => { setFilterLostReason(e.target.value); setCurrentPage(1); }}
-                className="w-full appearance-none px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-700 bg-white hover:border-slate-300 focus:outline-hidden focus:border-black cursor-pointer pr-7 font-medium shadow-2xs"
-              >
-                {lostReasonOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-              </div>
-            </div>
-
-            <div className="relative">
-              <select
-                value={filterJobType}
-                onChange={(e) => { setFilterJobType(e.target.value); setCurrentPage(1); }}
-                className="w-full appearance-none px-3 py-2 rounded-xl border border-slate-200 text-xs text-slate-700 bg-white hover:border-slate-300 focus:outline-hidden focus:border-black cursor-pointer pr-7 font-medium shadow-2xs"
-              >
-                {jobTypeOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-              </div>
+            {/* Quick Status Tabs (ALL, HOT, WARM, COLD) */}
+            <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
+              {["ALL", "HOT", "WARM", "COLD"].map((st) => (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => { setFilterStatus(st); setCurrentPage(1); }}
+                  className={`px-4 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                    filterStatus === st
+                      ? "bg-slate-900 text-white shadow-xs"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  {st}
+                </button>
+              ))}
             </div>
           </div>
 
-          {/* Date Filter & Orange Reset */}
-          <div className="flex items-center gap-3 pt-1">
-            <div className="relative w-48 sm:w-60">
-              <input
-                type={showDatePicker ? "date" : "text"}
-                value={filterDate}
-                onFocus={() => setShowDatePicker(true)}
-                onBlur={(e) => { if (!e.target.value) setShowDatePicker(false); }}
-                onChange={(e) => { setFilterDate(e.target.value); setCurrentPage(1); }}
-                placeholder="All Dates"
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-200 text-xs text-slate-700 bg-white hover:border-slate-300 focus:outline-hidden focus:border-black cursor-pointer pr-9 shadow-2xs font-medium placeholder:text-slate-700"
-              />
-              <span className="absolute right-3 text-slate-400 pointer-events-none">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                  <line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
-                </svg>
-              </span>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleResetFilters}
-              className="h-9 px-3.5 rounded-xl bg-orange-500 hover:bg-orange-600 active:scale-95 text-white flex items-center gap-1.5 text-xs font-bold transition-all cursor-pointer shadow-xs shrink-0"
-              title="Reset All Filters"
+          {/* 5 Filter Dropdowns + Date Picker + Reset Button */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-2 border-t border-slate-100">
+            {/* 1. Lead Mode Dropdown */}
+            <select
+              value={filterLeadMode}
+              onChange={(e) => { setFilterLeadMode(e.target.value); setCurrentPage(1); }}
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:border-slate-900 cursor-pointer shadow-2xs"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              <span>Reset Filters</span>
-            </button>
+              <option value="ALL">Lead Mode</option>
+              {leadModesList.filter(m => m !== "ALL").map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+
+            {/* 2. Lead Type Dropdown */}
+            <select
+              value={filterLeadType}
+              onChange={(e) => { setFilterLeadType(e.target.value); setCurrentPage(1); }}
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:border-slate-900 cursor-pointer shadow-2xs"
+            >
+              <option value="ALL">Lead Type</option>
+              {leadTypesList.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+
+            {/* 3. Lead Status Dropdown */}
+            <select
+              value={filterStatus}
+              onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }}
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:border-slate-900 cursor-pointer shadow-2xs"
+            >
+              <option value="ALL">Lead Status</option>
+              <option value="Hot">Hot</option>
+              <option value="Warm">Warm</option>
+              <option value="Cold">Cold</option>
+            </select>
+
+            {/* 4. Work Category Dropdown */}
+            <select
+              value={filterWorkCategory}
+              onChange={(e) => { setFilterWorkCategory(e.target.value); setCurrentPage(1); }}
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:border-slate-900 cursor-pointer shadow-2xs"
+            >
+              <option value="ALL">Work Category</option>
+              {workCategoryList.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+
+            {/* 5. Work Type Dropdown */}
+            <select
+              value={filterWorkType}
+              onChange={(e) => { setFilterWorkType(e.target.value); setCurrentPage(1); }}
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:border-slate-900 cursor-pointer shadow-2xs"
+            >
+              <option value="ALL">Work Type</option>
+              {availableWorkTypes.map(w => <option key={w} value={w}>{w}</option>)}
+            </select>
+
+            {/* Date Picker & Reset Button */}
+            <div className="flex items-center gap-2 col-span-2 sm:col-span-1">
+              <input
+                type="date"
+                value={filterDateFrom}
+                onChange={(e) => { setFilterDateFrom(e.target.value); setCurrentPage(1); }}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:border-slate-900 shadow-2xs"
+              />
+
+              {/* Orange Reset Button */}
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="bg-[#ff5722] hover:bg-[#e64a19] text-white p-2.5 rounded-xl shadow-xs transition-colors shrink-0 cursor-pointer"
+                title="Reset All Filters"
+              >
+                🔄
+              </button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* 4. ROWS PER PAGE */}
-      <div className="flex items-center gap-2">
-        <div className="relative w-20">
-          <select
-            value={rowsPerPage}
-            onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-            className="w-full appearance-none px-3 py-1.5 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-800 focus:outline-hidden focus:border-black cursor-pointer pr-6 shadow-2xs"
-          >
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
-          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-          </div>
-        </div>
-      </div>
-
-      {/* 5. TABLE */}
+      {/* 4. TABLE COMPONENT */}
       <Table
-        data={paginatedLeads}
         columnConfig={columnConfig}
-        currentPage={currentPage}
-        totalItems={sortedLeads.length}
+        data={paginatedLeads}
+        totalItems={filteredLeads.length}
         itemsPerPage={rowsPerPage}
         onPageChange={(page) => setCurrentPage(page)}
       />
 
-      {/* 7. FULL LOST LEAD DETAIL MODAL */}
-      {selectedLead && (
+      {/* 5. REVIVE MODAL */}
+      {reviveModalLead && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl p-6 max-w-2xl w-full shadow-2xl border border-slate-100 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2.5">
-                <span className="w-8 h-8 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center text-sm font-bold">📉</span>
-                <div>
-                  <h3 className="text-base font-black text-slate-900">{selectedLead.concernPersonName}</h3>
-                  <p className="text-xs text-slate-400">Lead ID: <span className="font-mono font-bold text-slate-700">{selectedLead.id}</span> • Lost Date: {selectedLead.lostDate}</p>
-                </div>
-              </div>
-              <button type="button" onClick={() => setSelectedLead(null)} className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 cursor-pointer">✕</button>
+          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 space-y-4">
+            <div>
+              <h3 className="text-sm font-black text-slate-900">Revive / Reopen Lead</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Client: <strong className="text-slate-800">{reviveModalLead.clientName || reviveModalLead.concernPersonName}</strong></p>
             </div>
-
-            <div className="p-3.5 rounded-2xl bg-rose-50/70 border border-rose-200 space-y-1">
-              <span className="text-[10px] font-extrabold uppercase text-rose-600 tracking-wider">Primary Reason for Loss:</span>
-              <div className="font-bold text-sm text-rose-900">{selectedLead.lostReason}</div>
-              {selectedLead.lostRemarks && <p className="text-xs text-rose-700 mt-1 italic">"{selectedLead.lostRemarks}"</p>}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Lead Priority Status</label>
+              <select value={reviveStatus} onChange={(e) => setReviveStatus(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 bg-white cursor-pointer">
+                <option value="Hot">Hot Lead 🔥</option>
+                <option value="Warm">Warm Lead ⚡</option>
+                <option value="Cold">Cold Lead ❄️</option>
+              </select>
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100"><span className="text-[10px] font-bold text-slate-400 uppercase block">Client Designation</span><span className="font-semibold text-slate-800">{selectedLead.clientDesignation || "—"}</span></div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100"><span className="text-[10px] font-bold text-slate-400 uppercase block">Client Type</span><span className="font-semibold text-slate-800">{selectedLead.clientType || "Individual"}</span></div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100"><span className="text-[10px] font-bold text-slate-400 uppercase block">Lost Deal Value</span><span className="font-mono font-black text-rose-600 text-sm">₹ {Number(selectedLead.expectedBusinessAmount || 0).toLocaleString("en-IN")}</span></div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100"><span className="text-[10px] font-bold text-slate-400 uppercase block">Phone Number</span><a href={`tel:${selectedLead.phoneNumber}`} className="font-mono font-bold text-blue-600 hover:underline">+91 {selectedLead.phoneNumber}</a></div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100"><span className="text-[10px] font-bold text-slate-400 uppercase block">WhatsApp Number</span><a href={`https://wa.me/91${selectedLead.whatsAppNumber}`} target="_blank" rel="noopener noreferrer" className="font-mono font-bold text-emerald-600 hover:underline">+91 {selectedLead.whatsAppNumber} 💬</a></div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100"><span className="text-[10px] font-bold text-slate-400 uppercase block">Email Address</span><span className="text-slate-800 truncate block">{selectedLead.emailAddress || "—"}</span></div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100"><span className="text-[10px] font-bold text-slate-400 uppercase block">Lead Source</span><span className="font-semibold text-slate-800">{selectedLead.leadSource}</span></div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100"><span className="text-[10px] font-bold text-slate-400 uppercase block">Lead Type & Job</span><span className="font-semibold text-slate-800">{selectedLead.leadType} ({selectedLead.jobType})</span></div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100"><span className="text-[10px] font-bold text-slate-400 uppercase block">City & State</span><span className="font-semibold text-slate-800">{selectedLead.city}, {selectedLead.state}</span></div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 col-span-1 sm:col-span-2 md:col-span-3"><span className="text-[10px] font-bold text-slate-400 uppercase block">Original Requirements & Remarks</span><p className="mt-1 text-slate-700 leading-relaxed font-medium">{selectedLead.remarks || "No additional project notes provided."}</p></div>
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Revive Notes / Remarks</label>
+              <textarea
+                value={reviveNotes}
+                onChange={(e) => setReviveNotes(e.target.value)}
+                placeholder="Enter negotiation notes..."
+                rows={3}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 bg-white"
+              />
             </div>
-
-            <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <a href={`tel:${selectedLead.phoneNumber}`} className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5"><span>📞 Call</span></a>
-                <a href={`https://wa.me/91${selectedLead.whatsAppNumber}`} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 rounded-xl bg-[#25D366] hover:bg-[#1EBE5D] text-white font-bold text-xs"><span>WhatsApp</span></a>
-                <button type="button" onClick={() => setReviveModalLead(selectedLead)} className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs cursor-pointer"><span>🚀 Revive Lead</span></button>
-              </div>
-              <button type="button" onClick={() => setSelectedLead(null)} className="px-5 py-1.5 rounded-xl bg-black text-white font-bold text-xs hover:bg-neutral-800 cursor-pointer">Close</button>
+            <div className="pt-2 flex items-center justify-end gap-2">
+              <button type="button" onClick={() => setReviveModalLead(null)} className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50">Cancel</button>
+              <button type="button" onClick={handleReviveSubmit} className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700">Revive Lead</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 8. REVIVE LEAD MODAL */}
-      {reviveModalLead && (
+      {/* 6. DETAIL VIEW MODAL */}
+      {selectedLead && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 space-y-4">
-            <div>
-              <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-lg font-bold mb-2">🚀</div>
-              <h3 className="text-sm font-black text-slate-900">Revive / Reopen Lead</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Client: <strong className="text-slate-800">{reviveModalLead.concernPersonName}</strong></p>
+          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-100 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <h3 className="text-base font-extrabold text-slate-900">Lost Lead Details</h3>
+              <button type="button" onClick={() => setSelectedLead(null)} className="w-7 h-7 rounded-full bg-slate-100 text-slate-500 font-bold hover:bg-slate-200 text-xs">✕</button>
             </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">New Pipeline Status</label>
-              <select value={reviveStatus} onChange={(e) => setReviveStatus(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 bg-white focus:outline-hidden focus:border-black cursor-pointer">
-                <option value="Hot">Hot Lead 🔥</option>
-                <option value="Warm">Warm Lead ⚡</option>
-                <option value="Interested">Interested / Followup</option>
-              </select>
+            <div className="space-y-2 text-xs text-slate-700">
+              <p><strong>Client Name:</strong> {selectedLead.clientName || selectedLead.concernPersonName}</p>
+              <p><strong>Phone:</strong> {selectedLead.phoneNumber || selectedLead.contact}</p>
+              <p><strong>Email:</strong> {selectedLead.emailAddress || selectedLead.email || "--"}</p>
+              <p><strong>Lost Reason:</strong> <span className="text-rose-700 font-bold">{selectedLead.lostReason || "Client Not Interested"}</span></p>
+              <p><strong>Expected Business:</strong> ₹{Number(selectedLead.expectedBusiness || selectedLead.expectedBusinessAmount || 0).toLocaleString("en-IN")}</p>
+              <p><strong>Assigned To:</strong> {selectedLead.assignedTo || selectedLead.salesPerson || "Sales TL"}</p>
+              <p><strong>Remarks:</strong> {selectedLead.remark || selectedLead.remarks || "--"}</p>
             </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Re-opening Notes / Strategy</label>
-              <textarea
-                rows={2}
-                value={reviveNotes}
-                onChange={(e) => setReviveNotes(e.target.value)}
-                placeholder="E.g. Discount offered, new requirement discussion..."
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 bg-white focus:outline-hidden focus:border-black placeholder:text-slate-400 resize-none"
-              />
-            </div>
-
-            <div className="pt-2 flex items-center justify-end gap-2">
-              <button type="button" onClick={() => setReviveModalLead(null)} className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50 cursor-pointer">Cancel</button>
-              <button type="button" onClick={handleConfirmRevive} className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 cursor-pointer shadow-xs">Move to Active Pipeline</button>
+            <div className="pt-2 flex justify-end">
+              <button type="button" onClick={() => setSelectedLead(null)} className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800">Close</button>
             </div>
           </div>
         </div>

@@ -1,8 +1,12 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import Table from "../../../../Common/Components/Table";
+import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
 import { initialTotalLeads as initialLeadsData } from "../../data/totalLeadsData";
+import { availableWorkTypes, workCategoryList, indianStatesList } from "../../data/addLeadData";
+import { FaUserPlus, FaUsers, FaUserCheck } from "react-icons/fa";
 
 const salesPersonsList = [
   "ALL",
@@ -14,15 +18,28 @@ const salesPersonsList = [
   "Sanjay Gupta"
 ];
 
-const workTypesList = [
+const leadModesList = [
   "ALL",
-  "Digital Signage",
-  "LED Video Wall",
-  "Indoor Display",
-  "Outdoor Billboard",
-  "Interactive Kiosk",
-  "Software / CMS",
-  "Maintenance & AMC"
+  "Business networking",
+  "By freelancer",
+  "By sales Team",
+  "Customer to customer"
+];
+
+const leadTypesList = [
+  "ALL",
+  "FRESH",
+  "REPEAT"
+];
+
+const workCategoriesList = [
+  "ALL",
+  ...workCategoryList
+];
+
+const fullWorkTypesList = [
+  "ALL",
+  ...availableWorkTypes
 ];
 
 const citiesList = [
@@ -33,6 +50,11 @@ const citiesList = [
   "Mumbai",
   "Bengaluru",
   "Jaipur"
+];
+
+const fullStatesList = [
+  "ALL",
+  ...indianStatesList
 ];
 
 const SalseTotalLeads = () => {
@@ -58,213 +80,44 @@ const SalseTotalLeads = () => {
   };
 
   // Search & Filter States
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [filterScope, setFilterScope] = useState("ALL");
+  const [filterLeadMode, setFilterLeadMode] = useState("ALL");
+  const [filterLeadType, setFilterLeadType] = useState("ALL");
+  const [filterWorkCategory, setFilterWorkCategory] = useState("ALL");
+  const [filterWorkType, setFilterWorkType] = useState("ALL");
   const [filterStatus, setFilterStatus] = useState("ALL");
   const [filterSalesPerson, setFilterSalesPerson] = useState("ALL");
-  const [filterWorkType, setFilterWorkType] = useState("ALL");
   const [filterCity, setFilterCity] = useState("ALL");
+  const [filterState, setFilterState] = useState("ALL");
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo] = useState("");
 
-  // Table Column Configuration for common Table component matching exact screenshot design
-  const columnConfig = useMemo(() => ({
-    actions: {
-      label: "ACTIONS",
-      render: (val, row) => {
-        const phone = row.phoneNumber || row.contact || row.whatsappNumber || "";
-        return (
-          <div className="flex items-center justify-center gap-1.5">
-            {/* Orange Square Eye Button matching screenshot */}
-            <button
-              type="button"
-              onClick={() => navigate(`/sales/leads/details/${row.id}`, { state: { lead: row } })}
-              className="w-7 h-7 rounded-lg border border-orange-400 text-orange-500 hover:bg-orange-500 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
-              title="View Lead Details"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-            </button>
+  const handleResetFilters = () => {
+    setSearchTerm("");
+    setFilterLeadMode("ALL");
+    setFilterLeadType("ALL");
+    setFilterWorkCategory("ALL");
+    setFilterWorkType("ALL");
+    setFilterStatus("ALL");
+    setFilterSalesPerson("ALL");
+    setFilterCity("ALL");
+    setFilterState("ALL");
+    setFilterDateFrom("");
+    setFilterDateTo("");
+    setCurrentPage(1);
+  };
 
-            {/* Green Phone Call Icon */}
-            <a
-              href={phone ? `tel:${phone}` : "#"}
-              className={`w-7 h-7 rounded-lg border border-emerald-400 text-emerald-600 hover:bg-emerald-600 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs ${!phone && "opacity-40 pointer-events-none"}`}
-              title={phone ? `Call ${phone}` : "No phone available"}
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-              </svg>
-            </a>
-          </div>
-        );
-      }
-    },
-    createdDate: {
-      label: "CREATED DATE",
-      render: (val, row) => (
-        <span className="text-slate-700 text-xs font-sans font-medium">
-          {val || row.createdDate || row.date || "18/7/2026, 12:45:35 pm"}
-          {row.createdTime && `, ${row.createdTime}`}
-        </span>
-      )
-    },
-    leadAge: {
-      label: "LEAD AGE",
-      render: (val, row) => (
-        <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-600 font-bold italic text-xs border border-blue-200 inline-block">
-          {val || row.leadAge || "33 Days"}
-        </span>
-      )
-    },
-    status: {
-      label: "STATUS",
-      render: (val, row) => {
-        const s = (val || row.status || row.leadStatus || "").toString().toUpperCase();
-        const isNew = s === "NEW" || s === "FRESH" || row.jobType === "NEW" || (row.leadType && row.leadType.toUpperCase() === "FRESH");
-        const displayStatus = isNew ? "NEW" : "OLD";
-
-        return (
-          <span
-            className={`px-3 py-0.5 rounded-full text-xs font-extrabold uppercase border ${
-              displayStatus === "NEW"
-                ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                : "bg-slate-100 text-slate-700 border-slate-300"
-            }`}
-          >
-            {displayStatus}
-          </span>
-        );
-      }
-    },
-    concernPersonName: {
-      label: "CONCERN PERSON NAME",
-      render: (val, row) => (
-        <div className="text-left font-medium text-slate-800 text-xs">
-          {row.concernPersonName || row.clientName || "--"}
-        </div>
-      )
-    },
-    phoneNumber: {
-      label: "PHONE",
-      render: (val, row) => {
-        const phone = row.phoneNumber || row.contact || row.whatsappNumber || "--";
-        return (
-          <div className="text-left font-sans text-slate-800 text-xs font-medium">
-            {phone}
-          </div>
-        );
-      }
-    },
-    email: {
-      label: "EMAIL",
-      render: (val, row) => (
-        <span className="text-xs font-mono text-slate-600">
-          {val || row.emailAddress || row.email || "--"}
-        </span>
-      )
-    },
-    leadType: {
-      label: "LEAD TYPE",
-      render: (val, row) => (
-        <span className="px-2 py-0.5 rounded text-xs font-bold bg-slate-100 text-slate-800 border border-slate-200">
-          {val || row.leadType || "FRESH"}
-        </span>
-      )
-    },
-    jobType: {
-      label: "JOB TYPE",
-      render: (val, row) => (
-        <span className="px-2 py-0.5 rounded text-xs font-bold uppercase bg-emerald-50 text-emerald-800 border border-emerald-200">
-          {val || row.jobType || "NEW"}
-        </span>
-      )
-    },
-    leadLabel: {
-      label: "LEAD LABEL",
-      render: (val, row) => {
-        const lbl = (val || row.leadLabel || row.leadStatus || "WARM").toUpperCase();
-        const colors = {
-          HOT: "bg-rose-100 text-rose-800 border-rose-200",
-          WARM: "bg-amber-100 text-amber-800 border-amber-200",
-          COLD: "bg-sky-100 text-sky-800 border-sky-200",
-          NEW: "bg-purple-100 text-purple-800 border-purple-200"
-        };
-        return (
-          <span className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold uppercase border ${colors[lbl] || "bg-slate-100 text-slate-700 border-slate-200"}`}>
-            {lbl}
-          </span>
-        );
-      }
-    },
-    leadSource: {
-      label: "LEAD SOURCE",
-      render: (val, row) => (
-        <span className="text-xs font-bold text-slate-700 uppercase">
-          {val || row.leadSource || row.leadMode || "WEBSITE"}
-        </span>
-      )
-    },
-    requirement: {
-      label: "REQUIREMENTS",
-      render: (val, row) => (
-        <div className="max-w-[200px] truncate text-xs text-slate-700 font-medium" title={val || row.requirement || row.projectDetails}>
-          {val || row.requirement || row.projectDetails || "--"}
-        </div>
-      )
-    },
-    addressPincode: {
-      label: "ADDRESS & PIN CODE",
-      render: (val, row) => (
-        <div className="text-left text-xs max-w-[180px]">
-          <div className="truncate text-slate-800 font-medium" title={row.address || row.siteAddress || row.city}>
-            {row.address || row.siteAddress || row.city || "--"}
-          </div>
-          {row.pincode && (
-            <div className="text-[11px] font-mono text-slate-500 font-bold">
-              PIN: {row.pincode}
-            </div>
-          )}
-        </div>
-      )
-    },
-    assignTo: {
-      label: "ASSIGN PERSON",
-      render: (val, row) => (
-        <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-800 text-xs font-semibold border border-slate-200">
-          {val || row.assignTo || row.salesPerson || "--"}
-        </span>
-      )
-    },
-    priority: {
-      label: "PRIORITY",
-      render: (val, row) => {
-        const p = (val || row.priority || (row.leadLabel === "HOT" || row.leadStatus === "Hot" ? "HIGH" : row.leadLabel === "WARM" || row.leadStatus === "Warm" ? "MEDIUM" : "LOW")).toUpperCase();
-        const badges = {
-          HIGH: "bg-red-50 text-red-700 border-red-200",
-          MEDIUM: "bg-amber-50 text-amber-700 border-amber-200",
-          LOW: "bg-emerald-50 text-emerald-700 border-emerald-200"
-        };
-        return (
-          <span className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold uppercase border ${badges[p] || "bg-slate-100 text-slate-700 border-slate-200"}`}>
-            {p === "HIGH" ? "🔴 High" : p === "MEDIUM" ? "🟡 Medium" : "🟢 Low"}
-          </span>
-        );
-      }
-    }
-  }), []);
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(20);
 
   // Sort State
   const [sortConfig, setSortConfig] = useState({
     key: "date",
     direction: "desc"
   });
-
-  // Pagination State
-  const [currentPage, setCurrentPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(20);
 
   // Bulk Selection State
   const [selectedIds, setSelectedIds] = useState([]);
@@ -277,6 +130,340 @@ const SalseTotalLeads = () => {
   const [bulkStatusModal, setBulkStatusModal] = useState(false);
   const [bulkNewStatus, setBulkNewStatus] = useState("Warm");
 
+  // Assign Lead Modal States (Matching User Screenshot Design)
+  const [assignModalLead, setAssignModalLead] = useState(null);
+  const [assignType, setAssignType] = useState("self"); // "self" or "executive"
+  const [selectedExecutive, setSelectedExecutive] = useState("Rahul Sharma");
+  const [executiveBranch, setExecutiveBranch] = useState("Noida Branch");
+  const [leadPriority, setLeadPriority] = useState("Medium");
+  const [assignmentRemark, setAssignmentRemark] = useState("");
+  const [assignmentFiles, setAssignmentFiles] = useState([]);
+
+  const executiveBranchMap = useMemo(() => ({
+    "Rahul Sharma": "Noida Branch",
+    "Pooja Verma": "Delhi NCR Branch",
+    "Vikram Malhotra": "Gurugram Branch",
+    "Ankit Patel": "Mumbai Branch",
+    "Sanjay Gupta": "Bengaluru Branch",
+    "Sales TL (Current User)": "Head Office Main"
+  }), []);
+
+  const handleExecutiveChange = (execName) => {
+    setSelectedExecutive(execName);
+    setExecutiveBranch(executiveBranchMap[execName] || "Noida Branch");
+  };
+
+  const handleAssignLeadSubmit = () => {
+    if (!assignModalLead) return;
+
+    const assignedPerson =
+      assignType === "self"
+        ? "Sales TL (Current User)"
+        : selectedExecutive || "Rahul Sharma";
+
+    const assignedBranch =
+      assignType === "self"
+        ? "Head Office Main"
+        : executiveBranchMap[assignedPerson] || "Noida Branch";
+
+    const today = new Date();
+    const formattedDate = today.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+    const formattedTime = today.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+
+    const updatedLeadData = {
+      ...assignModalLead,
+      assignTo: assignedPerson,
+      salesPerson: assignedPerson,
+      assignedTo: assignedPerson,
+      leadBy: assignedPerson,
+      assignedType: assignType,
+      assignedBranch: assignedBranch,
+      priority: leadPriority,
+      leadPriority: leadPriority,
+      isAssigned: true,
+      assignedDate: formattedDate,
+      assignedTime: formattedTime,
+      assignmentRemark: assignmentRemark,
+      assignmentFiles: assignmentFiles.map((f) => ({
+        name: f.name,
+        type: f.type,
+        size: f.size
+      }))
+    };
+
+    // 1. Update in dss_leads (Total Leads Directory)
+    const updatedTotalLeads = leads.map((l) =>
+      l.id === assignModalLead.id ? updatedLeadData : l
+    );
+    saveLeadsToStorage(updatedTotalLeads);
+
+    // 2. Save / prepend to dss_assigned_leads (Assigned Leads)
+    try {
+      const savedAssigned = localStorage.getItem("dss_assigned_leads");
+      const currentAssigned = savedAssigned ? JSON.parse(savedAssigned) : [];
+      const filteredAssigned = currentAssigned.filter((item) => item.id !== assignModalLead.id);
+      localStorage.setItem(
+        "dss_assigned_leads",
+        JSON.stringify([updatedLeadData, ...filteredAssigned])
+      );
+    } catch (e) {
+      console.error("Error saving assigned lead:", e);
+    }
+
+    toast.success(`Lead ${assignModalLead.id} assigned to ${assignedPerson} successfully! 🎯`);
+    setAssignModalLead(null);
+    setAssignmentRemark("");
+    setAssignmentFiles([]);
+  };
+
+  // Table Column Configuration matching AddLead form fields in exact sequence
+  const columnConfig = useMemo(() => ({
+    srNo: {
+      label: "SR. NO.",
+      align: "center",
+      render: (val, row, idx) => (
+        <span className="font-mono font-bold text-slate-700 text-xs">
+          {(currentPage - 1) * rowsPerPage + idx + 1}
+        </span>
+      )
+    },
+    actions: {
+      label: "ACTIONS",
+      align: "center",
+      render: (val, row) => {
+        return (
+          <div className="flex items-center justify-center gap-1.5">
+            {/* View Lead Details Eye Button */}
+            <button
+              type="button"
+              onClick={() => navigate(`/sales/leads/details/${row.id}`, { state: { lead: row } })}
+              className="w-7 h-7 rounded-lg border border-orange-400 text-orange-500 hover:bg-orange-500 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
+              title="View Lead Details"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+            </button>
+
+            {/* Assign Lead Icon Button */}
+            <button
+              type="button"
+              onClick={() => {
+                const assignee = row.assignTo || row.salesPerson || "Rahul Sharma";
+                const isSelf = assignee.includes("Current") || assignee.includes("TL") || assignee.includes("Self");
+                setAssignType(isSelf ? "self" : "executive");
+                if (!isSelf) {
+                  setSelectedExecutive(assignee);
+                  setExecutiveBranch(executiveBranchMap[assignee] || "Noida Branch");
+                }
+                setAssignModalLead(row);
+              }}
+              className="w-7 h-7 rounded-lg border border-blue-500 text-blue-600 hover:bg-blue-600 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
+              title="Assign Lead"
+            >
+              <FaUserPlus className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        );
+      }
+    },
+    createdDate: {
+      label: "CREATED DATE & TIME",
+      render: (val, row) => {
+        const dateStr = row.createdDate || row.date || "2026-08-18";
+        const timeStr = row.createdTime || "11:00 am";
+        return (
+          <div className="text-xs font-medium text-slate-700 whitespace-nowrap">
+            <div>{dateStr}</div>
+            <div className="text-[11px] font-mono text-slate-500 font-bold">{timeStr}</div>
+          </div>
+        );
+      }
+    },
+    leadMode: {
+      label: "LEAD MODE",
+      render: (val, row) => (
+        <span className="text-xs font-semibold text-slate-700">
+          {row.leadMode || row.leadSource || "Business networking"}
+        </span>
+      )
+    },
+    leadType: {
+      label: "LEAD TYPE",
+      render: (val, row) => (
+        <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-slate-100 text-slate-800 border border-slate-300">
+          {row.leadType || "FRESH"}
+        </span>
+      )
+    },
+    workCategory: {
+      label: "WORK CATEGORY",
+      render: (val, row) => (
+        <span className="px-2.5 py-0.5 rounded-md text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+          {row.workCategory || "Design"}
+        </span>
+      )
+    },
+    workType: {
+      label: "WORK TYPE",
+      render: (val, row) => {
+        const wt = Array.isArray(row.workType)
+          ? row.workType.join(", ")
+          : (row.workType || "Concept Drawing");
+        return (
+          <div className="max-w-[180px] truncate text-xs font-medium text-slate-700" title={wt}>
+            {wt}
+          </div>
+        );
+      }
+    },
+    leadStatus: {
+      label: "LEAD STATUS",
+      render: (val, row) => {
+        const status = (row.leadStatus || row.status || "Warm").toUpperCase();
+        const colors = {
+          HOT: "bg-rose-100 text-rose-800 border-rose-200",
+          WARM: "bg-amber-100 text-amber-800 border-amber-200",
+          COLD: "bg-sky-100 text-sky-800 border-sky-200",
+          NEW: "bg-emerald-100 text-emerald-800 border-emerald-200"
+        };
+        return (
+          <span className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold uppercase border ${colors[status] || "bg-slate-100 text-slate-700 border-slate-200"}`}>
+            {status}
+          </span>
+        );
+      }
+    },
+    clientName: {
+      label: "CLIENT NAME",
+      render: (val, row) => {
+        const name = row.clientName || row.concernPersonName || "--";
+        return (
+          <span className="font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 shadow-2xs inline-block text-xs">
+            {name}
+          </span>
+        );
+      }
+    },
+    phoneNumber: {
+      label: "PHONE NUMBER",
+      render: (val, row) => {
+        const phone = row.phoneNumber || row.contact || row.whatsappNumber || "--";
+        return phone !== "--" ? (
+          <a
+            href={`tel:${phone}`}
+            className="text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 cursor-pointer"
+          >
+            <span>📞</span> {phone}
+          </a>
+        ) : (
+          <span className="text-xs text-slate-400">--</span>
+        );
+      }
+    },
+    alternateNumber: {
+      label: "ALTERNATE NUMBER",
+      render: (val, row) => {
+        const alt = row.alternateNumber || "--";
+        return alt !== "--" ? (
+          <a
+            href={`tel:${alt}`}
+            className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+          >
+            {alt}
+          </a>
+        ) : (
+          <span className="text-xs text-slate-400">--</span>
+        );
+      }
+    },
+    emailAddress: {
+      label: "EMAIL ADDRESS",
+      render: (val, row) => {
+        const email = row.emailAddress || row.email || "--";
+        return email !== "--" ? (
+          <a
+            href={`mailto:${email}`}
+            className="text-xs font-mono text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+          >
+            {email}
+          </a>
+        ) : (
+          <span className="text-xs text-slate-400">--</span>
+        );
+      }
+    },
+    address: {
+      label: "ADDRESS",
+      render: (val, row) => {
+        const addr = row.address || row.siteAddress || "--";
+        return (
+          <div className="max-w-[180px] truncate text-xs text-slate-700 font-medium" title={addr}>
+            {addr}
+          </div>
+        );
+      }
+    },
+    pincode: {
+      label: "PINCODE",
+      render: (val, row) => (
+        <span className="font-mono text-xs text-slate-700 font-bold">
+          {row.pincode || "--"}
+        </span>
+      )
+    },
+    city: {
+      label: "CITY",
+      render: (val, row) => (
+        <span className="text-xs font-semibold text-slate-700">
+          {row.city || "--"}
+        </span>
+      )
+    },
+    state: {
+      label: "STATE",
+      render: (val, row) => (
+        <span className="text-xs font-semibold text-slate-700">
+          {row.state || "--"}
+        </span>
+      )
+    },
+    expectedBusiness: {
+      label: "EXPECTED BUSINESS (₹)",
+      render: (val, row) => {
+        const amt = Number(row.expectedBusiness || row.expectedRevenue || 0);
+        return (
+          <span className="text-xs font-mono font-bold text-slate-900">
+            ₹{amt.toLocaleString('en-IN')}
+          </span>
+        );
+      }
+    },
+    projectDetail: {
+      label: "PROJECT DETAIL",
+      render: (val, row) => {
+        const pd = row.projectDetail || row.projectDetails || "--";
+        return (
+          <div className="max-w-[200px] truncate text-xs text-slate-700 font-medium" title={pd}>
+            {pd}
+          </div>
+        );
+      }
+    },
+    remark: {
+      label: "REMARK",
+      render: (val, row) => {
+        const rem = row.remark || row.requirement || "--";
+        return (
+          <div className="max-w-[200px] truncate text-xs text-slate-700 font-medium" title={rem}>
+            {rem}
+          </div>
+        );
+      }
+    }
+  }), [currentPage, rowsPerPage]);
+
   // Filter & Search Logic
   const filteredLeads = useMemo(() => {
     return leads.filter((item) => {
@@ -284,18 +471,34 @@ const SalseTotalLeads = () => {
       const matchSearch =
         !searchTerm ||
         item.clientName?.toLowerCase().includes(search) ||
+        item.concernPersonName?.toLowerCase().includes(search) ||
+        item.projectDetail?.toLowerCase().includes(search) ||
         item.projectDetails?.toLowerCase().includes(search) ||
         item.city?.toLowerCase().includes(search) ||
+        item.address?.toLowerCase().includes(search) ||
+        item.phoneNumber?.includes(search) ||
         item.contact?.includes(search) ||
+        item.emailAddress?.toLowerCase().includes(search) ||
+        item.email?.toLowerCase().includes(search) ||
         item.id?.toLowerCase().includes(search);
 
-      const matchStatus =
-        filterStatus === "ALL" ||
-        item.leadStatus?.toLowerCase() === filterStatus.toLowerCase();
+      const sp = (item.salesPerson || item.assignTo || "").toLowerCase();
+      const isSelfLead = sp.includes("sales tl") || sp.includes("current") || sp.includes("self") || sp.includes("rahul");
+      const matchScope =
+        filterScope === "ALL" ||
+        (filterScope === "SELF" ? isSelfLead : !isSelfLead);
 
-      const matchSalesPerson =
-        filterSalesPerson === "ALL" ||
-        item.salesPerson === filterSalesPerson;
+      const matchLeadMode =
+        filterLeadMode === "ALL" ||
+        (item.leadMode || item.leadSource)?.toLowerCase() === filterLeadMode.toLowerCase();
+
+      const matchLeadType =
+        filterLeadType === "ALL" ||
+        item.leadType?.toLowerCase() === filterLeadType.toLowerCase();
+
+      const matchWorkCategory =
+        filterWorkCategory === "ALL" ||
+        item.workCategory?.toLowerCase() === filterWorkCategory.toLowerCase();
 
       const matchWorkType =
         filterWorkType === "ALL" ||
@@ -303,20 +506,32 @@ const SalseTotalLeads = () => {
           ? item.workType.includes(filterWorkType)
           : item.workType === filterWorkType);
 
+      const matchStatus =
+        filterStatus === "ALL" ||
+        (item.leadStatus || item.status)?.toLowerCase() === filterStatus.toLowerCase();
+
+      const matchSalesPerson =
+        filterSalesPerson === "ALL" ||
+        (item.salesPerson || item.assignTo) === filterSalesPerson;
+
       const matchCity =
         filterCity === "ALL" || item.city === filterCity;
 
+      const matchState =
+        filterState === "ALL" || item.state === filterState;
+
       let matchDate = true;
-      if (filterDateFrom) {
-        matchDate = matchDate && item.date >= filterDateFrom;
+      const leadDate = item.createdDate || item.date;
+      if (filterDateFrom && leadDate) {
+        matchDate = matchDate && leadDate >= filterDateFrom;
       }
-      if (filterDateTo) {
-        matchDate = matchDate && item.date <= filterDateTo;
+      if (filterDateTo && leadDate) {
+        matchDate = matchDate && leadDate <= filterDateTo;
       }
 
-      return matchSearch && matchStatus && matchSalesPerson && matchWorkType && matchCity && matchDate;
+      return matchSearch && matchScope && matchLeadMode && matchLeadType && matchWorkCategory && matchWorkType && matchStatus && matchSalesPerson && matchCity && matchState && matchDate;
     });
-  }, [leads, searchTerm, filterStatus, filterSalesPerson, filterWorkType, filterCity, filterDateFrom, filterDateTo]);
+  }, [leads, searchTerm, filterScope, filterLeadMode, filterLeadType, filterWorkCategory, filterWorkType, filterStatus, filterSalesPerson, filterCity, filterState, filterDateFrom, filterDateTo]);
 
   // Sort Logic
   const sortedLeads = useMemo(() => {
@@ -491,7 +706,7 @@ const SalseTotalLeads = () => {
         description={`Showing ${filteredLeads.length} of ${leads.length} registered pipeline leads`}
         showBackButton={true}
         rightActions={
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={handleExportCSV}
@@ -510,27 +725,78 @@ const SalseTotalLeads = () => {
             >
               <span>+</span> Add Lead
             </Link>
+
+            <button
+              type="button"
+              onClick={() => setShowFilters((prev) => !prev)}
+              className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-center shadow-2xs font-bold text-xs sm:text-sm ${
+                showFilters
+                  ? "bg-slate-900 text-white border-slate-900 shadow-md"
+                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+              }`}
+              title={showFilters ? "Hide Filter Options" : "Show Filter Options"}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+              </svg>
+            </button>
           </div>
         }
       />
 
-      {/* ================= 2. COLLAPSIBLE FILTER TOGGLE BAR ================= */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3.5 sm:p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="text-xs sm:text-sm font-semibold text-slate-600 text-center sm:text-left">
-          Showing <strong className="font-bold text-slate-900">{filteredLeads.length}</strong> of <strong className="font-bold text-slate-900">{leads.length}</strong> Total Leads
-        </div>
+      {/* ================= ALL / SELF / TEAM SCOPE FILTER PILL ================= */}
+      <div className="flex justify-center items-center my-1.5">
+        <div className="inline-flex items-center gap-1 p-1 bg-[#f0fdf4] border border-emerald-200/60 rounded-full shadow-2xs">
+          <button
+            type="button"
+            onClick={() => {
+              setFilterScope("ALL");
+              setCurrentPage(1);
+            }}
+            className={`px-5 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+              filterScope === "ALL"
+                ? "bg-[#00b050] text-white shadow-sm"
+                : "text-[#00b050] hover:bg-emerald-100/60"
+            }`}
+          >
+            All
+          </button>
 
-        <button
-          type="button"
-          onClick={() => setShowFilters((prev) => !prev)}
-          className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 shadow-2xs"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-          </svg>
-          <span>{showFilters ? "Hide Filter Options ✕" : "Filter Options 🔍"}</span>
-        </button>
+          <button
+            type="button"
+            onClick={() => {
+              setFilterScope("SELF");
+              setCurrentPage(1);
+            }}
+            className={`px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              filterScope === "SELF"
+                ? "bg-[#00b050] text-white shadow-sm"
+                : "text-[#00b050] hover:bg-emerald-100/60"
+            }`}
+          >
+            <FaUserPlus className="w-3.5 h-3.5" />
+            <span>Self</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setFilterScope("TEAM");
+              setCurrentPage(1);
+            }}
+            className={`px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              filterScope === "TEAM"
+                ? "bg-[#00b050] text-white shadow-sm"
+                : "text-[#00b050] hover:bg-emerald-100/60"
+            }`}
+          >
+            <FaUsers className="w-3.5 h-3.5" />
+            <span>Team</span>
+          </button>
+        </div>
       </div>
+
+
 
       {/* COLLAPSIBLE FILTER PANEL (Opens on click) */}
       {showFilters && (
@@ -562,9 +828,9 @@ const SalseTotalLeads = () => {
               )}
             </div>
 
-            {/* Quick Status Tabs */}
+            {/* Quick Status Tabs (Only ALL, HOT, WARM, COLD) */}
             <div className="flex items-center gap-2 overflow-x-auto w-full lg:w-auto pb-1 lg:pb-0">
-              {["ALL", "HOT", "WARM", "COLD", "NEW", "CONVERTED"].map((st) => (
+              {["ALL", "HOT", "WARM", "COLD"].map((st) => (
                 <button
                   key={st}
                   type="button"
@@ -587,74 +853,106 @@ const SalseTotalLeads = () => {
             </div>
           </div>
 
-          {/* Secondary Filter Dropdowns */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 pt-3 border-t border-slate-100 text-xs sm:text-sm">
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Sales Person</label>
+          {/* Secondary Filters Matching User Specifications */}
+          <div className="pt-3 border-t border-slate-100 space-y-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 text-xs sm:text-sm">
+              {/* 1. Lead Type */}
               <select
-                value={filterSalesPerson}
+                value={filterLeadType}
                 onChange={(e) => {
-                  setFilterSalesPerson(e.target.value);
+                  setFilterLeadType(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white focus:outline-hidden focus:border-black cursor-pointer font-semibold shadow-2xs"
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-700 bg-white focus:outline-none focus:border-slate-400 cursor-pointer font-medium shadow-2xs"
               >
-                {salesPersonsList.map((p) => (
-                  <option key={p} value={p}>{p}</option>
+                <option value="ALL">Lead Type</option>
+                {leadTypesList.filter(t => t !== "ALL").map((t) => (
+                  <option key={t} value={t}>{t}</option>
                 ))}
               </select>
-            </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Work Type</label>
+              {/* 2. Lead Mode */}
+              <select
+                value={filterLeadMode}
+                onChange={(e) => {
+                  setFilterLeadMode(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-700 bg-white focus:outline-none focus:border-slate-400 cursor-pointer font-medium shadow-2xs"
+              >
+                <option value="ALL">Lead Mode</option>
+                {leadModesList.filter(m => m !== "ALL").map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
+
+              {/* 3. Lead Status (Only Hot, Warm, Cold) */}
+              <select
+                value={filterStatus}
+                onChange={(e) => {
+                  setFilterStatus(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-700 bg-white focus:outline-none focus:border-slate-400 cursor-pointer font-medium shadow-2xs"
+              >
+                <option value="ALL">Lead Status</option>
+                {["Hot", "Warm", "Cold"].map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+
+              {/* 4. Work Category */}
+              <select
+                value={filterWorkCategory}
+                onChange={(e) => {
+                  setFilterWorkCategory(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-700 bg-white focus:outline-none focus:border-slate-400 cursor-pointer font-medium shadow-2xs"
+              >
+                <option value="ALL">Work Category</option>
+                {workCategoryList.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+
+              {/* 5. Work Type */}
               <select
                 value={filterWorkType}
                 onChange={(e) => {
                   setFilterWorkType(e.target.value);
                   setCurrentPage(1);
                 }}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white focus:outline-hidden focus:border-black cursor-pointer font-semibold shadow-2xs"
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-700 bg-white focus:outline-none focus:border-slate-400 cursor-pointer font-medium shadow-2xs"
               >
-                {workTypesList.map((w) => (
+                <option value="ALL">Work Type</option>
+                {availableWorkTypes.map((w) => (
                   <option key={w} value={w}>{w}</option>
                 ))}
               </select>
             </div>
 
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">City</label>
-              <select
-                value={filterCity}
-                onChange={(e) => {
-                  setFilterCity(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white focus:outline-hidden focus:border-black cursor-pointer font-semibold shadow-2xs"
+            {/* Row 2: Date Picker & Orange Reset Button */}
+            <div className="flex items-center gap-3">
+              <div className="relative w-48">
+                <input
+                  type="date"
+                  value={filterDateFrom}
+                  onChange={(e) => setFilterDateFrom(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-700 bg-white focus:outline-none focus:border-slate-400 font-medium shadow-2xs cursor-pointer"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="w-9 h-9 rounded-xl bg-[#ff5722] hover:bg-[#e64a19] text-white shadow-xs transition-colors cursor-pointer flex items-center justify-center font-bold text-sm shrink-0"
+                title="Reset Filters"
               >
-                {citiesList.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Date From</label>
-              <input
-                type="date"
-                value={filterDateFrom}
-                onChange={(e) => setFilterDateFrom(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white focus:outline-hidden focus:border-black font-semibold shadow-2xs"
-              />
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Date To</label>
-              <input
-                type="date"
-                value={filterDateTo}
-                onChange={(e) => setFilterDateTo(e.target.value)}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white focus:outline-hidden focus:border-black font-semibold shadow-2xs"
-              />
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              </button>
             </div>
           </div>
         </div>
@@ -762,6 +1060,165 @@ const SalseTotalLeads = () => {
                 className="px-5 py-2 rounded-xl bg-black text-white text-xs font-bold hover:bg-neutral-800 cursor-pointer"
               >
                 Close
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* ================= ASSIGN LEAD MODAL (EXACT SCREENSHOT DESIGN) ================= */}
+      {assignModalLead && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200">
+            {/* Header Banner */}
+            <div className="bg-[#ff5722] text-white px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
+                  <FaUserPlus className="w-5 h-5 text-white" />
+                </div>
+                <h3 className="text-xl font-extrabold tracking-wide">Assign Lead</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setAssignModalLead(null);
+                  setAssignmentRemark("");
+                  setAssignmentFiles([]);
+                }}
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white text-base transition-colors cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Form Body */}
+            <div className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
+              
+              {/* ASSIGN TO RADIO SELECTION */}
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                  ASSIGN TO
+                </label>
+                <div className="flex items-center gap-6">
+                  <label className="flex items-center gap-2 text-sm font-bold text-slate-800 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="assignType"
+                      value="self"
+                      checked={assignType === "self"}
+                      onChange={() => {
+                        setAssignType("self");
+                        setSelectedExecutive("Sales TL (Current User)");
+                        setExecutiveBranch("Head Office Main");
+                      }}
+                      className="w-4 h-4 text-[#ff5722] focus:ring-[#ff5722] accent-[#ff5722] cursor-pointer"
+                    />
+                    <span>Self</span>
+                  </label>
+
+                  <label className="flex items-center gap-2 text-sm font-bold text-slate-800 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="assignType"
+                      value="executive"
+                      checked={assignType === "executive"}
+                      onChange={() => {
+                        setAssignType("executive");
+                        const firstExec = salesPersonsList.find(p => p !== "ALL" && !p.includes("Current")) || "Rahul Sharma";
+                        setSelectedExecutive(firstExec);
+                        setExecutiveBranch(executiveBranchMap[firstExec] || "Noida Branch");
+                      }}
+                      className="w-4 h-4 text-[#ff5722] focus:ring-[#ff5722] accent-[#ff5722] cursor-pointer"
+                    />
+                    <span>Executive</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* EXECUTIVE SELECTION & BRANCH AUTO-FILL (Shown when Executive is selected) */}
+              {assignType === "executive" && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
+                      SELECT SALES EXECUTIVE
+                    </label>
+                    <select
+                      value={selectedExecutive}
+                      onChange={(e) => handleExecutiveChange(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-orange-300 text-xs sm:text-sm font-bold text-slate-800 bg-white focus:outline-none focus:border-[#ff5722] shadow-2xs cursor-pointer"
+                    >
+                      {salesPersonsList.filter(p => p !== "ALL" && !p.includes("Current")).map((p) => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
+                      BRANCH (AUTO-FILLED)
+                    </label>
+                    <input
+                      type="text"
+                      readOnly
+                      value={executiveBranch}
+                      placeholder="Auto-fills on selection"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold text-slate-600 bg-slate-50 italic focus:outline-none cursor-not-allowed shadow-2xs"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* LEAD PRIORITY */}
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                  LEAD PRIORITY
+                </label>
+                <select
+                  value={leadPriority}
+                  onChange={(e) => setLeadPriority(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-orange-300 text-xs sm:text-sm font-bold text-slate-800 bg-white focus:outline-none focus:border-[#ff5722] shadow-2xs cursor-pointer"
+                >
+                  <option value="High">High</option>
+                  <option value="Medium">Medium</option>
+                  <option value="Low">Low</option>
+                </select>
+              </div>
+
+              {/* ASSIGNMENT REMARK (COMMENT WITH MEDIA COMPONENT) */}
+              <div>
+                <CommentWithMedia
+                  title="ASSIGNMENT REMARK"
+                  placeholder="Write assignment remark here..."
+                  value={assignmentRemark}
+                  onChange={(val) => setAssignmentRemark(val)}
+                  files={assignmentFiles}
+                  onFilesChange={(files) => setAssignmentFiles(files)}
+                  allowMedia={true}
+                />
+              </div>
+
+            </div>
+
+            {/* Modal Footer Actions */}
+            <div className="bg-slate-50/70 px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setAssignModalLead(null);
+                  setAssignmentRemark("");
+                  setAssignmentFiles([]);
+                }}
+                className="px-5 py-2.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs sm:text-sm font-bold transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleAssignLeadSubmit}
+                className="px-6 py-2.5 rounded-xl bg-[#ff5722] hover:bg-[#e64a19] text-white text-xs sm:text-sm font-extrabold shadow-md shadow-orange-500/20 transition-all cursor-pointer"
+              >
+                Assign Lead
               </button>
             </div>
 

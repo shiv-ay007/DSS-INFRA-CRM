@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import Table from "../../../../Common/Components/Table";
 import { initialLeadsData } from "../../data/leadManagementData";
+import { FaUserPlus, FaUsers } from "react-icons/fa";
 
 /**
  * Component: Lead (Lead Management Sheet)
@@ -51,8 +52,9 @@ const Lead = () => {
   };
 
   // Filters & Collapsible Filter State
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [filterScope, setFilterScope] = useState("ALL");
   const [filterStatus, setFilterStatus] = useState("All");
   const [filterLeadType, setFilterLeadType] = useState("All");
   const [filterJobType, setFilterJobType] = useState("All");
@@ -413,6 +415,11 @@ const Lead = () => {
   // 2. Filtered Leads
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
+      const sp = (lead.assignTo || lead.salesPerson || "").toLowerCase();
+      const isSelfLead = sp.includes("sales tl") || sp.includes("current") || sp.includes("self") || sp.includes("john") || sp.includes("rahul");
+      if (filterScope === "SELF" && !isSelfLead) return false;
+      if (filterScope === "TEAM" && isSelfLead) return false;
+
       if (filterStatus !== "All" && lead.status !== filterStatus) return false;
       if (filterLeadType !== "All" && lead.leadType !== filterLeadType) return false;
       if (filterJobType !== "All" && lead.jobType !== filterJobType) return false;
@@ -430,7 +437,7 @@ const Lead = () => {
       }
       return true;
     });
-  }, [leads, filterStatus, filterLeadType, filterJobType, filterLeadLabel, searchTerm]);
+  }, [leads, filterScope, filterStatus, filterLeadType, filterJobType, filterLeadLabel, searchTerm]);
 
   // 3. Paginated Leads
   const paginatedLeads = useMemo(() => {
@@ -554,12 +561,29 @@ const Lead = () => {
         description="Complete overview of all leads, conversion metrics, expected revenue, and customer interactions."
         showBackButton={true}
         rightActions={
-          <Link
-            to="/sales/leads/add"
-            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs sm:text-sm font-bold shadow-md shadow-emerald-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
-          >
-            <span>+</span> Add Lead
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              to="/sales/leads/add"
+              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs sm:text-sm font-bold shadow-md shadow-emerald-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
+            >
+              <span>+</span> Add Lead
+            </Link>
+
+            <button
+              type="button"
+              onClick={() => setShowFilters((prev) => !prev)}
+              className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-center shadow-2xs font-bold text-xs sm:text-sm ${
+                showFilters
+                  ? "bg-slate-900 text-white border-slate-900 shadow-md"
+                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+              }`}
+              title={showFilters ? "Hide Filter Options" : "Show Filter Options"}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+              </svg>
+            </button>
+          </div>
         }
       />
 
@@ -649,23 +673,59 @@ const Lead = () => {
 
       </div>
 
-      {/* ================= 3. COLLAPSIBLE FILTER TOGGLE BAR ================= */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3.5 sm:p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="text-xs sm:text-sm font-semibold text-slate-600 text-center sm:text-left">
-          Showing <strong className="font-bold text-slate-900">{filteredLeads.length}</strong> of <strong className="font-bold text-slate-900">{leads.length}</strong> Leads
-        </div>
+      {/* ================= ALL / SELF / TEAM SCOPE FILTER PILL ================= */}
+      <div className="flex justify-center items-center my-1.5">
+        <div className="inline-flex items-center gap-1 p-1 bg-[#f0fdf4] border border-emerald-200/60 rounded-full shadow-2xs">
+          <button
+            type="button"
+            onClick={() => {
+              setFilterScope("ALL");
+              setCurrentPage(1);
+            }}
+            className={`px-5 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+              filterScope === "ALL"
+                ? "bg-[#00b050] text-white shadow-sm"
+                : "text-[#00b050] hover:bg-emerald-100/60"
+            }`}
+          >
+            All
+          </button>
 
-        <button
-          type="button"
-          onClick={() => setShowFilters((prev) => !prev)}
-          className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 shadow-2xs"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-          </svg>
-          <span>{showFilters ? "Hide Filter Options ✕" : "Filter Options 🔍"}</span>
-        </button>
+          <button
+            type="button"
+            onClick={() => {
+              setFilterScope("SELF");
+              setCurrentPage(1);
+            }}
+            className={`px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              filterScope === "SELF"
+                ? "bg-[#00b050] text-white shadow-sm"
+                : "text-[#00b050] hover:bg-emerald-100/60"
+            }`}
+          >
+            <FaUserPlus className="w-3.5 h-3.5" />
+            <span>Self</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setFilterScope("TEAM");
+              setCurrentPage(1);
+            }}
+            className={`px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              filterScope === "TEAM"
+                ? "bg-[#00b050] text-white shadow-sm"
+                : "text-[#00b050] hover:bg-emerald-100/60"
+            }`}
+          >
+            <FaUsers className="w-3.5 h-3.5" />
+            <span>Team</span>
+          </button>
+        </div>
       </div>
+
+
 
       {/* COLLAPSIBLE FILTER PANEL (Opens on click) */}
       {showFilters && (

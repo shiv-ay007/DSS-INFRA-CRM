@@ -38,6 +38,14 @@ export const leadTypesList = [
   "RE-ENGAGED"
 ];
 
+export const workCategoryList = [
+  "Design",
+  "Construction",
+  "Interior",
+  "Full Furnished",
+  "Fabrication"
+];
+
 export const jobTypesList = [
   "NEW",
   "REPAIR",
@@ -96,11 +104,22 @@ export const indianStatesList = [
 ];
 
 export const availableWorkTypes = [
-  "Digital Signage",
-  "LED Video Wall",
-  "Indoor Display",
-  "Outdoor Billboard",
-  "Interactive Kiosk",
-  "Software / CMS",
-  "Maintenance & AMC"
+  "Concept Drawing",
+  "Approval Drawing",
+  "Structure Drawing",
+  "Working Drawing",
+  "Electrical Drawing",
+  "Plumbing Drawing",
+  "Survey Drawing",
+  "Landscape Drawing",
+  "Submission Drawing",
+  "Elevation Drawing",
+  "Interior Work",
+  "Construction Raw Drawing",
+  "Project Management",
+  "Renovation Work",
+  "Site Visit Work",
+  "3D Interior View Design",
+  "2D Interior Design",
+  "3D Exterior View Design"
 ];

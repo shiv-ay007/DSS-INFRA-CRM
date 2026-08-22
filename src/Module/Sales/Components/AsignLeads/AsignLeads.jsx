@@ -1,17 +1,23 @@
 import React, { useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import Table from "../../../../Common/Components/Table";
-import {
-  initialAssignedLeads,
-  leadTypeOptions,
-  leadSourceOptions,
-  leadStatusOptions,
-  leadLabelOptions,
-  jobTypeOptions,
-  teamMembers
-} from "../../data/assignedLeadsData";
+import { initialAssignedLeads, teamMembers } from "../../data/assignedLeadsData";
+import { availableWorkTypes, workCategoryList, leadTypesList } from "../../data/addLeadData";
+import { FaUserPlus, FaSearch, FaFilter, FaUserCheck, FaUser } from "react-icons/fa";
+
+const leadModesList = [
+  "ALL",
+  "Business networking",
+  "By freelancer",
+  "By sales Team",
+  "Customer to customer"
+];
 
 const AsignLeads = () => {
+  const navigate = useNavigate();
+
   // Leads state with LocalStorage support
   const [leads, setLeads] = useState(() => {
     try {
@@ -32,35 +38,129 @@ const AsignLeads = () => {
   };
 
   // Filter States
-  const [showFilters, setShowFilters] = useState(false);
+  const [showFilters, setShowFilters] = useState(true);
   const [assignmentTab, setAssignmentTab] = useState("all");
-  const [filterLeadType, setFilterLeadType] = useState("Lead Type");
-  const [filterLeadSource, setFilterLeadSource] = useState("Lead Source");
-  const [filterLeadStatus, setFilterLeadStatus] = useState("Lead Status");
-  const [filterLeadLabel, setFilterLeadLabel] = useState("Lead Label");
-  const [filterJobType, setFilterJobType] = useState("Job Type");
-  const [filterDate, setFilterDate] = useState("");
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterLeadMode, setFilterLeadMode] = useState("ALL");
+  const [filterLeadType, setFilterLeadType] = useState("ALL");
+  const [filterWorkCategory, setFilterWorkCategory] = useState("ALL");
+  const [filterWorkType, setFilterWorkType] = useState("ALL");
+  const [filterStatus, setFilterStatus] = useState("ALL");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
 
-  // Pagination & Sorting States
-  const [rowsPerPage, setRowsPerPage] = useState(10);
+  // Pagination States
+  const [rowsPerPage, setRowsPerPage] = useState(20);
   const [currentPage, setCurrentPage] = useState(1);
-  const [sortField, setSortField] = useState("id");
-  const [sortDirection, setSortDirection] = useState("asc");
 
   // Modal States
-  const [selectedLead, setSelectedLead] = useState(null);
   const [reassignModalLead, setReassignModalLead] = useState(null);
   const [newAssignee, setNewAssignee] = useState("");
+  const [statusModalLead, setStatusModalLead] = useState(null);
+  const [selectedClientStatus, setSelectedClientStatus] = useState("");
 
-  // Table Column Configuration for common Table component
+  const handleResetFilters = () => {
+    setSearchTerm("");
+    setFilterLeadMode("ALL");
+    setFilterLeadType("ALL");
+    setFilterWorkCategory("ALL");
+    setFilterWorkType("ALL");
+    setFilterStatus("ALL");
+    setFilterDateFrom("");
+    setAssignmentTab("all");
+    setCurrentPage(1);
+  };
+
+  // Handler to move lead to Followup or Lost Leads based on Client Status
+  const handleSendToSalesManagement = () => {
+    if (!statusModalLead) return;
+
+    if (!selectedClientStatus) {
+      toast.error("Please select Client Status (INTERESTED or NOT INTERESTED)!");
+      return;
+    }
+
+    const today = new Date();
+    const formattedDate = today.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+    const formattedTime = today.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+
+    if (selectedClientStatus === "INTERESTED") {
+      // 1. Move to Followup Leads
+      const followupLeadData = {
+        ...statusModalLead,
+        leadStatus: "Hot",
+        status: "INTERESTED",
+        isInterested: true,
+        movedToFollowupDate: formattedDate,
+        movedToFollowupTime: formattedTime,
+        nextFollowupDate: formattedDate,
+        nextFollowupTime: "11:00 am"
+      };
+
+      try {
+        const savedFollowup = localStorage.getItem("dss_followup_leads");
+        const currentFollowup = savedFollowup ? JSON.parse(savedFollowup) : [];
+        const filteredFollowup = currentFollowup.filter(l => l.id !== statusModalLead.id);
+        localStorage.setItem("dss_followup_leads", JSON.stringify([followupLeadData, ...filteredFollowup]));
+
+        const savedScheduled = localStorage.getItem("dss_scheduled_leads_sheet");
+        const currentScheduled = savedScheduled ? JSON.parse(savedScheduled) : [];
+        const filteredScheduled = currentScheduled.filter(l => l.id !== statusModalLead.id);
+        localStorage.setItem("dss_scheduled_leads_sheet", JSON.stringify([followupLeadData, ...filteredScheduled]));
+      } catch (e) {
+        console.error("Error saving to followup leads:", e);
+      }
+
+      toast.success(`Lead ${statusModalLead.clientName || statusModalLead.concernPersonName} marked as INTERESTED and sent to Followup! 🎯`);
+    } else if (selectedClientStatus === "NOT INTERESTED") {
+      // 2. Move to Lost Leads
+      const lostLeadData = {
+        ...statusModalLead,
+        leadStatus: "Cold",
+        status: "NOT INTERESTED",
+        isInterested: false,
+        lostReason: "Client Not Interested",
+        lostDate: formattedDate,
+        lostTime: formattedTime
+      };
+
+      try {
+        const savedLost = localStorage.getItem("dss_lost_leads");
+        const currentLost = savedLost ? JSON.parse(savedLost) : [];
+        const filteredLost = currentLost.filter(l => l.id !== statusModalLead.id);
+        localStorage.setItem("dss_lost_leads", JSON.stringify([lostLeadData, ...filteredLost]));
+      } catch (e) {
+        console.error("Error saving to lost leads:", e);
+      }
+
+      toast.success(`Lead ${statusModalLead.clientName || statusModalLead.concernPersonName} marked as NOT INTERESTED and moved to Lost Leads! 📌`);
+    }
+
+    // Remove from dss_assigned_leads list
+    const updatedAssigned = leads.filter(l => l.id !== statusModalLead.id);
+    saveLeads(updatedAssigned);
+
+    setStatusModalLead(null);
+    setSelectedClientStatus("");
+  };
+
+  // Table Column Configuration matching Total Leads exactly
   const columnConfig = useMemo(() => ({
+    srNo: {
+      label: "SR. NO.",
+      align: "center",
+      render: (val, row, idx) => (
+        <span className="font-mono font-bold text-slate-700 text-xs">
+          {(currentPage - 1) * rowsPerPage + idx + 1}
+        </span>
+      )
+    },
     actions: {
       label: "ACTIONS",
+      align: "center",
       render: (val, row) => {
-        const phone = row.phoneNumber || row.contact || "";
         return (
           <div className="flex items-center justify-center gap-1.5">
+            {/* View Lead Details Eye Button */}
             <button
               type="button"
               onClick={() => navigate(`/sales/leads/details/${row.id}`, { state: { lead: row } })}
@@ -73,175 +173,298 @@ const AsignLeads = () => {
               </svg>
             </button>
 
-            <a
-              href={phone ? `tel:${phone}` : "#"}
-              className={`w-7 h-7 rounded-lg border border-emerald-400 text-emerald-600 hover:bg-emerald-600 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs ${!phone && "opacity-40 pointer-events-none"}`}
-              title={phone ? `Call ${phone}` : "No phone available"}
+            {/* Client Status / Interested / Not Interested Modal Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setStatusModalLead(row);
+                setSelectedClientStatus("");
+              }}
+              className="w-7 h-7 rounded-lg border border-blue-500 text-blue-600 hover:bg-blue-600 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
+              title="Client Status (Interested / Not Interested)"
             >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
-              </svg>
-            </a>
+              <FaUserCheck className="w-3.5 h-3.5" />
+            </button>
           </div>
         );
       }
     },
     createdDate: {
-      label: "CREATED DATE",
-      render: (val, row) => (
-        <span className="text-slate-700 text-xs font-sans font-medium">
-          {val || row.createdDate || "18/7/2026, 12:45:35 pm"}
-        </span>
-      )
-    },
-    leadAge: {
-      label: "LEAD AGE",
-      render: (val, row) => (
-        <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-600 font-bold italic text-xs border border-blue-200 inline-block">
-          {val || row.leadAge || "33 Days"}
-        </span>
-      )
-    },
-    status: {
-      label: "STATUS",
+      label: "CREATED DATE & TIME",
       render: (val, row) => {
-        const s = (val || row.status || row.leadStatus || "").toString().toUpperCase();
-        const isNew = s === "NEW" || s === "FRESH" || row.jobType === "NEW";
-        const displayStatus = isNew ? "NEW" : "OLD";
-
+        const dateStr = row.createdDate || row.date || row.assignedDate || "2026-08-18";
+        const timeStr = row.createdTime || row.assignedTime || "11:00 am";
         return (
-          <span
-            className={`px-3 py-0.5 rounded-full text-xs font-extrabold uppercase border ${
-              displayStatus === "NEW"
-                ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                : "bg-slate-100 text-slate-700 border-slate-300"
-            }`}
-          >
-            {displayStatus}
+          <div className="text-xs font-medium text-slate-700 whitespace-nowrap">
+            <div>{dateStr}</div>
+            <div className="text-[11px] font-mono text-slate-500 font-bold">{timeStr}</div>
+          </div>
+        );
+      }
+    },
+    leadMode: {
+      label: "LEAD MODE",
+      render: (val, row) => (
+        <span className="text-xs font-semibold text-slate-700">
+          {row.leadMode || row.leadSource || "Business networking"}
+        </span>
+      )
+    },
+    leadType: {
+      label: "LEAD TYPE",
+      render: (val, row) => (
+        <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-slate-100 text-slate-800 border border-slate-300">
+          {row.leadType || "FRESH"}
+        </span>
+      )
+    },
+    workCategory: {
+      label: "WORK CATEGORY",
+      render: (val, row) => (
+        <span className="px-2.5 py-0.5 rounded-md text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+          {row.workCategory || "Design"}
+        </span>
+      )
+    },
+    workType: {
+      label: "WORK TYPE",
+      render: (val, row) => {
+        const wt = Array.isArray(row.workType)
+          ? row.workType.join(", ")
+          : (row.workType || "Concept Drawing");
+        return (
+          <div className="max-w-[180px] truncate text-xs font-medium text-slate-700" title={wt}>
+            {wt}
+          </div>
+        );
+      }
+    },
+    leadStatus: {
+      label: "LEAD STATUS",
+      render: (val, row) => {
+        const status = row.leadStatus || row.status || "Hot";
+        let color = "bg-amber-50 text-amber-700 border-amber-300";
+        if (status.toLowerCase().includes("hot")) color = "bg-rose-50 text-rose-700 border-rose-300";
+        if (status.toLowerCase().includes("warm")) color = "bg-amber-50 text-amber-700 border-amber-300";
+        if (status.toLowerCase().includes("cold")) color = "bg-sky-50 text-sky-700 border-sky-300";
+        return (
+          <span className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold border ${color}`}>
+            {status}
           </span>
         );
       }
     },
-    concernPersonName: {
-      label: "CONCERN PERSON NAME",
+    clientName: {
+      label: "CLIENT NAME",
       render: (val, row) => (
-        <div className="text-left font-medium text-slate-800 text-xs">
-          {row.concernPersonName || row.clientName || "--"}
-          {row.clientDesignation && <div className="text-[11px] text-slate-500 font-normal">{row.clientDesignation}</div>}
-        </div>
+        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-extrabold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
+          {row.clientName || row.concernPersonName || "Unnamed Client"}
+        </span>
       )
     },
     phoneNumber: {
-      label: "PHONE",
+      label: "PHONE NUMBER",
+      render: (val, row) => {
+        const num = row.phoneNumber || row.contact || "";
+        return num ? (
+          <a
+            href={`tel:${num}`}
+            className="text-xs font-mono font-bold text-blue-600 hover:text-blue-800 hover:underline"
+          >
+            +91 {num}
+          </a>
+        ) : (
+          <span className="text-xs text-slate-400">--</span>
+        );
+      }
+    },
+    alternateNumber: {
+      label: "ALTERNATE NUMBER",
+      render: (val, row) => {
+        const num = row.alternateNumber || "";
+        return num ? (
+          <a
+            href={`tel:${num}`}
+            className="text-xs font-mono font-medium text-slate-700 hover:text-blue-600 hover:underline"
+          >
+            +91 {num}
+          </a>
+        ) : (
+          <span className="text-xs text-slate-400">--</span>
+        );
+      }
+    },
+    emailAddress: {
+      label: "EMAIL ADDRESS",
+      render: (val, row) => {
+        const mail = row.emailAddress || row.email || "";
+        return mail ? (
+          <a
+            href={`mailto:${mail}`}
+            className="text-xs font-medium text-blue-600 hover:underline max-w-[160px] truncate block"
+            title={mail}
+          >
+            {mail}
+          </a>
+        ) : (
+          <span className="text-xs text-slate-400">--</span>
+        );
+      }
+    },
+    address: {
+      label: "ADDRESS",
       render: (val, row) => (
-        <div className="text-left font-sans text-slate-800 text-xs font-medium">
-          {row.phoneNumber || row.contact || "--"}
+        <div className="max-w-[180px] truncate text-xs text-slate-700 font-medium" title={row.address}>
+          {row.address || "--"}
         </div>
       )
+    },
+    pincode: {
+      label: "PINCODE",
+      render: (val, row) => (
+        <span className="font-mono text-xs text-slate-700 font-bold">
+          {row.pincode || "--"}
+        </span>
+      )
+    },
+    city: {
+      label: "CITY",
+      render: (val, row) => (
+        <span className="text-xs font-semibold text-slate-700">
+          {row.city || "--"}
+        </span>
+      )
+    },
+    state: {
+      label: "STATE",
+      render: (val, row) => (
+        <span className="text-xs font-semibold text-slate-700">
+          {row.state || "--"}
+        </span>
+      )
+    },
+    expectedBusiness: {
+      label: "EXPECTED BUSINESS (₹)",
+      render: (val, row) => {
+        const amt = Number(row.expectedBusiness || row.expectedRevenue || row.expectedBusinessAmount || 0);
+        return (
+          <span className="text-xs font-mono font-bold text-slate-900">
+            ₹{amt.toLocaleString('en-IN')}
+          </span>
+        );
+      }
     },
     assignedTo: {
       label: "ASSIGNED TO",
-      render: (val, row) => (
-        <div className="flex items-center justify-center gap-2">
-          <span className={`w-2.5 h-2.5 rounded-full ${row.assignedType === "self" ? "bg-emerald-500" : "bg-blue-500"}`} />
-          <span className="text-xs font-bold text-slate-800">{val || row.assignedTo || "Sales TL"}</span>
-          <button
-            type="button"
-            onClick={() => { setReassignModalLead(row); setNewAssignee(row.assignedTo || teamMembers[0]); }}
-            className="text-xs text-blue-600 hover:text-blue-800 font-semibold underline cursor-pointer"
-          >
-            Edit
-          </button>
-        </div>
-      )
+      render: (val, row) => {
+        const assignee = row.assignTo || row.assignedTo || row.salesPerson || "Sales TL";
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-800 border border-blue-200">
+            <span className="w-2 h-2 rounded-full bg-blue-500" />
+            {assignee}
+          </span>
+        );
+      }
     },
-    sourceType: {
-      label: "SOURCE / TYPE",
-      render: (val, row) => (
-        <span className="text-xs text-slate-700">
-          <strong className="text-slate-800">{row.leadSource || "WEBSITE"}</strong> ({row.leadType || "FRESH"})
-        </span>
-      )
+    assignmentRemark: {
+      label: "ASSIGNMENT REMARK",
+      render: (val, row) => {
+        const remark = row.assignmentRemark || "--";
+        return (
+          <div className="max-w-[180px] truncate text-xs text-slate-700 font-medium" title={remark}>
+            {remark}
+          </div>
+        );
+      }
+    },
+    projectDetail: {
+      label: "PROJECT DETAIL",
+      render: (val, row) => {
+        const pd = row.projectDetail || row.projectDetails || "--";
+        return (
+          <div className="max-w-[200px] truncate text-xs text-slate-700 font-medium" title={pd}>
+            {pd}
+          </div>
+        );
+      }
+    },
+    remark: {
+      label: "REMARK",
+      render: (val, row) => {
+        const rem = row.remark || row.requirement || "--";
+        return (
+          <div className="max-w-[180px] truncate text-xs text-slate-700 font-medium" title={rem}>
+            {rem}
+          </div>
+        );
+      }
     }
-  }), []);
-
-  const handleResetFilters = () => {
-    setFilterLeadType("Lead Type");
-    setFilterLeadSource("Lead Source");
-    setFilterLeadStatus("Lead Status");
-    setFilterLeadLabel("Lead Label");
-    setFilterJobType("Job Type");
-    setFilterDate("");
-    setAssignmentTab("all");
-    setCurrentPage(1);
-  };
+  }), [currentPage, rowsPerPage, navigate]);
 
   // Filtering Logic
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
-      if (assignmentTab === "self" && lead.assignedType !== "self") return false;
-      if (assignmentTab === "team" && lead.assignedType !== "team") return false;
-      if (filterLeadType !== "Lead Type" && lead.leadType !== filterLeadType) return false;
-      if (filterLeadSource !== "Lead Source" && lead.leadSource !== filterLeadSource) return false;
-      if (
-        filterLeadStatus !== "Lead Status" &&
-        lead.leadStatus?.toUpperCase() !== filterLeadStatus.toUpperCase()
-      ) {
+      // Scope Filter (All / Self / Team)
+      if (assignmentTab === "self") {
+        const assigned = (lead.assignTo || lead.assignedTo || lead.salesPerson || "").toLowerCase();
+        if (!assigned.includes("self") && !assigned.includes("tl") && !assigned.includes("current")) {
+          return false;
+        }
+      }
+      if (assignmentTab === "team") {
+        const assigned = (lead.assignTo || lead.assignedTo || lead.salesPerson || "").toLowerCase();
+        if (assigned.includes("self") || assigned.includes("tl") || assigned.includes("current")) {
+          return false;
+        }
+      }
+
+      // Search Query
+      if (searchTerm.trim()) {
+        const q = searchTerm.toLowerCase().trim();
+        const client = (lead.clientName || lead.concernPersonName || "").toLowerCase();
+        const proj = (lead.projectDetail || lead.projectDetails || "").toLowerCase();
+        const city = (lead.city || "").toLowerCase();
+        const phone = (lead.phoneNumber || lead.contact || "").toLowerCase();
+        const email = (lead.emailAddress || lead.email || "").toLowerCase();
+        if (!client.includes(q) && !proj.includes(q) && !city.includes(q) && !phone.includes(q) && !email.includes(q)) {
+          return false;
+        }
+      }
+
+      // Dropdown Filters
+      if (filterLeadMode !== "ALL" && (lead.leadMode || lead.leadSource) !== filterLeadMode) return false;
+      if (filterLeadType !== "ALL" && lead.leadType !== filterLeadType) return false;
+      if (filterWorkCategory !== "ALL" && lead.workCategory !== filterWorkCategory) return false;
+      if (filterWorkType !== "ALL") {
+        const wt = Array.isArray(lead.workType) ? lead.workType.join(",") : (lead.workType || "");
+        if (!wt.includes(filterWorkType)) return false;
+      }
+      if (filterStatus !== "ALL" && (lead.leadStatus || lead.status || "").toLowerCase() !== filterStatus.toLowerCase()) {
         return false;
       }
-      if (filterLeadLabel !== "Lead Label" && lead.leadLabel !== filterLeadLabel) return false;
-      if (filterJobType !== "Job Type" && lead.jobType !== filterJobType) return false;
-      if (filterDate && !(lead.createdDate || "").includes(filterDate)) return false;
+      if (filterDateFrom && !(lead.createdDate || lead.assignedDate || lead.date || "").includes(filterDateFrom)) {
+        return false;
+      }
+
       return true;
     });
   }, [
     leads,
     assignmentTab,
+    searchTerm,
+    filterLeadMode,
     filterLeadType,
-    filterLeadSource,
-    filterLeadStatus,
-    filterLeadLabel,
-    filterJobType,
-    filterDate
+    filterWorkCategory,
+    filterWorkType,
+    filterStatus,
+    filterDateFrom
   ]);
 
-  // Sorting Logic
-  const sortedLeads = useMemo(() => {
-    const data = [...filteredLeads];
-    if (sortField) {
-      data.sort((a, b) => {
-        let valA = a[sortField] || "";
-        let valB = b[sortField] || "";
-        if (sortField === "leadAge") {
-          valA = parseInt(valA, 10) || 0;
-          valB = parseInt(valB, 10) || 0;
-        } else if (typeof valA === "string") {
-          valA = valA.toLowerCase();
-          valB = valB.toLowerCase();
-        }
-        if (valA < valB) return sortDirection === "asc" ? -1 : 1;
-        if (valA > valB) return sortDirection === "asc" ? 1 : -1;
-        return 0;
-      });
-    }
-    return data;
-  }, [filteredLeads, sortField, sortDirection]);
-
   // Pagination Logic
-  const totalPages = Math.ceil(sortedLeads.length / rowsPerPage) || 1;
   const paginatedLeads = useMemo(() => {
     const start = (currentPage - 1) * rowsPerPage;
-    return sortedLeads.slice(start, start + rowsPerPage);
-  }, [sortedLeads, currentPage, rowsPerPage]);
-
-  const handleSortToggle = (field) => {
-    if (sortField === field) {
-      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
-    } else {
-      setSortField(field);
-      setSortDirection("asc");
-    }
-  };
+    return filteredLeads.slice(start, start + rowsPerPage);
+  }, [filteredLeads, currentPage, rowsPerPage]);
 
   const handleConfirmReassign = () => {
     if (!reassignModalLead || !newAssignee) return;
@@ -250,35 +473,30 @@ const AsignLeads = () => {
       l.id === reassignModalLead.id
         ? {
             ...l,
+            assignTo: newAssignee,
             assignedTo: newAssignee,
-            assignedType: isSelf ? "self" : "team",
-            assignedDate: new Date().toLocaleString("en-IN")
+            salesPerson: newAssignee,
+            assignedType: isSelf ? "self" : "executive",
+            assignedDate: new Date().toLocaleDateString("en-GB")
           }
         : l
     );
     saveLeads(updated);
-    if (selectedLead && selectedLead.id === reassignModalLead.id) {
-      setSelectedLead((prev) => ({
-        ...prev,
-        assignedTo: newAssignee,
-        assignedType: isSelf ? "self" : "team"
-      }));
-    }
+
+    // Also update dss_leads
+    try {
+      const savedTotal = localStorage.getItem("dss_leads");
+      if (savedTotal) {
+        const parsedTotal = JSON.parse(savedTotal);
+        const updatedTotal = parsedTotal.map((l) =>
+          l.id === reassignModalLead.id ? { ...l, assignTo: newAssignee, salesPerson: newAssignee } : l
+        );
+        localStorage.setItem("dss_leads", JSON.stringify(updatedTotal));
+      }
+    } catch (e) {}
+
     setReassignModalLead(null);
     setNewAssignee("");
-  };
-
-  const getStatusBadgeClass = (status) => {
-    const st = status?.toUpperCase() || "";
-    if (st.includes("INTERESTED") || st.includes("NEW")) {
-      return "bg-emerald-50 text-emerald-600 border border-emerald-300 font-bold";
-    }
-    if (st.includes("HOT")) return "bg-rose-50 text-rose-600 border border-rose-300 font-bold";
-    if (st.includes("WARM")) return "bg-amber-50 text-amber-600 border border-amber-300 font-bold";
-    if (st.includes("COLD")) return "bg-blue-50 text-blue-600 border border-blue-300 font-bold";
-    if (st.includes("LOST")) return "bg-red-50 text-red-600 border border-red-300 font-bold";
-    if (st.includes("CONVERTED")) return "bg-green-600 text-white font-extrabold";
-    return "bg-slate-100 text-slate-700 border border-slate-300 font-bold";
   };
 
   return (
@@ -286,268 +504,230 @@ const AsignLeads = () => {
       
       {/* 1. SUB-HEADER BAR */}
       <PageHeader
-        title="Assigned Leads"
+        title="Assigned Leads Directory"
         badge="Pipeline"
         badgeColor="bg-blue-100 text-blue-800 border-blue-300"
         description="Manage self and team assigned leads, filter by source, status, or re-assign reps."
         showBackButton={true}
         rightActions={
-          <div className="text-xs sm:text-sm text-slate-600 font-semibold px-3 py-1.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
-            Total: <span className="font-black text-blue-700 font-mono">{filteredLeads.length}</span> Leads
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowFilters((prev) => !prev)}
+              className={`h-9 px-3.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs ${
+                showFilters
+                  ? "bg-slate-900 text-white border-slate-900"
+                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+              }`}
+            >
+              <FaFilter className="w-3.5 h-3.5" />
+              <span>Filter</span>
+            </button>
+
+            <div className="text-xs sm:text-sm text-slate-600 font-semibold px-3 py-1.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
+              Total: <span className="font-black text-blue-700 font-mono">{filteredLeads.length}</span> Leads
+            </div>
           </div>
         }
       />
 
       {/* 2. TAB BUTTONS (All Assigned | + Self Assigned | 👥 Team Assigned) */}
       <div className="flex justify-center w-full">
-        <div className="inline-flex p-1.5 rounded-2xl bg-slate-200/80 border border-slate-300/80 gap-2 shadow-2xs">
+        <div className="inline-flex p-1.5 rounded-2xl bg-emerald-50/80 border border-emerald-200 gap-2 shadow-2xs">
           <button
             type="button"
             onClick={() => { setAssignmentTab("all"); setCurrentPage(1); }}
-            className={`px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
-              assignmentTab === "all" ? "bg-slate-900 text-white shadow-md" : "bg-transparent text-slate-700 hover:bg-white/80"
+            className={`px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+              assignmentTab === "all" ? "bg-emerald-600 text-white shadow-md" : "bg-transparent text-emerald-900 hover:bg-white/80"
             }`}
           >
-            All Assigned ({leads.length})
+            All
           </button>
 
           <button
             type="button"
             onClick={() => { setAssignmentTab("self"); setCurrentPage(1); }}
-            className={`px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              assignmentTab === "self" ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/25" : "bg-transparent text-emerald-800 hover:bg-white/80"
+            className={`px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              assignmentTab === "self" ? "bg-emerald-600 text-white shadow-md" : "bg-transparent text-emerald-900 hover:bg-white/80"
             }`}
           >
-            <span className="text-base leading-none font-black">+</span>
-            <span>Self Assigned</span>
+            <FaUserPlus className="w-3.5 h-3.5" />
+            <span>Self</span>
           </button>
 
           <button
             type="button"
             onClick={() => { setAssignmentTab("team"); setCurrentPage(1); }}
-            className={`px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 ${
-              assignmentTab === "team" ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-600/25" : "bg-transparent text-blue-800 hover:bg-white/80"
+            className={`px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              assignmentTab === "team" ? "bg-emerald-600 text-white shadow-md" : "bg-transparent text-emerald-900 hover:bg-white/80"
             }`}
           >
             <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
               <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
             </svg>
-            <span>Team Assigned</span>
+            <span>Team</span>
           </button>
         </div>
       </div>
 
-      {/* 3. COLLAPSIBLE FILTER TOGGLE BAR */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3.5 sm:p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="text-xs sm:text-sm font-semibold text-slate-600 text-center sm:text-left">
-          Showing <strong className="font-bold text-slate-900">{filteredLeads.length}</strong> of <strong className="font-bold text-slate-900">{leads.length}</strong> Assigned Leads
-        </div>
-
-        <button
-          type="button"
-          onClick={() => setShowFilters((prev) => !prev)}
-          className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 shadow-2xs"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-          </svg>
-          <span>{showFilters ? "Hide Filter Options ✕" : "Filter Options 🔍"}</span>
-        </button>
-      </div>
-
-      {/* COLLAPSIBLE FILTER PANEL (Opens on click) */}
+      {/* 3. COLLAPSIBLE FILTER PANEL */}
       {showFilters && (
-        <div className="w-full bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 space-y-3.5 animate-in fade-in duration-150">
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3.5">
-            {/* Dropdown 1: Lead Type */}
-            <div className="relative">
+        <div className="w-full bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 sm:p-5 space-y-4 animate-in fade-in duration-200">
+          
+          {/* Top Row: Search Input + Status Tabs */}
+          <div className="flex flex-col lg:flex-row items-center justify-between gap-4">
+            <div className="relative w-full lg:w-96">
+              <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-3.5 h-3.5" />
+              <input
+                type="text"
+                placeholder="Search Client Name, Project Details, City..."
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-hidden focus:border-black transition-all placeholder:text-slate-400 font-medium shadow-2xs"
+              />
+              {searchTerm && (
+                <button
+                  onClick={() => setSearchTerm("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-black text-xs cursor-pointer font-bold"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            {/* Quick Status Tabs */}
+            <div className="flex items-center gap-2 overflow-x-auto w-full lg:w-auto pb-1 lg:pb-0">
+              {["ALL", "HOT", "WARM", "COLD"].map((st) => (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => {
+                    setFilterStatus(st);
+                    setCurrentPage(1);
+                  }}
+                  className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                    filterStatus === st
+                      ? "bg-slate-900 text-white shadow-md"
+                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
+                  }`}
+                >
+                  <span>{st}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Secondary Filters */}
+          <div className="pt-3 border-t border-slate-100 space-y-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 text-xs sm:text-sm">
+              {/* 1. Lead Type */}
               <select
                 value={filterLeadType}
                 onChange={(e) => { setFilterLeadType(e.target.value); setCurrentPage(1); }}
-                className="w-full appearance-none px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white hover:border-slate-300 focus:outline-hidden focus:border-black cursor-pointer pr-8 font-semibold shadow-2xs"
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-700 bg-white focus:outline-none focus:border-slate-400 cursor-pointer font-medium shadow-2xs"
               >
-                {leadTypeOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                <option value="ALL">Lead Type</option>
+                {leadTypesList.filter(t => t !== "ALL").map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
               </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-              </div>
-            </div>
 
-            {/* Dropdown 2: Lead Source */}
-            <div className="relative">
+              {/* 2. Lead Mode */}
               <select
-                value={filterLeadSource}
-                onChange={(e) => { setFilterLeadSource(e.target.value); setCurrentPage(1); }}
-                className="w-full appearance-none px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white hover:border-slate-300 focus:outline-hidden focus:border-black cursor-pointer pr-8 font-semibold shadow-2xs"
+                value={filterLeadMode}
+                onChange={(e) => { setFilterLeadMode(e.target.value); setCurrentPage(1); }}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-700 bg-white focus:outline-none focus:border-slate-400 cursor-pointer font-medium shadow-2xs"
               >
-                {leadSourceOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                <option value="ALL">Lead Mode</option>
+                {leadModesList.filter(m => m !== "ALL").map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
               </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-              </div>
-            </div>
 
-            {/* Dropdown 3: Lead Status */}
-            <div className="relative">
+              {/* 3. Lead Status */}
               <select
-                value={filterLeadStatus}
-                onChange={(e) => { setFilterLeadStatus(e.target.value); setCurrentPage(1); }}
-                className="w-full appearance-none px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white hover:border-slate-300 focus:outline-hidden focus:border-black cursor-pointer pr-8 font-semibold shadow-2xs"
+                value={filterStatus}
+                onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-700 bg-white focus:outline-none focus:border-slate-400 cursor-pointer font-medium shadow-2xs"
               >
-                {leadStatusOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                <option value="ALL">Lead Status</option>
+                {["Hot", "Warm", "Cold"].map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
               </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-              </div>
-            </div>
 
-            {/* Dropdown 4: Lead Label */}
-            <div className="relative">
+              {/* 4. Work Category */}
               <select
-                value={filterLeadLabel}
-                onChange={(e) => { setFilterLeadLabel(e.target.value); setCurrentPage(1); }}
-                className="w-full appearance-none px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white hover:border-slate-300 focus:outline-hidden focus:border-black cursor-pointer pr-8 font-semibold shadow-2xs"
+                value={filterWorkCategory}
+                onChange={(e) => { setFilterWorkCategory(e.target.value); setCurrentPage(1); }}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-700 bg-white focus:outline-none focus:border-slate-400 cursor-pointer font-medium shadow-2xs"
               >
-                {leadLabelOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                <option value="ALL">Work Category</option>
+                {workCategoryList.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
               </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-              </div>
-            </div>
 
-            {/* Dropdown 5: Job Type */}
-            <div className="relative">
+              {/* 5. Work Type */}
               <select
-                value={filterJobType}
-                onChange={(e) => { setFilterJobType(e.target.value); setCurrentPage(1); }}
-                className="w-full appearance-none px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white hover:border-slate-300 focus:outline-hidden focus:border-black cursor-pointer pr-8 font-semibold shadow-2xs"
+                value={filterWorkType}
+                onChange={(e) => { setFilterWorkType(e.target.value); setCurrentPage(1); }}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-700 bg-white focus:outline-none focus:border-slate-400 cursor-pointer font-medium shadow-2xs"
               >
-                {jobTypeOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
+                <option value="ALL">Work Type</option>
+                {availableWorkTypes.map((w) => (
+                  <option key={w} value={w}>{w}</option>
+                ))}
               </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-              </div>
             </div>
-          </div>
 
-          {/* Date Filter & Orange Refresh Button */}
-          <div className="flex items-center gap-3 pt-1">
-            <div className="relative w-56 sm:w-64">
-              <input
-                type={showDatePicker ? "date" : "text"}
-                value={filterDate}
-                onFocus={() => setShowDatePicker(true)}
-                onBlur={(e) => { if (!e.target.value) setShowDatePicker(false); }}
-                onChange={(e) => { setFilterDate(e.target.value); setCurrentPage(1); }}
-                placeholder="All Dates"
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white hover:border-slate-300 focus:outline-hidden focus:border-black cursor-pointer pr-9 shadow-2xs font-semibold placeholder:text-slate-700"
-              />
-              <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-                  <line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" />
+            {/* Date Picker & Orange Reset Button */}
+            <div className="flex items-center gap-3">
+              <div className="relative w-48">
+                <input
+                  type="date"
+                  value={filterDateFrom}
+                  onChange={(e) => setFilterDateFrom(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-700 bg-white focus:outline-none focus:border-slate-400 font-medium shadow-2xs cursor-pointer"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="w-9 h-9 rounded-xl bg-[#ff5722] hover:bg-[#e64a19] text-white shadow-xs transition-colors cursor-pointer flex items-center justify-center font-bold text-sm shrink-0"
+                title="Reset Filters"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
-              </span>
+              </button>
             </div>
-
-            <button
-              type="button"
-              onClick={handleResetFilters}
-              className="h-10 px-4 rounded-xl bg-orange-500 hover:bg-orange-600 active:scale-95 text-white flex items-center gap-2 text-xs sm:text-sm font-bold transition-all cursor-pointer shadow-xs shrink-0"
-              title="Reset All Filters"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              <span>Reset Filters</span>
-            </button>
           </div>
+
         </div>
       )}
 
-      {/* 4. ROWS PER PAGE */}
-      <div className="flex items-center gap-2">
-        <span className="text-xs sm:text-sm font-bold text-slate-600">Rows per page:</span>
-        <div className="relative w-24">
-          <select
-            value={rowsPerPage}
-            onChange={(e) => { setRowsPerPage(Number(e.target.value)); setCurrentPage(1); }}
-            className="w-full appearance-none px-3.5 py-1.5 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-bold text-slate-800 focus:outline-hidden focus:border-black cursor-pointer pr-6 shadow-2xs"
-          >
-            <option value={10}>10</option>
-            <option value={25}>25</option>
-            <option value={50}>50</option>
-            <option value={100}>100</option>
-          </select>
-          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
-            <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-          </div>
-        </div>
-      </div>
-
-      {/* 5. TABLE */}
+      {/* 4. TABLE */}
       <Table
         data={paginatedLeads}
         columnConfig={columnConfig}
         currentPage={currentPage}
-        totalItems={sortedLeads.length}
+        totalItems={filteredLeads.length}
         itemsPerPage={rowsPerPage}
         onPageChange={(page) => setCurrentPage(page)}
       />
 
-      {/* 7. FULL LEAD DETAIL MODAL */}
-      {selectedLead && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl p-6 max-w-2xl w-full shadow-2xl border border-slate-100 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2.5">
-                <span className="w-8 h-8 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center text-sm font-bold">👁️</span>
-                <div>
-                  <h3 className="text-base font-black text-slate-900">{selectedLead.concernPersonName}</h3>
-                  <p className="text-xs text-slate-400">Lead ID: <span className="font-mono font-bold text-slate-700">{selectedLead.id}</span> • Created: {selectedLead.createdDate}</p>
-                </div>
-              </div>
-              <button type="button" onClick={() => setSelectedLead(null)} className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-xs font-bold text-slate-600 cursor-pointer">✕</button>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 text-xs">
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100"><span className="text-[10px] font-bold text-slate-400 uppercase block">Client Designation</span><span className="font-semibold text-slate-800">{selectedLead.clientDesignation || "—"}</span></div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100"><span className="text-[10px] font-bold text-slate-400 uppercase block">Client Type</span><span className="font-semibold text-slate-800">{selectedLead.clientType || "Individual"}</span></div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100"><span className="text-[10px] font-bold text-slate-400 uppercase block">Lead Label</span><span className="font-semibold text-slate-800">{selectedLead.leadLabel || "—"}</span></div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100"><span className="text-[10px] font-bold text-slate-400 uppercase block">Phone Number</span><a href={`tel:${selectedLead.phoneNumber}`} className="font-mono font-bold text-blue-600 hover:underline">+91 {selectedLead.phoneNumber}</a></div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100"><span className="text-[10px] font-bold text-slate-400 uppercase block">WhatsApp Number</span><a href={`https://wa.me/91${selectedLead.whatsAppNumber}`} target="_blank" rel="noopener noreferrer" className="font-mono font-bold text-emerald-600 hover:underline">+91 {selectedLead.whatsAppNumber} 💬</a></div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100"><span className="text-[10px] font-bold text-slate-400 uppercase block">Email Address</span><span className="text-slate-800 truncate block">{selectedLead.emailAddress || "—"}</span></div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100"><span className="text-[10px] font-bold text-slate-400 uppercase block">Lead Source</span><span className="font-semibold text-slate-800">{selectedLead.leadSource}</span></div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100"><span className="text-[10px] font-bold text-slate-400 uppercase block">Channel</span><span className="font-semibold text-slate-800">{selectedLead.channel || "Sales"}</span></div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100"><span className="text-[10px] font-bold text-slate-400 uppercase block">Lead Type</span><span className="font-semibold text-slate-800">{selectedLead.leadType}</span></div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100"><span className="text-[10px] font-bold text-slate-400 uppercase block">Job Type</span><span className="font-semibold text-slate-800">{selectedLead.jobType}</span></div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100"><span className="text-[10px] font-bold text-slate-400 uppercase block">Lead Status</span><span className={`inline-block px-2 py-0.5 rounded text-[10px] ${getStatusBadgeClass(selectedLead.leadStatus)}`}>{selectedLead.leadStatus}</span></div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100"><span className="text-[10px] font-bold text-slate-400 uppercase block">Expected Business</span><span className="font-mono font-black text-slate-900 text-sm">₹ {Number(selectedLead.expectedBusinessAmount || 0).toLocaleString("en-IN")}</span></div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100"><span className="text-[10px] font-bold text-slate-400 uppercase block">City & State</span><span className="font-semibold text-slate-800">{selectedLead.city}, {selectedLead.state}</span></div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100"><span className="text-[10px] font-bold text-slate-400 uppercase block">Pincode</span><span className="font-mono font-semibold text-slate-800">{selectedLead.pincode || "—"}</span></div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100"><span className="text-[10px] font-bold text-slate-400 uppercase block">Lead Age & Assigned</span><span className="font-semibold text-slate-800">{selectedLead.leadAge} ({selectedLead.assignedTo})</span></div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100 col-span-1 sm:col-span-2 md:col-span-3"><span className="text-[10px] font-bold text-slate-400 uppercase block">Project Remarks / Notes</span><p className="mt-1 text-slate-700 leading-relaxed font-medium">{selectedLead.remarks || "No additional remarks specified."}</p></div>
-            </div>
-
-            <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <a href={`tel:${selectedLead.phoneNumber}`} className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5"><span>📞 Call</span></a>
-                <a href={`https://wa.me/91${selectedLead.whatsAppNumber}`} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 rounded-xl bg-[#25D366] hover:bg-[#1EBE5D] text-white font-bold text-xs"><span>WhatsApp</span></a>
-                <button type="button" onClick={() => { setReassignModalLead(selectedLead); setNewAssignee(selectedLead.assignedTo || teamMembers[0]); }} className="px-3 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold text-xs">Re-assign</button>
-              </div>
-              <button type="button" onClick={() => setSelectedLead(null)} className="px-5 py-1.5 rounded-xl bg-black text-white font-bold text-xs hover:bg-neutral-800 cursor-pointer">Close</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 8. RE-ASSIGN MODAL */}
+      {/* 5. RE-ASSIGN MODAL */}
       {reassignModalLead && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 space-y-4">
             <div>
               <h3 className="text-sm font-black text-slate-900">Re-assign Lead</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Client: <strong className="text-slate-800">{reassignModalLead.concernPersonName}</strong></p>
+              <p className="text-xs text-slate-500 mt-0.5">Client: <strong className="text-slate-800">{reassignModalLead.clientName || reassignModalLead.concernPersonName}</strong></p>
             </div>
             <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1.5">Select Team Member</label>
@@ -557,8 +737,100 @@ const AsignLeads = () => {
             </div>
             <div className="pt-2 flex items-center justify-end gap-2">
               <button type="button" onClick={() => setReassignModalLead(null)} className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50">Cancel</button>
-              <button type="button" onClick={handleConfirmReassign} className="px-4 py-2 rounded-xl bg-black text-white text-xs font-bold hover:bg-neutral-800">Assign</button>
+              <button type="button" onClick={handleConfirmReassign} className="px-4 py-2 rounded-xl bg-orange-600 text-white text-xs font-bold hover:bg-orange-700">Assign</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= CLIENT STATUS / LEAD DETAILS MODAL (MATCHING IMAGE 1) ================= */}
+      {statusModalLead && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden border border-slate-100 p-6 space-y-6 animate-in zoom-in-95 duration-200">
+            
+            {/* Modal Title */}
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-extrabold text-slate-900">Lead Details</h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusModalLead(null);
+                  setSelectedClientStatus("");
+                }}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 text-sm font-bold transition-colors cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Top Cards: Client Info (Light Blue) & Expected Business (Light Green) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {/* Left Box: Client Info */}
+              <div className="p-4 rounded-2xl bg-blue-50/80 border border-blue-100 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-sm shrink-0">
+                  <FaUser className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-sm font-extrabold text-slate-900 truncate">
+                    {statusModalLead.clientName || statusModalLead.concernPersonName || "Client Name"}
+                  </h4>
+                  <p className="text-xs font-mono text-slate-600 font-semibold truncate">
+                    {statusModalLead.phoneNumber || statusModalLead.contact || "--"}
+                  </p>
+                  <p className="text-[11px] text-slate-500 font-medium truncate">
+                    {statusModalLead.emailAddress || statusModalLead.email || "--"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Right Box: Expected Business */}
+              <div className="p-4 rounded-2xl bg-emerald-100/70 border border-emerald-200/80 text-center flex flex-col justify-center items-center">
+                <span className="text-xs font-bold text-slate-700 tracking-wide uppercase mb-1">
+                  Expected Business
+                </span>
+                <span className="text-2xl font-black text-slate-900 font-mono">
+                  {statusModalLead.expectedBusiness || statusModalLead.expectedRevenue || statusModalLead.expectedBusinessAmount || "0"}
+                </span>
+              </div>
+            </div>
+
+            {/* Form Section: Client Status Dropdown */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                Client Status
+              </label>
+              <select
+                value={selectedClientStatus}
+                onChange={(e) => setSelectedClientStatus(e.target.value)}
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm font-bold text-slate-800 bg-white focus:outline-none focus:border-orange-500 shadow-2xs cursor-pointer"
+              >
+                <option value="">-- Select Status --</option>
+                <option value="INTERESTED">INTERESTED</option>
+                <option value="NOT INTERESTED">NOT INTERESTED</option>
+              </select>
+            </div>
+
+            {/* Modal Footer Actions */}
+            <div className="pt-2 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusModalLead(null);
+                  setSelectedClientStatus("");
+                }}
+                className="px-5 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSendToSalesManagement}
+                className="px-6 py-2.5 rounded-xl bg-[#ff5722] hover:bg-[#e64a19] text-white text-sm font-extrabold shadow-md shadow-orange-500/20 transition-all cursor-pointer"
+              >
+                Send To Sales Management
+              </button>
+            </div>
+
           </div>
         </div>
       )}

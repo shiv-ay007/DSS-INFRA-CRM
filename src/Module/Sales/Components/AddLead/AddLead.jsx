@@ -2,6 +2,7 @@ import React, { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
+import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
 import {
   salesPersonsList,
   leadSourcesList,
@@ -13,6 +14,7 @@ import {
   indianStatesList,
   availableWorkTypes
 } from "../../data/addLeadData";
+import { initialTotalLeads } from "../../data/totalLeadsData";
 import { FaPlus, FaMicrophone, FaImage, FaVideo, FaFileAudio, FaTimes } from "react-icons/fa";
 
 const Addlead = () => {
@@ -28,18 +30,45 @@ const Addlead = () => {
   };
 
   // Lead Mode options
-  const leadModeList = ["Online", "Offline", "Reference", "Walk-in", "Call"];
+  const leadModeList = [
+    "Business networking",
+    "By freelancer",
+    "By sales Team",
+    "Customer to customer"
+  ];
+
+  // Work Category options
+  const workCategoryList = [
+    "Design",
+    "Construction",
+    "Interior",
+    "Full Furnished",
+    "Fabrication"
+  ];
 
   // Lead Status options (Hot, Warm, Cold)
   const leadStatusList = ["Hot", "Warm", "Cold"];
 
   // Work Type options for multi-select
   const workTypeOptions = [
-    "Architectural Planning",
-    "Construction",
-    "Interior Design",
-    "Fabrication Works",
-    "Consultancy"
+    "Concept Drawing",
+    "Approval Drawing",
+    "Structure Drawing",
+    "Working Drawing",
+    "Electrical Drawing",
+    "Plumbing Drawing",
+    "Survey Drawing",
+    "Landscape Drawing",
+    "Submission Drawing",
+    "Elevation Drawing",
+    "Interior Work",
+    "Construction Raw Drawing",
+    "Project Management",
+    "Renovation Work",
+    "Site Visit Work",
+    "3D Interior View Design",
+    "2D Interior Design",
+    "3D Exterior View Design"
   ];
 
   // Initial Form State
@@ -47,6 +76,7 @@ const Addlead = () => {
     date: getTodayDate(),
     leadMode: "",
     leadType: "FRESH",
+    workCategory: "",
     workType: [],
     leadStatus: "",
     clientName: "",
@@ -77,6 +107,7 @@ const Addlead = () => {
   const [formData, setFormData] = useState(initialFormState);
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isFetchingPincode, setIsFetchingPincode] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showUploadOptions, setShowUploadOptions] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -100,6 +131,57 @@ const Addlead = () => {
 
     if (errors[name]) {
       setErrors((prev) => ({ ...prev, [name]: "" }));
+    }
+  };
+
+  // Handle Pincode change and auto-fetch City & State
+  const handlePincodeChange = async (e) => {
+    const val = e.target.value.replace(/\D/g, "");
+    setFormData((prev) => ({
+      ...prev,
+      pincode: val
+    }));
+
+    if (errors.pincode) {
+      setErrors((prev) => ({ ...prev, pincode: "" }));
+    }
+
+    if (val.length === 6) {
+      setIsFetchingPincode(true);
+      try {
+        const response = await fetch(`https://api.postalpincode.in/pincode/${val}`);
+        const data = await response.json();
+
+        if (data && data[0] && data[0].Status === "Success" && data[0].PostOffice?.length > 0) {
+          const po = data[0].PostOffice[0];
+          const apiDistrict = po.District || po.Block || po.Circle || "";
+          const apiState = po.State || "";
+
+          // Match state in indianStatesList
+          const matchedState = indianStatesList.find(
+            (st) => st.toLowerCase() === apiState.toLowerCase() ||
+                    (apiState.toLowerCase() === "delhi" && st === "Delhi NCR") ||
+                    st.toLowerCase().includes(apiState.toLowerCase())
+          ) || apiState;
+
+          setFormData((prev) => ({
+            ...prev,
+            city: apiDistrict,
+            state: matchedState
+          }));
+
+          setErrors((prev) => ({
+            ...prev,
+            city: "",
+            state: "",
+            pincode: ""
+          }));
+        }
+      } catch (err) {
+        console.error("Error fetching pincode details:", err);
+      } finally {
+        setIsFetchingPincode(false);
+      }
     }
   };
 
@@ -210,6 +292,7 @@ const Addlead = () => {
 
     if (!formData.leadMode) newErrors.leadMode = "Please select lead mode";
     if (!formData.leadType) newErrors.leadType = "Please select lead type";
+    if (!formData.workCategory) newErrors.workCategory = "Please select work category";
     if (formData.workType.length === 0) newErrors.workType = "Please select at least one work type";
     if (!formData.leadStatus) newErrors.leadStatus = "Please select lead status";
 
@@ -262,56 +345,71 @@ const Addlead = () => {
       const today = new Date();
       const options = { day: '2-digit', month: 'short', year: 'numeric' };
       const formattedDate = today.toLocaleDateString('en-GB', options);
+      const formattedTime = today.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
 
       const newLead = {
         id: `LM-${Math.floor(100000 + Math.random() * 900000)}`,
+        clientName: formData.clientName,
         concernPersonName: formData.clientName,
         phoneNumber: formData.phoneNumber,
+        contact: formData.phoneNumber,
         alternateNumber: formData.alternateNumber,
         emailAddress: formData.emailAddress,
-        status: formData.leadStatus || "NEW",
-        nextFollowupDate: formattedDate,
-        nextFollowupDateRaw: formData.date || today.toISOString().split("T")[0],
-        nextFollowupTime: "11:00 am",
-        channelType: formData.channel || "Sales",
-        followupRemarksCount: 0,
-        followupHistory: [],
-        createdDate: formattedDate,
-        createdTime: today.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        leadAge: "0 Days",
-        leadLabel: formData.leadLabel || "",
-        leadType: formData.leadType,
+        email: formData.emailAddress,
+        status: formData.leadStatus || "Warm",
+        leadStatus: formData.leadStatus || "Warm",
+        leadMode: formData.leadMode,
+        leadSource: formData.leadMode || "Business networking",
+        leadType: formData.leadType || "FRESH",
+        workCategory: formData.workCategory || "Design",
         jobType: formData.jobType || "NEW",
         clientType: formData.clientType || "Individual",
         workType: formData.workType,
         requirement: formData.remark || "New Lead Registration",
         expectedBusiness: formData.expectedBusiness || "0",
+        expectedRevenue: formData.expectedBusiness || "0",
         pincode: formData.pincode,
         city: formData.city,
         state: formData.state,
-        leadSource: formData.leadSource || "",
         leadBy: formData.salesPerson || "Sales TL (Current User)",
+        salesPerson: formData.salesPerson || "Sales TL (Current User)",
         assignTo: formData.salesPerson || "Sales TL (Current User)",
         address: formData.address,
         clientDesignation: formData.clientDesignation || "",
         googleLocation: formData.googleLocation || "",
-        leadMode: formData.leadMode,
-        leadStatus: formData.leadStatus,
         projectDetail: formData.projectDetail || "",
+        projectDetails: formData.projectDetail || "",
         remark: formData.remark || "",
         remarkAttachments: formData.remarkAttachments.map(att => ({
           name: att.name,
           type: att.type,
           size: att.size
         })),
-        whatsappNumber: formData.whatsappNumber || formData.phoneNumber
+        whatsappNumber: formData.whatsappNumber || formData.phoneNumber,
+        createdDate: formattedDate,
+        date: today.toISOString().split("T")[0],
+        createdTime: formattedTime,
+        leadAge: "0 Days",
+        nextFollowupDate: formattedDate,
+        nextFollowupDateRaw: formData.date || today.toISOString().split("T")[0],
+        nextFollowupTime: "11:00 am",
+        channelType: formData.channel || "Sales",
+        followupRemarksCount: 0,
+        followupHistory: []
       };
 
       try {
-        const saved = localStorage.getItem("dss_lead_management_sheet_v1");
-        const currentLeads = saved ? JSON.parse(saved) : [];
-        const updatedLeads = [newLead, ...currentLeads];
-        localStorage.setItem("dss_lead_management_sheet_v1", JSON.stringify(updatedLeads));
+        // 1. Save to dss_leads (Used by Total Leads Directory)
+        const savedTotal = localStorage.getItem("dss_leads");
+        const currentTotalLeads = savedTotal ? JSON.parse(savedTotal) : initialTotalLeads;
+        const updatedTotalLeads = [newLead, ...currentTotalLeads];
+        localStorage.setItem("dss_leads", JSON.stringify(updatedTotalLeads));
+
+        // 2. Save to dss_lead_management_sheet_v1 (Used by Lead Sheet)
+        const savedSheet = localStorage.getItem("dss_lead_management_sheet_v1");
+        const currentSheetLeads = savedSheet ? JSON.parse(savedSheet) : [];
+        const updatedSheetLeads = [newLead, ...currentSheetLeads];
+        localStorage.setItem("dss_lead_management_sheet_v1", JSON.stringify(updatedSheetLeads));
       } catch (err) {
         console.error("Failed to save lead to localStorage", err);
       }
@@ -364,7 +462,7 @@ const Addlead = () => {
       {/* MAIN FORM CARD */}
       <form onSubmit={handleSubmit} autoComplete="off" className="bg-white rounded-2xl shadow-2xs px-2.5 sm:px-4 py-5 space-y-3.5">
         
-        {/* ROW 1: Lead Mode | Lead Type | Lead Status */}
+        {/* ROW 1: Lead Mode | Lead Type | Work Category */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-x-2.5 sm:gap-x-3 gap-y-3">
           <div>
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
@@ -406,6 +504,57 @@ const Addlead = () => {
 
           <div>
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
+              Work Category <span className="text-red-500">*</span>
+            </label>
+            <select
+              name="workCategory"
+              value={formData.workCategory}
+              onChange={handleChange}
+              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all cursor-pointer ${
+                errors.workCategory ? "border-red-400 bg-red-50/20" : "border-black/20"
+              }`}
+            >
+              <option value="">Select Work Category</option>
+              {workCategoryList.map((cat) => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+            {errors.workCategory && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.workCategory}</p>}
+          </div>
+        </div>
+
+        {/* ROW 2: Work Type (Full Width - Multi-select Pills) */}
+        <div className="pt-1">
+          <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
+            Work Type <span className="text-red-500">*</span> <span className="text-slate-500 font-normal">(Select all that apply)</span>
+          </label>
+          <div className="flex flex-wrap gap-1.5 pt-0.5">
+            {workTypeOptions.map((type) => {
+              const isSelected = formData.workType.includes(type);
+              return (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => toggleWorkType(type)}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-1 ${
+                    isSelected
+                      ? "bg-blue-600 text-white shadow-2xs"
+                      : "bg-slate-100 text-slate-700 hover:bg-slate-200 border border-black/20"
+                  }`}
+                >
+                  <span>{type}</span>
+                  {isSelected ? "✓" : "+"}
+                </button>
+              );
+            })}
+          </div>
+          {errors.workType && <p className="text-xs text-red-500 font-medium mt-1">{errors.workType}</p>}
+        </div>
+
+        {/* ROW 3: Lead Status | Client Name | Phone Number */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-2.5 sm:gap-x-3 gap-y-3 pt-1">
+          <div>
+            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
               Lead Status <span className="text-red-500">*</span>
             </label>
             <select
@@ -423,10 +572,7 @@ const Addlead = () => {
             </select>
             {errors.leadStatus && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.leadStatus}</p>}
           </div>
-        </div>
 
-        {/* ROW 2: Client Name | Phone Number | Alternate Number */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-2.5 sm:gap-x-3 gap-y-3">
           <div>
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
               Client Name <span className="text-red-500">*</span>
@@ -464,7 +610,10 @@ const Addlead = () => {
             />
             {errors.phoneNumber && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.phoneNumber}</p>}
           </div>
+        </div>
 
+        {/* ROW 4: Alternate Number | Email Address */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-2.5 sm:gap-x-3 gap-y-3 pt-1">
           <div>
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
               Alternate Number
@@ -485,10 +634,7 @@ const Addlead = () => {
             />
             {errors.alternateNumber && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.alternateNumber}</p>}
           </div>
-        </div>
 
-        {/* ROW 3: Email Address */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-2.5 sm:gap-x-3 gap-y-3">
           <div>
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
               Email Address
@@ -506,10 +652,9 @@ const Addlead = () => {
             {errors.emailAddress && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.emailAddress}</p>}
           </div>
           <div></div>
-          <div></div>
         </div>
 
-        {/* ROW 4: Address (Full Width) */}
+        {/* ROW 5: Address (Full Width) */}
         <div className="pt-1">
           <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
             Address <span className="text-red-500">*</span>
@@ -527,8 +672,27 @@ const Addlead = () => {
           {errors.address && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.address}</p>}
         </div>
 
-        {/* ROW 5: City | Pincode | State */}
+        {/* ROW 6: Pincode | City | State */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-x-2.5 sm:gap-x-3 gap-y-3 pt-1">
+          <div>
+            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5 flex items-center justify-between">
+              <span>Pincode <span className="text-red-500">*</span></span>
+              {isFetchingPincode && <span className="text-xs text-blue-600 animate-pulse font-normal">Fetching City/State...</span>}
+            </label>
+            <input
+              type="text"
+              name="pincode"
+              maxLength={6}
+              placeholder="Enter 6-digit Pincode"
+              value={formData.pincode}
+              onChange={handlePincodeChange}
+              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all placeholder:text-slate-400 ${
+                errors.pincode ? "border-red-400 bg-red-50/20" : "border-black/20"
+              }`}
+            />
+            {errors.pincode && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.pincode}</p>}
+          </div>
+
           <div>
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
               City <span className="text-red-500">*</span>
@@ -544,27 +708,6 @@ const Addlead = () => {
               }`}
             />
             {errors.city && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.city}</p>}
-          </div>
-
-          <div>
-            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
-              Pincode <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              name="pincode"
-              maxLength={6}
-              placeholder="Enter 6-digit Pincode"
-              value={formData.pincode}
-              onChange={(e) => {
-                const val = e.target.value.replace(/\D/g, "");
-                handleChange({ target: { name: "pincode", value: val } });
-              }}
-              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all placeholder:text-slate-400 ${
-                errors.pincode ? "border-red-400 bg-red-50/20" : "border-black/20"
-              }`}
-            />
-            {errors.pincode && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.pincode}</p>}
           </div>
 
           <div>
@@ -588,35 +731,7 @@ const Addlead = () => {
           </div>
         </div>
 
-        {/* ROW 6: Work Type / Categories (Full Width - Multi-select Pills) */}
-        <div className="pt-1">
-          <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-            Work Type / Categories <span className="text-red-500">*</span> <span className="text-slate-500 font-normal">(Select all that apply)</span>
-          </label>
-          <div className="flex flex-wrap gap-1.5 pt-0.5">
-            {workTypeOptions.map((type) => {
-              const isSelected = formData.workType.includes(type);
-              return (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => toggleWorkType(type)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-1 ${
-                    isSelected
-                      ? "bg-blue-600 text-white shadow-2xs"
-                      : "bg-slate-100 text-slate-700 hover:bg-slate-200 border border-black/20"
-                  }`}
-                >
-                  <span>{type}</span>
-                  {isSelected ? "✓" : "+"}
-                </button>
-              );
-            })}
-          </div>
-          {errors.workType && <p className="text-xs text-red-500 font-medium mt-1">{errors.workType}</p>}
-        </div>
-
-        {/* ROW 7: Expected Business Amount | Lead Date | Project Detail */}
+        {/* ROW 7: Expected Business Amount | Lead Date */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-x-2.5 sm:gap-x-3 gap-y-3 pt-1">
           <div>
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
@@ -644,156 +759,34 @@ const Addlead = () => {
               className="w-full px-3 py-1.5 rounded-lg border border-black/20 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all cursor-pointer"
             />
           </div>
-
-          <div>
-            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
-              Project Detail
-            </label>
-            <input
-              type="text"
-              name="projectDetail"
-              placeholder="Enter Project Detail"
-              value={formData.projectDetail}
-              onChange={handleChange}
-              className="w-full px-3 py-1.5 rounded-lg border border-black/20 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all placeholder:text-slate-400"
-            />
-          </div>
+          <div></div>
         </div>
 
-        {/* ROW 8: Remark (Full Width) with Icons Inside Textarea */}
+        {/* ROW 8: Project Detail (Full Width Textarea) */}
         <div className="pt-1">
-          <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-            Remark
+          <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
+            Project Detail
           </label>
-          
-          {/* Hidden file inputs */}
-          <input
-            type="file"
-            ref={imageInputRef}
-            accept="image/*"
-            multiple
-            onChange={(e) => handleFileUpload(e, 'image')}
-            className="hidden"
+          <textarea
+            rows={3}
+            name="projectDetail"
+            placeholder="Enter Project Detail"
+            value={formData.projectDetail}
+            onChange={handleChange}
+            className="w-full px-3 py-1.5 rounded-lg border border-black/20 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all placeholder:text-slate-400 resize-y"
           />
-          <input
-            type="file"
-            ref={videoInputRef}
-            accept="video/*"
-            multiple
-            onChange={(e) => handleFileUpload(e, 'video')}
-            className="hidden"
+        </div>
+
+        {/* ROW 9: Remark with CommentWithMedia Component */}
+        <div className="pt-1">
+          <CommentWithMedia
+            title="Remark / Comments"
+            placeholder="Write your remark or comment..."
+            value={formData.remark}
+            onChange={(val) => setFormData((prev) => ({ ...prev, remark: val }))}
+            files={formData.remarkAttachments}
+            onFilesChange={(newFiles) => setFormData((prev) => ({ ...prev, remarkAttachments: newFiles }))}
           />
-          <input
-            type="file"
-            ref={audioInputRef}
-            accept="audio/*"
-            multiple
-            onChange={(e) => handleFileUpload(e, 'audio')}
-            className="hidden"
-          />
-
-          {/* Textarea with Icons Inside */}
-          <div className="relative">
-            <textarea
-              ref={remarkTextareaRef}
-              rows={3}
-              name="remark"
-              placeholder="Enter Remarks"
-              value={formData.remark}
-              onChange={handleChange}
-              className="w-full px-3 py-1.5 pr-28 rounded-lg border border-black/20 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all placeholder:text-slate-400 resize-y"
-            />
-            
-            {/* Icons positioned inside the textarea */}
-            <div className="absolute right-2 bottom-2 flex items-center gap-1.5 bg-white/90 backdrop-blur-sm rounded-lg px-1.5 py-1 border border-slate-200 shadow-sm">
-              {/* Plus Icon - Upload Options */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setShowUploadOptions(!showUploadOptions)}
-                  className="p-1 rounded-md hover:bg-blue-50 text-blue-600 transition-colors cursor-pointer"
-                  title="Add Attachment"
-                >
-                  <FaPlus size={13} />
-                </button>
-                
-                {/* Upload Options Dropdown */}
-                {showUploadOptions && (
-                  <div className="absolute right-0 bottom-7 bg-white border border-slate-200 rounded-lg shadow-lg p-1.5 z-10 min-w-[150px]">
-                    <button
-                      type="button"
-                      onClick={() => imageInputRef.current?.click()}
-                      className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded-md transition-colors"
-                    >
-                      <FaImage size={12} className="text-green-500" />
-                      Image
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => videoInputRef.current?.click()}
-                      className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded-md transition-colors"
-                    >
-                      <FaVideo size={12} className="text-purple-500" />
-                      Video
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => audioInputRef.current?.click()}
-                      className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded-md transition-colors"
-                    >
-                      <FaFileAudio size={12} className="text-red-500" />
-                      Audio
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Divider */}
-              <div className="w-px h-5 bg-slate-200"></div>
-
-              {/* Mic Icon - Audio Recording */}
-              <button
-                type="button"
-                onClick={isRecording ? stopRecording : startRecording}
-                className={`p-1 rounded-md transition-colors cursor-pointer ${
-                  isRecording 
-                    ? "text-red-500 animate-pulse" 
-                    : "text-gray-500 hover:text-gray-700 hover:bg-gray-100"
-                }`}
-                title={isRecording ? "Stop Recording" : "Start Recording"}
-              >
-                <FaMicrophone size={13} />
-              </button>
-            </div>
-          </div>
-
-          {/* Recording Status */}
-          {isRecording && (
-            <div className="flex items-center gap-2 mt-1 text-xs text-red-500">
-              <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>
-              Recording audio... Click mic again to stop
-            </div>
-          )}
-
-          {/* Attachments Preview */}
-          {formData.remarkAttachments.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-2">
-              {formData.remarkAttachments.map((att) => (
-                <div key={att.id} className="flex items-center gap-1.5 bg-slate-100 rounded-lg px-2 py-1 text-xs">
-                  {getFileIcon(att.type)}
-                  <span className="text-slate-700 max-w-[120px] truncate">{att.name}</span>
-                  <span className="text-slate-400">({formatFileSize(att.size)})</span>
-                  <button
-                    type="button"
-                    onClick={() => removeAttachment(att.id)}
-                    className="text-red-400 hover:text-red-600 transition-colors"
-                  >
-                    <FaTimes size={10} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* ACTION BUTTONS */}
@@ -857,11 +850,11 @@ const Addlead = () => {
                 type="button"
                 onClick={() => {
                   setShowSuccessModal(false);
-                  navigate("/sales/leads");
+                  navigate("/sales/leads/total");
                 }}
-                className="flex-1 py-2.5 px-4 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold transition-colors cursor-pointer"
+                className="flex-1 py-2.5 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition-colors cursor-pointer shadow-sm"
               >
-                Go to Lead Sheet
+                Go to Total Leads Directory
               </button>
             </div>
           </div>
