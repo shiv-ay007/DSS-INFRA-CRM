@@ -1,6 +1,9 @@
 import React, { useState, useMemo, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import Table from "../../../../Common/Components/Table";
+import { FaFilter, FaSearch, FaUserPlus } from "react-icons/fa";
+import { availableWorkTypes, workCategoryList, leadTypesList } from "../../data/addLeadData";
 import {
   getOffsetDateString,
   teamMembers,
@@ -13,7 +16,17 @@ import {
   initialScheduledLeads
 } from "../../data/followUpData";
 
+const leadModesList = [
+  "ALL",
+  "Business networking",
+  "By freelancer",
+  "By sales Team",
+  "Customer to customer"
+];
+
 const Follow = () => {
+  const navigate = useNavigate();
+
   // State for all scheduled leads
   const [leads, setLeads] = useState(() => {
     try {
@@ -35,14 +48,29 @@ const Follow = () => {
 
   // Filter States
   const [showFilters, setShowFilters] = useState(false);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [filterLeadType, setFilterLeadType] = useState("Lead Type");
-  const [filterLeadSource, setFilterLeadSource] = useState("Lead Source");
-  const [filterLeadStatus, setFilterLeadStatus] = useState("Lead Status");
-  const [filterLeadLabel, setFilterLeadLabel] = useState("Lead Label");
-  const [filterTimeRange, setFilterTimeRange] = useState("All Time");
+  const [filterScope, setFilterScope] = useState("ALL"); // "ALL", "SELF", "TEAM"
   const [searchTerm, setSearchTerm] = useState("");
+  const [filterLeadMode, setFilterLeadMode] = useState("ALL");
+  const [filterLeadType, setFilterLeadType] = useState("ALL");
+  const [filterWorkCategory, setFilterWorkCategory] = useState("ALL");
+  const [filterWorkType, setFilterWorkType] = useState("ALL");
+  const [filterStatus, setFilterStatus] = useState("ALL");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+
+  const [rowsPerPage, setRowsPerPage] = useState(20);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const handleResetFilters = () => {
+    setSearchTerm("");
+    setFilterLeadMode("ALL");
+    setFilterLeadType("ALL");
+    setFilterWorkCategory("ALL");
+    setFilterWorkType("ALL");
+    setFilterStatus("ALL");
+    setFilterDateFrom("");
+    setFilterScope("ALL");
+    setCurrentPage(1);
+  };
 
   // Modals States
   const [scheduleModalLead, setScheduleModalLead] = useState(null); // Opens Wireframe Schedule Modal
@@ -370,17 +398,6 @@ const Follow = () => {
   const [scheduleFormData, setScheduleFormData] = useState(defaultScheduleForm);
   const [scheduleFormErrors, setScheduleFormErrors] = useState({});
 
-  // Reset Filters Handler
-  const handleResetFilters = () => {
-    setFilterLeadType("Lead Type");
-    setFilterLeadSource("Lead Source");
-    setFilterLeadStatus("Lead Status");
-    setFilterLeadLabel("Lead Label");
-    setFilterTimeRange("All Time");
-    setSearchTerm("");
-    setCurrentPage(1);
-  };
-
   // Classification for Next Followup Color Coding
   const todayStr = getOffsetDateString(0);
   const tomorrowStr = getOffsetDateString(1);
@@ -424,32 +441,45 @@ const Follow = () => {
   // Filtered Leads
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
-      if (filterLeadType !== "Lead Type" && lead.leadType !== filterLeadType) return false;
-      if (filterLeadSource !== "Lead Source" && lead.leadSource !== filterLeadSource) return false;
-      if (filterLeadStatus !== "Lead Status" && lead.status !== filterLeadStatus) return false;
-      if (filterLeadLabel !== "Lead Label" && lead.leadLabel !== filterLeadLabel) return false;
-
-      // Time Range Filter
-      const cat = getFollowupCategory(lead);
-      if (filterTimeRange === "Today" && cat !== "today") return false;
-      if (filterTimeRange === "Tomorrow" && cat !== "tomorrow") return false;
-      if (filterTimeRange === "Overdue" && cat !== "overdue") return false;
-
       // Search Box
       if (searchTerm) {
         const q = searchTerm.toLowerCase();
         const matches =
-          (lead.concernPersonName || "").toLowerCase().includes(q) ||
+          (lead.concernPersonName || lead.clientName || "").toLowerCase().includes(q) ||
           (lead.phoneNumber || "").includes(q) ||
           (lead.emailAddress || "").toLowerCase().includes(q) ||
-          (lead.requirement || "").toLowerCase().includes(q) ||
-          (lead.address || "").toLowerCase().includes(q);
+          (lead.requirement || lead.projectDetail || "").toLowerCase().includes(q) ||
+          (lead.address || lead.city || "").toLowerCase().includes(q);
         if (!matches) return false;
       }
 
+      // Dropdowns
+      if (filterLeadMode !== "ALL" && (lead.leadMode || lead.leadSource) !== filterLeadMode) return false;
+      if (filterLeadType !== "ALL" && lead.leadType !== filterLeadType) return false;
+      if (filterWorkCategory !== "ALL" && (lead.workCategory || lead.leadLabel) !== filterWorkCategory) return false;
+      if (filterWorkType !== "ALL" && (lead.workType || lead.jobType) !== filterWorkType) return false;
+      if (filterStatus !== "ALL" && (lead.leadStatus || lead.status) !== filterStatus) return false;
+
+      // Date Filter
+      if (filterDateFrom && !(lead.createdDate || lead.date || lead.nextFollowupDate || "").includes(filterDateFrom)) return false;
+
+      // Scope Filter (ALL, SELF, TEAM)
+      if (filterScope === "SELF" && lead.assignedType !== "self") return false;
+      if (filterScope === "TEAM" && lead.assignedType === "self") return false;
+
       return true;
     });
-  }, [leads, filterLeadType, filterLeadSource, filterLeadStatus, filterLeadLabel, filterTimeRange, searchTerm]);
+  }, [
+    leads,
+    searchTerm,
+    filterLeadMode,
+    filterLeadType,
+    filterWorkCategory,
+    filterWorkType,
+    filterStatus,
+    filterDateFrom,
+    filterScope
+  ]);
 
   // Paginated Leads
   const paginatedLeads = useMemo(() => {
@@ -539,118 +569,178 @@ const Follow = () => {
         showBackButton={true}
         className="mb-5"
         rightActions={
-          <span className="px-3.5 py-1.5 rounded-xl bg-white border border-slate-200 shadow-2xs text-xs sm:text-sm font-bold text-slate-700">
-            Total: <span className="font-mono text-amber-700 font-black">{filteredLeads.length}</span> Scheduled
-          </span>
+          <button
+            type="button"
+            onClick={() => setShowFilters((prev) => !prev)}
+            className={`h-9 px-3.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs ${
+              showFilters
+                ? "bg-slate-900 text-white border-slate-900"
+                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+            }`}
+          >
+            <FaFilter className="w-3.5 h-3.5" />
+            <span>Filter</span>
+          </button>
         }
       />
 
-      {/* ================= 2. COLLAPSIBLE FILTER TOGGLE BAR ================= */}
-      <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-3.5 sm:p-4 mb-5 flex flex-col sm:flex-row items-center justify-between gap-3">
-        <div className="text-xs sm:text-sm font-semibold text-slate-600 text-center sm:text-left">
-          Showing <strong className="font-bold text-slate-900">{filteredLeads.length}</strong> of <strong className="font-bold text-slate-900">{leads.length}</strong> Scheduled Leads
-        </div>
+      {/* ================= 2. TAB BUTTONS (All | + Self | 👥 Team) ================= */}
+      <div className="flex justify-center w-full mb-5">
+        <div className="inline-flex p-1.5 rounded-2xl bg-emerald-50/80 border border-emerald-200 gap-2 shadow-2xs">
+          <button
+            type="button"
+            onClick={() => { setFilterScope("ALL"); setCurrentPage(1); }}
+            className={`px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+              filterScope === "ALL" ? "bg-emerald-600 text-white shadow-md" : "bg-transparent text-emerald-900 hover:bg-white/80"
+            }`}
+          >
+            All
+          </button>
 
-        <button
-          type="button"
-          onClick={() => setShowFilters((prev) => !prev)}
-          className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-2 shadow-2xs"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-          </svg>
-          <span>{showFilters ? "Hide Filter Options ✕" : "Filter Options 🔍"}</span>
-        </button>
+          <button
+            type="button"
+            onClick={() => { setFilterScope("SELF"); setCurrentPage(1); }}
+            className={`px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              filterScope === "SELF" ? "bg-emerald-600 text-white shadow-md" : "bg-transparent text-emerald-900 hover:bg-white/80"
+            }`}
+          >
+            <FaUserPlus className="w-3.5 h-3.5" />
+            <span>Self</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => { setFilterScope("TEAM"); setCurrentPage(1); }}
+            className={`px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+              filterScope === "TEAM" ? "bg-emerald-600 text-white shadow-md" : "bg-transparent text-emerald-900 hover:bg-white/80"
+            }`}
+          >
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+            </svg>
+            <span>Team</span>
+          </button>
+        </div>
       </div>
 
-      {/* COLLAPSIBLE FILTER PANEL */}
+      {/* ================= 3. COLLAPSIBLE FILTER PANEL ================= */}
       {showFilters && (
-        <div className="w-full bg-white rounded-2xl border border-slate-200/90 shadow-xs p-4 sm:p-5 mb-5 space-y-3.5 animate-in fade-in duration-150">
-          <div className="flex flex-wrap items-center gap-3">
-            
-            {/* Dropdown 1: Lead Type */}
-            <div className="relative min-w-[140px] flex-1 sm:flex-none">
-              <select
-                value={filterLeadType}
-                onChange={(e) => { setFilterLeadType(e.target.value); setCurrentPage(1); }}
-                className="w-full appearance-none pl-3.5 pr-8 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white hover:border-slate-300 focus:outline-hidden focus:border-black cursor-pointer font-semibold shadow-2xs"
-              >
-                {leadTypeOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-              </div>
+        <div className="w-full bg-white rounded-3xl border border-slate-200/90 shadow-md p-5 mb-5 space-y-4 animate-in fade-in duration-150">
+          {/* Search & Quick Status Tabs */}
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+            {/* Search Input */}
+            <div className="relative w-full md:w-96">
+              <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                placeholder="Search Client Name, Project Details, City..."
+                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold text-slate-800 bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:border-slate-900 transition-all shadow-2xs"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 text-xs font-bold"
+                >
+                  ✕
+                </button>
+              )}
             </div>
 
-            {/* Dropdown 2: Lead Source */}
-            <div className="relative min-w-[140px] flex-1 sm:flex-none">
-              <select
-                value={filterLeadSource}
-                onChange={(e) => { setFilterLeadSource(e.target.value); setCurrentPage(1); }}
-                className="w-full appearance-none pl-3.5 pr-8 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white hover:border-slate-300 focus:outline-hidden focus:border-black cursor-pointer font-semibold shadow-2xs"
-              >
-                {leadSourceOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-              </div>
+            {/* Quick Status Tabs (ALL, HOT, WARM, COLD) */}
+            <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
+              {["ALL", "HOT", "WARM", "COLD"].map((st) => (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => { setFilterStatus(st); setCurrentPage(1); }}
+                  className={`px-4 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                    filterStatus === st
+                      ? "bg-slate-900 text-white shadow-xs"
+                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                  }`}
+                >
+                  {st}
+                </button>
+              ))}
             </div>
+          </div>
 
-            {/* Dropdown 3: Lead Status */}
-            <div className="relative min-w-[140px] flex-1 sm:flex-none">
-              <select
-                value={filterLeadStatus}
-                onChange={(e) => { setFilterLeadStatus(e.target.value); setCurrentPage(1); }}
-                className="w-full appearance-none pl-3.5 pr-8 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white hover:border-slate-300 focus:outline-hidden focus:border-black cursor-pointer font-semibold shadow-2xs"
-              >
-                {leadStatusOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-              </div>
-            </div>
-
-            {/* Dropdown 4: Lead Label */}
-            <div className="relative min-w-[140px] flex-1 sm:flex-none">
-              <select
-                value={filterLeadLabel}
-                onChange={(e) => { setFilterLeadLabel(e.target.value); setCurrentPage(1); }}
-                className="w-full appearance-none pl-3.5 pr-8 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white hover:border-slate-300 focus:outline-hidden focus:border-black cursor-pointer font-semibold shadow-2xs"
-              >
-                {leadLabelOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-              </div>
-            </div>
-
-            {/* Dropdown 5: Time Range Filter (All Time) */}
-            <div className="relative min-w-[140px] flex-1 sm:flex-none">
-              <select
-                value={filterTimeRange}
-                onChange={(e) => { setFilterTimeRange(e.target.value); setCurrentPage(1); }}
-                className="w-full appearance-none pl-3.5 pr-8 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white hover:border-slate-300 focus:outline-hidden focus:border-black cursor-pointer font-semibold shadow-2xs"
-              >
-                {timeRangeOptions.map((opt) => (<option key={opt} value={opt}>{opt}</option>))}
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" /></svg>
-              </div>
-            </div>
-
-            {/* Bright Orange Refresh / Reset Button */}
-            <button
-              type="button"
-              onClick={handleResetFilters}
-              className="h-10 px-4 rounded-xl bg-[#F95700] hover:bg-[#E04F00] text-white flex items-center gap-2 text-xs sm:text-sm font-bold transition-all shadow-xs cursor-pointer shrink-0"
-              title="Reset All Filters"
+          {/* 5 Filter Dropdowns + Date Picker + Reset Button */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-2 border-t border-slate-100">
+            {/* 1. Lead Mode Dropdown */}
+            <select
+              value={filterLeadMode}
+              onChange={(e) => { setFilterLeadMode(e.target.value); setCurrentPage(1); }}
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:border-slate-900 cursor-pointer shadow-2xs"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-              </svg>
-              <span>Reset</span>
-            </button>
+              <option value="ALL">Lead Mode</option>
+              {leadModesList.filter(m => m !== "ALL").map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
 
+            {/* 2. Lead Type Dropdown */}
+            <select
+              value={filterLeadType}
+              onChange={(e) => { setFilterLeadType(e.target.value); setCurrentPage(1); }}
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:border-slate-900 cursor-pointer shadow-2xs"
+            >
+              <option value="ALL">Lead Type</option>
+              {leadTypesList.map(t => <option key={t} value={t}>{t}</option>)}
+            </select>
+
+            {/* 3. Lead Status Dropdown */}
+            <select
+              value={filterStatus}
+              onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }}
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:border-slate-900 cursor-pointer shadow-2xs"
+            >
+              <option value="ALL">Lead Status</option>
+              <option value="Hot">Hot</option>
+              <option value="Warm">Warm</option>
+              <option value="Cold">Cold</option>
+            </select>
+
+            {/* 4. Work Category Dropdown */}
+            <select
+              value={filterWorkCategory}
+              onChange={(e) => { setFilterWorkCategory(e.target.value); setCurrentPage(1); }}
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:border-slate-900 cursor-pointer shadow-2xs"
+            >
+              <option value="ALL">Work Category</option>
+              {workCategoryList.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+
+            {/* 5. Work Type Dropdown */}
+            <select
+              value={filterWorkType}
+              onChange={(e) => { setFilterWorkType(e.target.value); setCurrentPage(1); }}
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:border-slate-900 cursor-pointer shadow-2xs"
+            >
+              <option value="ALL">Work Type</option>
+              {availableWorkTypes.map(w => <option key={w} value={w}>{w}</option>)}
+            </select>
+
+            {/* Date Picker & Reset Button */}
+            <div className="flex items-center gap-2 col-span-2 sm:col-span-1">
+              <input
+                type="date"
+                value={filterDateFrom}
+                onChange={(e) => { setFilterDateFrom(e.target.value); setCurrentPage(1); }}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:border-slate-900 shadow-2xs"
+              />
+
+              {/* Orange Reset Button */}
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="bg-[#ff5722] hover:bg-[#e64a19] text-white p-2.5 rounded-xl shadow-xs transition-colors shrink-0 cursor-pointer"
+                title="Reset All Filters"
+              >
+                🔄
+              </button>
+            </div>
           </div>
         </div>
       )}
