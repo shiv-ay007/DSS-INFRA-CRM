@@ -33,7 +33,7 @@ const Lostlead = () => {
   };
 
   // Filter States
-  const [showFilters, setShowFilters] = useState(true);
+  const [showFilters, setShowFilters] = useState(false);
   const [filterScope, setFilterScope] = useState("ALL"); // "ALL", "SELF", "TEAM"
   const [searchTerm, setSearchTerm] = useState("");
   const [filterLeadMode, setFilterLeadMode] = useState("ALL");

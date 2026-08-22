@@ -80,7 +80,7 @@ const SalseTotalLeads = () => {
   };
 
   // Search & Filter States
-  const [showFilters, setShowFilters] = useState(true);
+  const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterScope, setFilterScope] = useState("ALL");
   const [filterLeadMode, setFilterLeadMode] = useState("ALL");

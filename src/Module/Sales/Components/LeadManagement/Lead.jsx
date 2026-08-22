@@ -52,7 +52,7 @@ const Lead = () => {
   };
 
   // Filters & Collapsible Filter State
-  const [showFilters, setShowFilters] = useState(true);
+  const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterScope, setFilterScope] = useState("ALL");
   const [filterStatus, setFilterStatus] = useState("All");
