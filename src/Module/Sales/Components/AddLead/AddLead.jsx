@@ -32,9 +32,9 @@ const Addlead = () => {
   // Lead Mode options
   const leadModeList = [
     "Business networking",
-    "By freelancer",
-    "By sales Team",
-    "Customer to customer"
+    "By Freelancer",
+    "By Sales Team",
+    "Customer to Customer"
   ];
 
   // Work Category options
@@ -111,7 +111,6 @@ const Addlead = () => {
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFetchingPincode, setIsFetchingPincode] = useState(false);
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [showUploadOptions, setShowUploadOptions] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [audioURL, setAudioURL] = useState(null);
@@ -215,20 +214,26 @@ const Addlead = () => {
   };
 
   // Handle File Upload
-  const handleFileUpload = (e, type) => {
+  const handleFileUpload = async (e, type) => {
     const files = Array.from(e.target.files);
     if (files.length === 0) return;
 
-    const newAttachments = files.map(file => ({
-      id: Date.now() + Math.random(),
-      file,
-      type,
-      name: file.name,
-      size: file.size,
-      url: URL.createObjectURL(file)
-    }));
+    const newAttachments = await Promise.all(
+      files.map(async (file) => {
+        const base64Url = await fileToBase64(file);
+        const resolvedType = type || (file.type.startsWith("image") ? "image" : file.type.startsWith("audio") ? "audio" : file.type.startsWith("video") ? "video" : "document");
+        return {
+          id: Date.now() + Math.random(),
+          file,
+          type: resolvedType,
+          name: file.name,
+          size: file.size,
+          url: base64Url || URL.createObjectURL(file)
+        };
+      })
+    );
 
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       remarkAttachments: [...prev.remarkAttachments, ...newAttachments]
     }));
@@ -240,9 +245,9 @@ const Addlead = () => {
 
   // Remove Attachment
   const removeAttachment = (id) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      remarkAttachments: prev.remarkAttachments.filter(item => item.id !== id)
+      remarkAttachments: prev.remarkAttachments.filter((item) => item.id !== id)
     }));
   };
 
@@ -259,9 +264,9 @@ const Addlead = () => {
         }
       };
 
-      recorder.onstop = () => {
+      recorder.onstop = async () => {
         const blob = new Blob(chunks, { type: 'audio/webm' });
-        const url = URL.createObjectURL(blob);
+        const base64Url = await fileToBase64(blob);
         const file = new File([blob], `audio-${Date.now()}.webm`, { type: 'audio/webm' });
         
         const newAttachment = {
@@ -270,20 +275,20 @@ const Addlead = () => {
           type: 'audio',
           name: `Audio-${Date.now()}.webm`,
           size: blob.size,
-          url: url
+          url: base64Url || URL.createObjectURL(blob)
         };
 
-        setFormData(prev => ({
+        setFormData((prev) => ({
           ...prev,
           remarkAttachments: [...prev.remarkAttachments, newAttachment]
         }));
 
-        setAudioURL(url);
+        setAudioURL(base64Url || URL.createObjectURL(blob));
         setIsRecording(false);
         setAudioChunks([]);
         
         // Stop all tracks
-        stream.getTracks().forEach(track => track.stop());
+        stream.getTracks().forEach((track) => track.stop());
       };
 
       recorder.start();
@@ -322,18 +327,20 @@ const Addlead = () => {
 
     if (!formData.clientName.trim()) {
       newErrors.clientName = "Client name is required";
+    } else if (/[0-9]/.test(formData.clientName)) {
+      newErrors.clientName = "Numbers are not allowed in client name";
     }
 
-    // Phone validation
-    const phoneRegex = /^\d{10}$/;
+    // Phone validation (10 digits, starting with 6, 7, 8, or 9)
+    const phoneRegex = /^[6-9]\d{9}$/;
     if (!formData.phoneNumber.trim()) {
       newErrors.phoneNumber = "Phone number is required";
     } else if (!phoneRegex.test(formData.phoneNumber.trim())) {
-      newErrors.phoneNumber = "Please enter valid 10-digit phone number";
+      newErrors.phoneNumber = "Phone number must start with 6, 7, 8, or 9 and be 10 digits";
     }
 
     if (formData.alternateNumber.trim() && !phoneRegex.test(formData.alternateNumber.trim())) {
-      newErrors.alternateNumber = "Alternate number must be 10 digits";
+      newErrors.alternateNumber = "Alternate number must start with 6, 7, 8, or 9 and be 10 digits";
     }
 
     // Email validation (optional but if provided should be valid)
@@ -371,8 +378,77 @@ const Addlead = () => {
     return true;
   };
 
+  const compressImageFile = (fileOrBlob, maxWidth = 1200, maxHeight = 1200, quality = 0.8) => {
+    return new Promise((resolve) => {
+      if (!(fileOrBlob instanceof Blob)) {
+        resolve("");
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+
+          if (width > maxWidth || height > maxHeight) {
+            if (width / height > maxWidth / maxHeight) {
+              height = Math.round((height * maxWidth) / width);
+              width = maxWidth;
+            } else {
+              width = Math.round((width * maxHeight) / height);
+              height = maxHeight;
+            }
+          }
+
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext("2d");
+          ctx.drawImage(img, 0, 0, width, height);
+
+          const compressedDataUrl = canvas.toDataURL("image/jpeg", quality);
+          resolve(compressedDataUrl);
+        };
+        img.onerror = () => resolve(e.target.result || "");
+        img.src = e.target.result;
+      };
+      reader.onerror = () => resolve("");
+      reader.readAsDataURL(fileOrBlob);
+    });
+  };
+
+  const fileToBase64 = async (fileOrBlobOrUrl) => {
+    if (!fileOrBlobOrUrl) return "";
+    if (typeof fileOrBlobOrUrl === "string" && fileOrBlobOrUrl.startsWith("data:")) {
+      return fileOrBlobOrUrl;
+    }
+    let target = fileOrBlobOrUrl;
+    if (typeof fileOrBlobOrUrl === "string" && fileOrBlobOrUrl.startsWith("blob:")) {
+      try {
+        const res = await fetch(fileOrBlobOrUrl);
+        target = await res.blob();
+      } catch (e) {
+        return fileOrBlobOrUrl;
+      }
+    }
+    if (target instanceof Blob && target.type?.startsWith("image")) {
+      const compressed = await compressImageFile(target);
+      if (compressed) return compressed;
+    }
+    if (!(target instanceof Blob)) {
+      return typeof fileOrBlobOrUrl === "string" ? fileOrBlobOrUrl : "";
+    }
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = () => resolve("");
+      reader.readAsDataURL(target);
+    });
+  };
+
   // Handle Form Submit & Save to LocalStorage
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!validateForm()) {
@@ -381,11 +457,56 @@ const Addlead = () => {
 
     setIsSubmitting(true);
 
-    setTimeout(() => {
-      const today = new Date();
+    const processedAttachments = await Promise.all(
+      (formData.remarkAttachments || []).map(async (att) => {
+        const sourceFile = att.file || att.blob;
+        const sourcePreview = att.url || att.preview || "";
+        
+        let finalUrl = await fileToBase64(sourceFile || sourcePreview);
+        if (!finalUrl && sourcePreview) {
+          finalUrl = sourcePreview;
+        }
+
+        let resolvedType = att.type || "";
+        if (!resolvedType && sourceFile && sourceFile.type) {
+          resolvedType = sourceFile.type.startsWith("image")
+            ? "image"
+            : sourceFile.type.startsWith("audio")
+            ? "audio"
+            : sourceFile.type.startsWith("video")
+            ? "video"
+            : "document";
+        }
+        const fileName = att.name || sourceFile?.name || "attachment";
+        if (!resolvedType && fileName) {
+          if (fileName.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i)) resolvedType = "image";
+          else if (fileName.match(/\.(mp3|wav|ogg|m4a|webm|aac)$/i) || fileName.includes("audio")) resolvedType = "audio";
+          else if (fileName.match(/\.(mp4|webm|mov|mkv)$/i) || fileName.includes("video")) resolvedType = "video";
+          else resolvedType = "document";
+        }
+
+        const attId = att.id || Date.now() + Math.random();
+        window.__DSS_MEDIA_CACHE = window.__DSS_MEDIA_CACHE || {};
+        if (finalUrl) {
+          window.__DSS_MEDIA_CACHE[attId] = finalUrl;
+          if (fileName) window.__DSS_MEDIA_CACHE[fileName] = finalUrl;
+        }
+
+        return {
+          id: attId,
+          name: fileName,
+          type: resolvedType || "image",
+          size: att.size || sourceFile?.size || 0,
+          url: finalUrl
+        };
+      })
+    );
+
+      const selectedDate = formData.date ? new Date(formData.date) : new Date();
+      const today = isNaN(selectedDate.getTime()) ? new Date() : selectedDate;
       const options = { day: '2-digit', month: 'short', year: 'numeric' };
       const formattedDate = today.toLocaleDateString('en-GB', options);
-      const formattedTime = today.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+      const formattedTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
 
       let finalWorkType = [...formData.workType];
       if (finalWorkType.includes("Other")) {
@@ -405,10 +526,12 @@ const Addlead = () => {
         phoneNumber: formData.phoneNumber,
         contact: formData.phoneNumber,
         alternateNumber: formData.alternateNumber,
+        alternateNo: formData.alternateNumber,
         emailAddress: formData.emailAddress,
         email: formData.emailAddress,
         status: formData.leadStatus || "Warm",
         leadStatus: formData.leadStatus || "Warm",
+        leadLabel: (formData.leadStatus || "Warm").toUpperCase(),
         leadMode: formData.leadMode,
         leadSource: formData.leadMode || "Business networking",
         leadType: formData.leadType || "FRESH",
@@ -416,7 +539,7 @@ const Addlead = () => {
         jobType: formData.jobType || "NEW",
         clientType: formData.clientType || "Individual",
         workType: finalWorkType,
-        requirement: formData.remark || "New Lead Registration",
+        requirement: formData.remark || formData.projectDetail || "New Lead Registration",
         expectedBusiness: formData.expectedBusiness || "0",
         expectedRevenue: formData.expectedBusiness || "0",
         pincode: formData.pincode,
@@ -426,19 +549,17 @@ const Addlead = () => {
         salesPerson: formData.salesPerson || "Sales TL (Current User)",
         assignTo: formData.salesPerson || "Sales TL (Current User)",
         address: formData.address,
+        siteAddress: formData.address,
         clientDesignation: formData.clientDesignation || "",
         googleLocation: formData.googleLocation || "",
         projectDetail: formData.projectDetail || "",
         projectDetails: formData.projectDetail || "",
         remark: formData.remark || "",
-        remarkAttachments: formData.remarkAttachments.map(att => ({
-          name: att.name,
-          type: att.type,
-          size: att.size
-        })),
+        remarkAttachments: processedAttachments,
+        attachments: processedAttachments,
         whatsappNumber: formData.whatsappNumber || formData.phoneNumber,
         createdDate: formattedDate,
-        date: today.toISOString().split("T")[0],
+        date: formData.date || today.toISOString().split("T")[0],
         createdTime: formattedTime,
         leadAge: "0 Days",
         nextFollowupDate: formattedDate,
@@ -449,29 +570,64 @@ const Addlead = () => {
         followupHistory: []
       };
 
+      const safeSaveLocalStorage = (key, dataArray) => {
+        try {
+          localStorage.setItem(key, JSON.stringify(dataArray));
+        } catch (err) {
+          console.warn(`Quota exceeded for ${key}, trimming large base64 URLs...`, err);
+          try {
+            const sanitized = dataArray.map((item) => ({
+              ...item,
+              remarkAttachments: (item.remarkAttachments || []).map((att) => ({
+                ...att,
+                url: att.url?.startsWith("data:") ? "" : att.url
+              })),
+              attachments: (item.attachments || []).map((att) => ({
+                ...att,
+                url: att.url?.startsWith("data:") ? "" : att.url
+              }))
+            }));
+            localStorage.setItem(key, JSON.stringify(sanitized));
+          } catch (e) {
+            console.error(`Failed to save to ${key}:`, e);
+          }
+        }
+      };
+
       try {
         // 1. Save to dss_leads (Used by Total Leads Directory)
         const savedTotal = localStorage.getItem("dss_leads");
         const currentTotalLeads = savedTotal ? JSON.parse(savedTotal) : initialTotalLeads;
         const updatedTotalLeads = [newLead, ...currentTotalLeads];
-        localStorage.setItem("dss_leads", JSON.stringify(updatedTotalLeads));
+        safeSaveLocalStorage("dss_leads", updatedTotalLeads);
 
         // 2. Save to dss_lead_management_sheet_v1 (Used by Lead Sheet)
         const savedSheet = localStorage.getItem("dss_lead_management_sheet_v1");
         const currentSheetLeads = savedSheet ? JSON.parse(savedSheet) : [];
         const updatedSheetLeads = [newLead, ...currentSheetLeads];
-        localStorage.setItem("dss_lead_management_sheet_v1", JSON.stringify(updatedSheetLeads));
+        safeSaveLocalStorage("dss_lead_management_sheet_v1", updatedSheetLeads);
+
+        // 3. Save to dss_assigned_leads (Used by Assigned Leads)
+        const savedAssigned = localStorage.getItem("dss_assigned_leads");
+        const currentAssignedLeads = savedAssigned ? JSON.parse(savedAssigned) : [];
+        const updatedAssignedLeads = [newLead, ...currentAssignedLeads];
+        safeSaveLocalStorage("dss_assigned_leads", updatedAssignedLeads);
+
+        // 4. Save to dss_scheduled_leads_sheet (Used by Followup Directory)
+        const savedScheduled = localStorage.getItem("dss_scheduled_leads_sheet");
+        const currentScheduledLeads = savedScheduled ? JSON.parse(savedScheduled) : [];
+        const updatedScheduledLeads = [newLead, ...currentScheduledLeads];
+        safeSaveLocalStorage("dss_scheduled_leads_sheet", updatedScheduledLeads);
       } catch (err) {
         console.error("Failed to save lead to localStorage", err);
       }
 
       setIsSubmitting(false);
-      setShowSuccessModal(true);
       toast.success("Lead Captured Successfully! 🎯", {
         position: "top-right",
         autoClose: 3000,
       });
-    }, 500);
+      navigate("/sales/leads/total");
   };
 
   // Reset Form
@@ -681,7 +837,10 @@ const Addlead = () => {
               name="clientName"
               placeholder="Enter Client Name"
               value={formData.clientName}
-              onChange={handleChange}
+              onChange={(e) => {
+                const val = e.target.value.replace(/[0-9]/g, "");
+                handleChange({ target: { name: "clientName", value: val } });
+              }}
               className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-1 transition-all placeholder:text-slate-400 ${
                 errors.clientName ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
               }`}
@@ -918,47 +1077,6 @@ const Addlead = () => {
         </div>
 
       </form>
-
-      {/* SUCCESS POPUP MODAL */}
-      {showSuccessModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-          <div className="bg-white rounded-2xl p-6 sm:p-7 max-w-md w-full text-center shadow-xl border border-slate-100">
-            <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-3">
-              <svg className="w-8 h-8" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
-            </div>
-            <h3 className="text-xl font-bold text-slate-900">
-              Lead Captured Successfully!
-            </h3>
-            <p className="text-sm text-slate-600 mt-2">
-              Lead for <strong className="text-slate-900">{formData.clientName}</strong> has been registered and saved to your pipeline.
-            </p>
-            <div className="mt-6 flex flex-col sm:flex-row gap-2.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowSuccessModal(false);
-                  handleReset();
-                }}
-                className="flex-1 py-2.5 px-4 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm font-semibold transition-colors cursor-pointer"
-              >
-                + Add Another Lead
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowSuccessModal(false);
-                  navigate("/sales/leads/total");
-                }}
-                className="flex-1 py-2.5 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-semibold transition-colors cursor-pointer shadow-sm"
-              >
-                Go to Total Leads Directory
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );

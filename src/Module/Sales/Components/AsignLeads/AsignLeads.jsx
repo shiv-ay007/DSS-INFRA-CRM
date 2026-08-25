@@ -3,9 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import Table from "../../../../Common/Components/Table";
+import ScopeTabs from "../../../../Common/Components/ScopeTabs";
 import { initialAssignedLeads, teamMembers } from "../../data/assignedLeadsData";
 import { availableWorkTypes, workCategoryList, leadTypesList } from "../../data/addLeadData";
-import { FaUserPlus, FaSearch, FaFilter, FaUserCheck, FaUser } from "react-icons/fa";
+import { FaUserPlus, FaSearch, FaFilter, FaUserCheck, FaUser, FaRegCheckCircle } from "react-icons/fa";
 
 const leadModesList = [
   "ALL",
@@ -40,6 +41,7 @@ const AsignLeads = () => {
   // Filter States
   const [showFilters, setShowFilters] = useState(false);
   const [assignmentTab, setAssignmentTab] = useState("all");
+  const [filterExecutive, setFilterExecutive] = useState("ALL");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterLeadMode, setFilterLeadMode] = useState("ALL");
   const [filterLeadType, setFilterLeadType] = useState("ALL");
@@ -67,10 +69,11 @@ const AsignLeads = () => {
     setFilterStatus("ALL");
     setFilterDateFrom("");
     setAssignmentTab("all");
+    setFilterExecutive("ALL");
     setCurrentPage(1);
   };
 
-  // Handler to move lead to Followup or Lost Leads based on Client Status
+  // Handler to move lead to Lead Management (Followup) or Lost Leads based on Client Status
   const handleSendToSalesManagement = () => {
     if (!statusModalLead) return;
 
@@ -84,8 +87,8 @@ const AsignLeads = () => {
     const formattedTime = today.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
 
     if (selectedClientStatus === "INTERESTED") {
-      // 1. Move to Followup Leads
-      const followupLeadData = {
+      // 1. Move to Lead Management (dss_lead_management_sheet_v1) & Followup Leads
+      const leadData = {
         ...statusModalLead,
         leadStatus: "Hot",
         status: "INTERESTED",
@@ -97,22 +100,30 @@ const AsignLeads = () => {
       };
 
       try {
+        // Save to Lead Management Sheet
+        const savedMgmt = localStorage.getItem("dss_lead_management_sheet_v1");
+        const currentMgmt = savedMgmt ? JSON.parse(savedMgmt) : [];
+        const filteredMgmt = currentMgmt.filter(l => l.id !== statusModalLead.id);
+        localStorage.setItem("dss_lead_management_sheet_v1", JSON.stringify([leadData, ...filteredMgmt]));
+
+        // Sync to Followup Leads
         const savedFollowup = localStorage.getItem("dss_followup_leads");
         const currentFollowup = savedFollowup ? JSON.parse(savedFollowup) : [];
         const filteredFollowup = currentFollowup.filter(l => l.id !== statusModalLead.id);
-        localStorage.setItem("dss_followup_leads", JSON.stringify([followupLeadData, ...filteredFollowup]));
+        localStorage.setItem("dss_followup_leads", JSON.stringify([leadData, ...filteredFollowup]));
 
+        // Sync to Scheduled Sheet
         const savedScheduled = localStorage.getItem("dss_scheduled_leads_sheet");
         const currentScheduled = savedScheduled ? JSON.parse(savedScheduled) : [];
         const filteredScheduled = currentScheduled.filter(l => l.id !== statusModalLead.id);
-        localStorage.setItem("dss_scheduled_leads_sheet", JSON.stringify([followupLeadData, ...filteredScheduled]));
+        localStorage.setItem("dss_scheduled_leads_sheet", JSON.stringify([leadData, ...filteredScheduled]));
       } catch (e) {
-        console.error("Error saving to followup leads:", e);
+        console.error("Error saving lead to Lead Management:", e);
       }
 
-      toast.success(`Lead ${statusModalLead.clientName || statusModalLead.concernPersonName} marked as INTERESTED and sent to Followup! 🎯`);
+      toast.success(`Lead ${statusModalLead.clientName || statusModalLead.concernPersonName} marked as INTERESTED and sent to Lead Management! 🎯`);
     } else if (selectedClientStatus === "NOT INTERESTED") {
-      // 2. Move to Lost Leads
+      // 2. Move to Lost Leads (dss_lost_leads)
       const lostLeadData = {
         ...statusModalLead,
         leadStatus: "Cold",
@@ -158,49 +169,33 @@ const AsignLeads = () => {
       label: "ACTIONS",
       align: "center",
       render: (val, row) => {
-        const assignee = (row.assignTo || row.assignedTo || row.salesPerson || "").toLowerCase();
-        const isSelf = assignee.includes("self") || assignee.includes("tl") || assignee.includes("current");
-
         return (
           <div className="flex items-center justify-center gap-1.5">
             {/* View Lead Details Eye Button */}
             <button
               type="button"
               onClick={() => navigate(`/sales/leads/details/${row.id}`, { state: { lead: row } })}
-              className="w-7 h-7 rounded-lg border border-orange-400 text-orange-500 hover:bg-orange-500 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
+              className="w-6.5 h-6.5 rounded-md border border-orange-400 text-orange-500 hover:bg-orange-500 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
               title="View Lead Details"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
               </svg>
             </button>
 
-            {/* ONLY FOR SELF ASSIGNED LEADS: Interested / Not Interested Modal Button */}
-            {isSelf ? (
+            {/* ONLY ON SELF TAB: 1 Single Green Check-Circle Icon Button for Client Status Modal */}
+            {assignmentTab?.toLowerCase() === "self" && (
               <button
                 type="button"
                 onClick={() => {
                   setStatusModalLead(row);
                   setSelectedClientStatus("");
                 }}
-                className="w-7 h-7 rounded-lg border border-blue-500 text-blue-600 hover:bg-blue-600 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
+                className="w-6.5 h-6.5 rounded-md border border-emerald-500 text-emerald-600 hover:bg-emerald-600 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
                 title="Client Status (Interested / Not Interested)"
               >
-                <FaUserCheck className="w-3.5 h-3.5" />
-              </button>
-            ) : (
-              /* FOR TEAM LEADS: Assign / Re-assign Lead to Team Member Button */
-              <button
-                type="button"
-                onClick={() => {
-                  setReassignModalLead(row);
-                  setNewAssignee(row.assignTo || row.assignedTo || teamMembers[0]);
-                }}
-                className="w-7 h-7 rounded-lg border border-emerald-500 text-emerald-600 hover:bg-emerald-600 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
-                title="Assign / Re-assign to Team Member"
-              >
-                <FaUserPlus className="w-3.5 h-3.5" />
+                <FaRegCheckCircle className="w-3.5 h-3.5 text-emerald-600 hover:text-white" />
               </button>
             )}
           </div>
@@ -215,8 +210,94 @@ const AsignLeads = () => {
         return (
           <div className="text-xs font-medium text-slate-700 whitespace-nowrap">
             <div>{dateStr}</div>
-            <div className="text-[11px] font-mono text-slate-500 font-bold">{timeStr}</div>
+            <div className="text-[10px] font-mono text-slate-500 font-bold">{timeStr}</div>
           </div>
+        );
+      }
+    },
+    clientDetails: {
+      label: "CLIENT DETAILS",
+      render: (val, row) => {
+        const name = row.clientName || row.concernPersonName || "--";
+        const phone = row.phoneNumber || row.contact || row.whatsappNumber || "--";
+        const email = row.emailAddress || row.email || "--";
+
+        return (
+          <div className="text-xs space-y-0.5 max-w-[160px]">
+            {/* Line 1: Client Name (Highlighted with color badge) */}
+            <div className="mb-0.5">
+              <span
+                className="font-extrabold text-emerald-900 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-200 shadow-2xs inline-block truncate max-w-full text-xs"
+                title={name}
+              >
+                {name}
+              </span>
+            </div>
+
+            {/* Line 2: Contact Number */}
+            {phone !== "--" ? (
+              <div>
+                <a
+                  href={`tel:${phone}`}
+                  className="font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                >
+                  {phone}
+                </a>
+              </div>
+            ) : (
+              <div className="text-slate-400">--</div>
+            )}
+
+            {/* Line 3: Email Address */}
+            {email !== "--" ? (
+              <div>
+                <a
+                  href={`mailto:${email}`}
+                  className="font-mono text-[11px] text-blue-600 hover:text-blue-800 hover:underline truncate block cursor-pointer"
+                  title={email}
+                >
+                  {email}
+                </a>
+              </div>
+            ) : (
+              <div className="text-slate-400 font-mono text-[11px]">--</div>
+            )}
+          </div>
+        );
+      }
+    },
+    leadType: {
+      label: "LEAD TYPE",
+      render: (val, row) => {
+        const type = (row.leadType || val || "FRESH").toUpperCase();
+        const isFresh = type === "FRESH";
+        return (
+          <span
+            className={`px-2 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wide border shadow-2xs ${
+              isFresh
+                ? "bg-emerald-600 text-white border-emerald-700"
+                : "bg-blue-600 text-white border-blue-700"
+            }`}
+          >
+            {type}
+          </span>
+        );
+      }
+    },
+    leadStatus: {
+      label: "LEAD STATUS",
+      render: (val, row) => {
+        const status = (row.leadStatus || row.status || "Warm").toUpperCase();
+        const colors = {
+          HOT: "bg-rose-100 text-rose-800 border-rose-200",
+          WARM: "bg-amber-100 text-amber-800 border-amber-200",
+          COLD: "bg-sky-100 text-sky-800 border-sky-200",
+          NEW: "bg-emerald-100 text-emerald-800 border-emerald-200"
+        };
+        return (
+          <span className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold uppercase border ${colors[status] || "bg-slate-100 text-slate-700 border-slate-200"}`}>
+            {status}
+          </span>
         );
       }
     },
@@ -228,18 +309,10 @@ const AsignLeads = () => {
         </span>
       )
     },
-    leadType: {
-      label: "LEAD TYPE",
-      render: (val, row) => (
-        <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-slate-100 text-slate-800 border border-slate-300">
-          {row.leadType || "FRESH"}
-        </span>
-      )
-    },
     workCategory: {
       label: "WORK CATEGORY",
       render: (val, row) => (
-        <span className="px-2.5 py-0.5 rounded-md text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+        <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
           {row.workCategory || "Design"}
         </span>
       )
@@ -251,78 +324,22 @@ const AsignLeads = () => {
           ? row.workType.join(", ")
           : (row.workType || "Concept Drawing");
         return (
-          <div className="max-w-[180px] truncate text-xs font-medium text-slate-700" title={wt}>
+          <div className="max-w-[140px] truncate text-xs font-medium text-slate-700" title={wt}>
             {wt}
           </div>
-        );
-      }
-    },
-    leadStatus: {
-      label: "LEAD STATUS",
-      render: (val, row) => {
-        const status = row.leadStatus || row.status || "Hot";
-        let color = "bg-amber-50 text-amber-700 border-amber-300";
-        if (status.toLowerCase().includes("hot")) color = "bg-rose-50 text-rose-700 border-rose-300";
-        if (status.toLowerCase().includes("warm")) color = "bg-amber-50 text-amber-700 border-amber-300";
-        if (status.toLowerCase().includes("cold")) color = "bg-sky-50 text-sky-700 border-sky-300";
-        return (
-          <span className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold border ${color}`}>
-            {status}
-          </span>
-        );
-      }
-    },
-    clientName: {
-      label: "CLIENT NAME",
-      render: (val, row) => (
-        <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-extrabold bg-emerald-50 text-emerald-800 border border-emerald-200 shadow-2xs">
-          {row.clientName || row.concernPersonName || "Unnamed Client"}
-        </span>
-      )
-    },
-    phoneNumber: {
-      label: "PHONE NUMBER",
-      render: (val, row) => {
-        const num = row.phoneNumber || row.contact || "";
-        return num ? (
-          <a
-            href={`tel:${num}`}
-            className="text-xs font-mono font-bold text-blue-600 hover:text-blue-800 hover:underline"
-          >
-            +91 {num}
-          </a>
-        ) : (
-          <span className="text-xs text-slate-400">--</span>
         );
       }
     },
     alternateNumber: {
       label: "ALTERNATE NUMBER",
       render: (val, row) => {
-        const num = row.alternateNumber || "";
-        return num ? (
+        const alt = row.alternateNumber || "--";
+        return alt !== "--" ? (
           <a
-            href={`tel:${num}`}
-            className="text-xs font-mono font-medium text-slate-700 hover:text-blue-600 hover:underline"
+            href={`tel:${alt}`}
+            className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
           >
-            +91 {num}
-          </a>
-        ) : (
-          <span className="text-xs text-slate-400">--</span>
-        );
-      }
-    },
-    emailAddress: {
-      label: "EMAIL ADDRESS",
-      render: (val, row) => {
-        const mail = row.emailAddress || row.email || "";
-        return mail ? (
-          <a
-            href={`mailto:${mail}`}
-            className="text-xs font-medium text-blue-600 hover:underline max-w-[160px] truncate block"
-            title={mail}
-          >
-            {mail}
+            {alt}
           </a>
         ) : (
           <span className="text-xs text-slate-400">--</span>
@@ -331,11 +348,14 @@ const AsignLeads = () => {
     },
     address: {
       label: "ADDRESS",
-      render: (val, row) => (
-        <div className="max-w-[180px] truncate text-xs text-slate-700 font-medium" title={row.address}>
-          {row.address || "--"}
-        </div>
-      )
+      render: (val, row) => {
+        const addr = row.address || row.siteAddress || "--";
+        return (
+          <div className="max-w-[140px] truncate text-xs text-slate-700 font-medium" title={addr}>
+            {addr}
+          </div>
+        );
+      }
     },
     pincode: {
       label: "PINCODE",
@@ -377,8 +397,8 @@ const AsignLeads = () => {
       render: (val, row) => {
         const assignee = row.assignTo || row.assignedTo || row.salesPerson || "Sales TL";
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-800 border border-blue-200">
-            <span className="w-2 h-2 rounded-full bg-blue-500" />
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
             {assignee}
           </span>
         );
@@ -389,7 +409,7 @@ const AsignLeads = () => {
       render: (val, row) => {
         const remark = row.assignmentRemark || "--";
         return (
-          <div className="max-w-[180px] truncate text-xs text-slate-700 font-medium" title={remark}>
+          <div className="max-w-[150px] truncate text-xs text-slate-700 font-medium" title={remark}>
             {remark}
           </div>
         );
@@ -400,7 +420,7 @@ const AsignLeads = () => {
       render: (val, row) => {
         const pd = row.projectDetail || row.projectDetails || "--";
         return (
-          <div className="max-w-[200px] truncate text-xs text-slate-700 font-medium" title={pd}>
+          <div className="max-w-[150px] truncate text-xs text-slate-700 font-medium" title={pd}>
             {pd}
           </div>
         );
@@ -411,27 +431,31 @@ const AsignLeads = () => {
       render: (val, row) => {
         const rem = row.remark || row.requirement || "--";
         return (
-          <div className="max-w-[180px] truncate text-xs text-slate-700 font-medium" title={rem}>
+          <div className="max-w-[150px] truncate text-xs text-slate-700 font-medium" title={rem}>
             {rem}
           </div>
         );
       }
     }
-  }), [currentPage, rowsPerPage, navigate]);
+  }), [currentPage, rowsPerPage, navigate, assignmentTab]);
 
   // Filtering Logic
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
+      const normTab = (assignmentTab || "").toLowerCase();
       // Scope Filter (All / Self / Team)
-      if (assignmentTab === "self") {
+      if (normTab === "self") {
         const assigned = (lead.assignTo || lead.assignedTo || lead.salesPerson || "").toLowerCase();
         if (!assigned.includes("self") && !assigned.includes("tl") && !assigned.includes("current")) {
           return false;
         }
       }
-      if (assignmentTab === "team") {
+      if (normTab === "team") {
         const assigned = (lead.assignTo || lead.assignedTo || lead.salesPerson || "").toLowerCase();
         if (assigned.includes("self") || assigned.includes("tl") || assigned.includes("current")) {
+          return false;
+        }
+        if (filterExecutive !== "ALL" && !assigned.includes(filterExecutive.toLowerCase())) {
           return false;
         }
       }
@@ -469,6 +493,7 @@ const AsignLeads = () => {
   }, [
     leads,
     assignmentTab,
+    filterExecutive,
     searchTerm,
     filterLeadMode,
     filterLeadType,
@@ -538,8 +563,8 @@ const AsignLeads = () => {
               onClick={() => setShowFilters((prev) => !prev)}
               className={`h-9 px-3.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs ${
                 showFilters
-                  ? "bg-slate-900 text-white border-slate-900"
-                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                  ? "bg-slate-900 text-white border-slate-900 shadow-md"
+                  : "bg-[#FF5722] text-[#white] border-[#FF5722] hover:bg-[#e64a19]"
               }`}
             >
               <FaFilter className="w-3.5 h-3.5" />
@@ -553,44 +578,20 @@ const AsignLeads = () => {
         }
       />
 
-      {/* 2. TAB BUTTONS (All Assigned | + Self Assigned | 👥 Team Assigned) */}
-      <div className="flex justify-center w-full">
-        <div className="inline-flex p-1.5 rounded-2xl bg-emerald-50/80 border border-emerald-200 gap-2 shadow-2xs">
-          <button
-            type="button"
-            onClick={() => { setAssignmentTab("all"); setCurrentPage(1); }}
-            className={`px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
-              assignmentTab === "all" ? "bg-emerald-600 text-white shadow-md" : "bg-transparent text-emerald-900 hover:bg-white/80"
-            }`}
-          >
-            All
-          </button>
-
-          <button
-            type="button"
-            onClick={() => { setAssignmentTab("self"); setCurrentPage(1); }}
-            className={`px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              assignmentTab === "self" ? "bg-emerald-600 text-white shadow-md" : "bg-transparent text-emerald-900 hover:bg-white/80"
-            }`}
-          >
-            <FaUserPlus className="w-3.5 h-3.5" />
-            <span>Self</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => { setAssignmentTab("team"); setCurrentPage(1); }}
-            className={`px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              assignmentTab === "team" ? "bg-emerald-600 text-white shadow-md" : "bg-transparent text-emerald-900 hover:bg-white/80"
-            }`}
-          >
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
-            </svg>
-            <span>Team</span>
-          </button>
-        </div>
-      </div>
+      {/* 2. SCOPE TABS WITH EXECUTIVE DROPDOWN */}
+      <ScopeTabs
+        activeTab={assignmentTab}
+        onTabChange={(tab) => {
+          setAssignmentTab(tab);
+          setCurrentPage(1);
+        }}
+        selectedExecutive={filterExecutive}
+        onExecutiveChange={(exec) => {
+          setFilterExecutive(exec);
+          setCurrentPage(1);
+        }}
+        executives={teamMembers}
+      />
 
       {/* 3. COLLAPSIBLE FILTER PANEL */}
       {showFilters && (

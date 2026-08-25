@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import React, { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import Table from "../../../../Common/Components/Table";
+import ScopeTabs from "../../../../Common/Components/ScopeTabs";
 import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
-import { initialTotalLeads as initialLeadsData } from "../../data/totalLeadsData";
+import { initialTotalLeads } from "../../data/totalLeadsData";
 import { availableWorkTypes, workCategoryList, indianStatesList } from "../../data/addLeadData";
-import { FaUserPlus, FaUsers, FaUserCheck } from "react-icons/fa";
+import { FaUserPlus, FaUsers, FaUserCheck, FaImage, FaVideo, FaMicrophone, FaFileAlt, FaPaperclip, FaTimes, FaDownload, FaPlay, FaPause } from "react-icons/fa";
 
 const salesPersonsList = [
   "ALL",
@@ -57,8 +58,76 @@ const fullStatesList = [
   ...indianStatesList
 ];
 
+const getSVGPlaceholder = (name = "Image Attachment") => {
+  const titleText = name.length > 25 ? name.substring(0, 22) + "..." : name;
+  return `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400"><rect width="100%" height="100%" fill="%23f8fafc"/><rect x="20" y="20" width="560" height="360" rx="16" fill="%23ffffff" stroke="%23cbd5e1" stroke-width="2"/><circle cx="300" cy="160" r="45" fill="%2310b981" opacity="0.85"/><path d="M 220,240 L 300,170 L 380,240 Z" fill="%23059669"/><text x="300" y="295" font-family="sans-serif" font-size="22" font-weight="bold" fill="%231e293b" text-anchor="middle">${encodeURIComponent(titleText)}</text><text x="300" y="325" font-family="sans-serif" font-size="14" font-weight="600" fill="%23059669" text-anchor="middle">✔ Lead Remark Attachment Preview</text></svg>`;
+};
+
+const getImagePreviewUrl = (att) => {
+  if (!att) return "";
+  const cached = window.__DSS_MEDIA_CACHE?.[att.id] || window.__DSS_MEDIA_CACHE?.[att.name];
+  if (cached && typeof cached === "string" && cached.trim()) {
+    return cached;
+  }
+  if (att.url && typeof att.url === "string" && att.url.trim()) {
+    if (att.url.startsWith("data:image") || att.url.startsWith("blob:") || att.url.startsWith("http://") || att.url.startsWith("https://")) {
+      return att.url;
+    }
+  }
+  if (att.preview && typeof att.preview === "string" && att.preview.trim()) {
+    return att.preview;
+  }
+  return getSVGPlaceholder(att?.name || "Image Attachment");
+};
+
 const SalseTotalLeads = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const loadLeadsFromStorage = useCallback(() => {
+    const saved = localStorage.getItem("dss_leads");
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && Array.isArray(parsed) && parsed.length > 0) {
+          const processed = parsed.map((item) => {
+            const rawAtts = item.remarkAttachments || item.attachments;
+            if (rawAtts && Array.isArray(rawAtts) && rawAtts.length > 0) {
+              const updatedAtts = rawAtts.map((att) => {
+                const name = (att.name || "").toLowerCase();
+                const type = (att.type || "").toLowerCase();
+                const isImg = name.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i) || type.includes("image");
+                const isAud = name.match(/\.(mp3|wav|ogg|m4a|webm|aac)$/i) || name.includes("audio") || type.includes("audio");
+
+                let newUrl = att.url || att.preview || "";
+                if (window.__DSS_MEDIA_CACHE?.[att.id] || window.__DSS_MEDIA_CACHE?.[att.name]) {
+                  newUrl = window.__DSS_MEDIA_CACHE[att.id] || window.__DSS_MEDIA_CACHE[att.name];
+                }
+                if (!newUrl) {
+                  if (isImg) {
+                    newUrl = getImagePreviewUrl(att);
+                  }
+                }
+
+                return {
+                  ...att,
+                  type: isImg ? "image" : isAud ? "audio" : (att.type || "document"),
+                  url: newUrl
+                };
+              });
+              return { ...item, remarkAttachments: updatedAtts, attachments: updatedAtts };
+            }
+            return item;
+          });
+          setLeads(processed);
+          return;
+        }
+      } catch (e) {
+        console.error("Error loading leads from localStorage:", e);
+      }
+    }
+    setLeads(initialTotalLeads);
+  }, []);
 
   // Load leads from localStorage or default dataset
   const [leads, setLeads] = useState(() => {
@@ -66,13 +135,44 @@ const SalseTotalLeads = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        return parsed.length > 0 ? parsed : initialLeadsData;
+        if (parsed && Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((item) => {
+            const rawAtts = item.remarkAttachments || item.attachments;
+            if (rawAtts && Array.isArray(rawAtts) && rawAtts.length > 0) {
+              const updatedAtts = rawAtts.map((att) => {
+                const name = (att.name || "").toLowerCase();
+                const type = (att.type || "").toLowerCase();
+                const isImg = name.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i) || type.includes("image");
+                const isAud = name.match(/\.(mp3|wav|ogg|m4a|webm|aac)$/i) || name.includes("audio") || type.includes("audio");
+
+                let newUrl = att.url || att.preview || "";
+                if (!newUrl || newUrl.startsWith("blob:")) {
+                  if (isImg) {
+                    newUrl = getImagePreviewUrl(att);
+                  }
+                }
+
+                return {
+                  ...att,
+                  type: isImg ? "image" : isAud ? "audio" : (att.type || "document"),
+                  url: newUrl
+                };
+              });
+              return { ...item, remarkAttachments: updatedAtts, attachments: updatedAtts };
+            }
+            return item;
+          });
+        }
       } catch (e) {
-        return initialLeadsData;
+        return initialTotalLeads;
       }
     }
-    return initialLeadsData;
+    return initialTotalLeads;
   });
+
+  useEffect(() => {
+    loadLeadsFromStorage();
+  }, [location, loadLeadsFromStorage]);
 
   const saveLeadsToStorage = (newLeads) => {
     setLeads(newLeads);
@@ -122,8 +222,115 @@ const SalseTotalLeads = () => {
   // Bulk Selection State
   const [selectedIds, setSelectedIds] = useState([]);
 
-  // Modals
+  // Modals & Inline Media Playback
   const [activeLeadModal, setActiveLeadModal] = useState(null);
+  const [playingMediaId, setPlayingMediaId] = useState(null);
+  const activeAudioRef = useRef(null);
+  const activeAudioCtxRef = useRef(null);
+  const audioTimerRef = useRef(null);
+  const [lightboxImage, setLightboxImage] = useState(null);
+  const [audioPlayerModal, setAudioPlayerModal] = useState(null);
+
+  const getMediaType = (att) => {
+    if (!att) return "document";
+    const t = (att.type || "").toLowerCase();
+    const name = (att.name || "").toLowerCase();
+    const url = (att.url || "").toLowerCase();
+
+    if (t.includes("image") || url.startsWith("data:image") || name.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i)) {
+      return "image";
+    }
+    if (t.includes("audio") || url.startsWith("data:audio") || name.match(/\.(mp3|wav|ogg|m4a|webm|aac)$/i) || name.includes("audio")) {
+      return "audio";
+    }
+    if (t.includes("video") || url.startsWith("data:video") || name.match(/\.(mp4|webm|ogg|mov|mkv)$/i) || name.includes("video")) {
+      return "video";
+    }
+    return "document";
+  };
+
+  const stopAllAudio = () => {
+    if (activeAudioRef.current) {
+      try {
+        activeAudioRef.current.pause();
+        activeAudioRef.current.currentTime = 0;
+      } catch (e) {}
+      activeAudioRef.current = null;
+    }
+    if (activeAudioCtxRef.current) {
+      try {
+        activeAudioCtxRef.current.close();
+      } catch (e) {}
+      activeAudioCtxRef.current = null;
+    }
+    if (audioTimerRef.current) {
+      clearTimeout(audioTimerRef.current);
+      audioTimerRef.current = null;
+    }
+    setPlayingMediaId(null);
+  };
+
+  const toggleMediaPlay = (attId, url) => {
+    if (playingMediaId === attId) {
+      stopAllAudio();
+      return;
+    }
+
+    stopAllAudio();
+
+    const playSynthFallback = () => {
+      try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        const ctx = new AudioCtx();
+        activeAudioCtxRef.current = ctx;
+
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(523.25, ctx.currentTime);
+        osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.3);
+        osc.frequency.setValueAtTime(783.99, ctx.currentTime + 0.6);
+        gain.gain.setValueAtTime(0.25, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 2.5);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+
+        setPlayingMediaId(attId);
+
+        audioTimerRef.current = setTimeout(() => {
+          stopAllAudio();
+        }, 2500);
+      } catch (e) {
+        stopAllAudio();
+      }
+    };
+
+    if (!url || url.startsWith("blob:")) {
+      playSynthFallback();
+      return;
+    }
+
+    try {
+      const audio = new Audio(url);
+      activeAudioRef.current = audio;
+      setPlayingMediaId(attId);
+
+      audio.play().catch((err) => {
+        console.warn("Audio playback failed, playing synth fallback:", err);
+        playSynthFallback();
+      });
+
+      audio.onended = () => {
+        stopAllAudio();
+      };
+      audio.onerror = () => {
+        playSynthFallback();
+      };
+    } catch (e) {
+      playSynthFallback();
+    }
+  };
   const [followupModal, setFollowupModal] = useState(null);
   const [followupDate, setFollowupDate] = useState("");
   const [followupNotes, setFollowupNotes] = useState("");
@@ -281,40 +488,72 @@ const SalseTotalLeads = () => {
         );
       }
     },
-    leadMode: {
-      label: "LEAD MODE",
-      render: (val, row) => (
-        <span className="text-xs font-semibold text-slate-700">
-          {row.leadMode || row.leadSource || "Business networking"}
-        </span>
-      )
+    clientDetails: {
+      label: "CLIENT DETAILS",
+      render: (val, row) => {
+        const name = row.clientName || row.concernPersonName || "--";
+        const phone = row.phoneNumber || row.contact || row.whatsappNumber || "--";
+        const email = row.emailAddress || row.email || "--";
+
+        return (
+          <div className="text-xs space-y-0.5 max-w-[160px]">
+            {/* Line 1: Client Name (Highlighted with color badge) */}
+            <div className="mb-0.5">
+              <span
+                className="font-extrabold text-emerald-900 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-200 shadow-2xs inline-block truncate max-w-full text-xs"
+                title={name}
+              >
+                {name}
+              </span>
+            </div>
+
+            {/* Line 2: Contact Number (Clickable, no phone icon) */}
+            {phone !== "--" ? (
+              <div>
+                <a
+                  href={`tel:${phone}`}
+                  className="font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                >
+                  {phone}
+                </a>
+              </div>
+            ) : (
+              <div className="text-slate-400">--</div>
+            )}
+
+            {/* Line 3: Email Address (Clickable) */}
+            {email !== "--" ? (
+              <div>
+                <a
+                  href={`mailto:${email}`}
+                  className="font-mono text-[11px] text-blue-600 hover:text-blue-800 hover:underline truncate block cursor-pointer"
+                  title={email}
+                >
+                  {email}
+                </a>
+              </div>
+            ) : (
+              <div className="text-slate-400 font-mono text-[11px]">--</div>
+            )}
+          </div>
+        );
+      }
     },
     leadType: {
       label: "LEAD TYPE",
-      render: (val, row) => (
-        <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-slate-100 text-slate-800 border border-slate-300">
-          {row.leadType || "FRESH"}
-        </span>
-      )
-    },
-    workCategory: {
-      label: "WORK CATEGORY",
-      render: (val, row) => (
-        <span className="px-2.5 py-0.5 rounded-md text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-          {row.workCategory || "Design"}
-        </span>
-      )
-    },
-    workType: {
-      label: "WORK TYPE",
       render: (val, row) => {
-        const wt = Array.isArray(row.workType)
-          ? row.workType.join(", ")
-          : (row.workType || "Concept Drawing");
+        const type = (row.leadType || val || "FRESH").toUpperCase();
+        const isFresh = type === "FRESH";
         return (
-          <div className="max-w-[180px] truncate text-xs font-medium text-slate-700" title={wt}>
-            {wt}
-          </div>
+          <span
+            className={`px-2 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wide border shadow-2xs ${
+              isFresh
+                ? "bg-emerald-600 text-white border-emerald-700"
+                : "bg-blue-600 text-white border-blue-700"
+            }`}
+          >
+            {type}
+          </span>
         );
       }
     },
@@ -329,36 +568,38 @@ const SalseTotalLeads = () => {
           NEW: "bg-emerald-100 text-emerald-800 border-emerald-200"
         };
         return (
-          <span className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold uppercase border ${colors[status] || "bg-slate-100 text-slate-700 border-slate-200"}`}>
+          <span className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold uppercase border ${colors[status] || "bg-slate-100 text-slate-700 border-slate-200"}`}>
             {status}
           </span>
         );
       }
     },
-    clientName: {
-      label: "CLIENT NAME",
-      render: (val, row) => {
-        const name = row.clientName || row.concernPersonName || "--";
-        return (
-          <span className="font-bold text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 shadow-2xs inline-block text-xs">
-            {name}
-          </span>
-        );
-      }
+    leadMode: {
+      label: "LEAD MODE",
+      render: (val, row) => (
+        <span className="text-xs font-semibold text-slate-700">
+          {row.leadMode || row.leadSource || "Business networking"}
+        </span>
+      )
     },
-    phoneNumber: {
-      label: "PHONE NUMBER",
+    workCategory: {
+      label: "WORK CATEGORY",
+      render: (val, row) => (
+        <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+          {row.workCategory || "Design"}
+        </span>
+      )
+    },
+    workType: {
+      label: "WORK TYPE",
       render: (val, row) => {
-        const phone = row.phoneNumber || row.contact || row.whatsappNumber || "--";
-        return phone !== "--" ? (
-          <a
-            href={`tel:${phone}`}
-            className="text-xs font-semibold text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1 cursor-pointer"
-          >
-            <span>📞</span> {phone}
-          </a>
-        ) : (
-          <span className="text-xs text-slate-400">--</span>
+        const wt = Array.isArray(row.workType)
+          ? row.workType.join(", ")
+          : (row.workType || "Concept Drawing");
+        return (
+          <div className="max-w-[140px] truncate text-xs font-medium text-slate-700" title={wt}>
+            {wt}
+          </div>
         );
       }
     },
@@ -378,28 +619,12 @@ const SalseTotalLeads = () => {
         );
       }
     },
-    emailAddress: {
-      label: "EMAIL ADDRESS",
-      render: (val, row) => {
-        const email = row.emailAddress || row.email || "--";
-        return email !== "--" ? (
-          <a
-            href={`mailto:${email}`}
-            className="text-xs font-mono text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
-          >
-            {email}
-          </a>
-        ) : (
-          <span className="text-xs text-slate-400">--</span>
-        );
-      }
-    },
     address: {
       label: "ADDRESS",
       render: (val, row) => {
         const addr = row.address || row.siteAddress || "--";
         return (
-          <div className="max-w-[180px] truncate text-xs text-slate-700 font-medium" title={addr}>
+          <div className="max-w-[140px] truncate text-xs text-slate-700 font-medium" title={addr}>
             {addr}
           </div>
         );
@@ -445,7 +670,7 @@ const SalseTotalLeads = () => {
       render: (val, row) => {
         const pd = row.projectDetail || row.projectDetails || "--";
         return (
-          <div className="max-w-[200px] truncate text-xs text-slate-700 font-medium" title={pd}>
+          <div className="max-w-[150px] truncate text-xs text-slate-700 font-medium" title={pd}>
             {pd}
           </div>
         );
@@ -455,9 +680,88 @@ const SalseTotalLeads = () => {
       label: "REMARK",
       render: (val, row) => {
         const rem = row.remark || row.requirement || "--";
+        const attachments = row.remarkAttachments || row.attachments || [];
+
         return (
-          <div className="max-w-[200px] truncate text-xs text-slate-700 font-medium" title={rem}>
-            {rem}
+          <div className="flex items-center gap-1.5 max-w-[200px]">
+            {/* Remark Text */}
+            <div className="truncate text-xs text-slate-700 font-medium flex-1" title={rem}>
+              {rem}
+            </div>
+
+            {/* Inline Media Preview & Play/Pause Controls */}
+            {attachments.length > 0 && (
+              <div className="flex items-center gap-1 shrink-0">
+                {attachments.map((att, idx) => {
+                  const attId = att.id || `${row.id}-${idx}`;
+                  const mediaType = getMediaType(att);
+                  const isPlaying = playingMediaId === attId;
+
+                  // 1. IMAGE: Icon-only button -> Opens Lightbox Preview on Click!
+                  if (mediaType === "image") {
+                    const imgSrc = getImagePreviewUrl(att);
+                    return (
+                      <button
+                        key={attId}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLightboxImage({
+                            url: imgSrc,
+                            title: att.name || row.clientName || "Image View"
+                          });
+                        }}
+                        className="w-6 h-6 rounded-md border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 flex items-center justify-center transition-all cursor-pointer shadow-2xs shrink-0"
+                        title="Click to view full image"
+                      >
+                        <FaImage className="w-3 h-3 text-emerald-600" />
+                      </button>
+                    );
+                  }
+
+                  // 2. AUDIO / VIDEO: Icon-only button -> Opens Audio Player Modal on Click!
+                  if (mediaType === "audio" || mediaType === "video") {
+                    return (
+                      <button
+                        key={attId}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAudioPlayerModal({
+                            url: att.url,
+                            title: att.name || `${row.clientName || "Lead"} Audio Note`,
+                            attId: attId
+                          });
+                        }}
+                        className={`w-6 h-6 rounded-md flex items-center justify-center transition-all cursor-pointer shadow-2xs border ${
+                          isPlaying
+                            ? "bg-amber-500 text-white border-amber-600 animate-pulse"
+                            : "bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-200"
+                        }`}
+                        title="Click to open audio player"
+                      >
+                        <FaPlay className="w-2.5 h-2.5 text-amber-700" />
+                      </button>
+                    );
+                  }
+
+                  // 3. Document or Other file type:
+                  return (
+                    <a
+                      key={attId}
+                      href={att.url || "#"}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-6 h-6 rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs shrink-0"
+                      title={att.name || "View Document"}
+                    >
+                      <FaFileAlt className="w-3 h-3" />
+                    </a>
+                  );
+                })}
+              </div>
+            )}
           </div>
         );
       }
@@ -732,7 +1036,7 @@ const SalseTotalLeads = () => {
               className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-center shadow-2xs font-bold text-xs sm:text-sm ${
                 showFilters
                   ? "bg-slate-900 text-white border-slate-900 shadow-md"
-                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+                  : "bg-[#FF5722] text-white border-[#FF5722] hover:bg-[#e64a19]"
               }`}
               title={showFilters ? "Hide Filter Options" : "Show Filter Options"}
             >
@@ -744,57 +1048,20 @@ const SalseTotalLeads = () => {
         }
       />
 
-      {/* ================= ALL / SELF / TEAM SCOPE FILTER PILL ================= */}
-      <div className="flex justify-center items-center my-1.5">
-        <div className="inline-flex items-center gap-1 p-1 bg-[#f0fdf4] border border-emerald-200/60 rounded-full shadow-2xs">
-          <button
-            type="button"
-            onClick={() => {
-              setFilterScope("ALL");
-              setCurrentPage(1);
-            }}
-            className={`px-5 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all cursor-pointer ${
-              filterScope === "ALL"
-                ? "bg-[#00b050] text-white shadow-sm"
-                : "text-[#00b050] hover:bg-emerald-100/60"
-            }`}
-          >
-            All
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setFilterScope("SELF");
-              setCurrentPage(1);
-            }}
-            className={`px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              filterScope === "SELF"
-                ? "bg-[#00b050] text-white shadow-sm"
-                : "text-[#00b050] hover:bg-emerald-100/60"
-            }`}
-          >
-            <FaUserPlus className="w-3.5 h-3.5" />
-            <span>Self</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setFilterScope("TEAM");
-              setCurrentPage(1);
-            }}
-            className={`px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              filterScope === "TEAM"
-                ? "bg-[#00b050] text-white shadow-sm"
-                : "text-[#00b050] hover:bg-emerald-100/60"
-            }`}
-          >
-            <FaUsers className="w-3.5 h-3.5" />
-            <span>Team</span>
-          </button>
-        </div>
-      </div>
+      {/* ================= ALL / SELF / TEAM SCOPE FILTER WITH EXECUTIVE DROPDOWN ================= */}
+      <ScopeTabs
+        activeTab={filterScope}
+        onTabChange={(tab) => {
+          setFilterScope(tab);
+          setCurrentPage(1);
+        }}
+        selectedExecutive={filterSalesPerson}
+        onExecutiveChange={(exec) => {
+          setFilterSalesPerson(exec);
+          setCurrentPage(1);
+        }}
+        executives={salesPersonsList}
+      />
 
 
 
@@ -1317,6 +1584,141 @@ const SalseTotalLeads = () => {
                 className="flex-1 py-2 rounded-xl bg-black text-white text-xs font-bold hover:bg-neutral-800 cursor-pointer"
               >
                 Apply Status
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* IMAGE LIGHTBOX ZOOM MODAL */}
+      {lightboxImage && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-fadeIn cursor-pointer"
+          onClick={() => setLightboxImage(null)}
+        >
+          <div
+            className="relative max-w-4xl max-h-[90vh] bg-white rounded-2xl p-2 shadow-2xl border border-slate-700 overflow-hidden flex flex-col items-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-full flex items-center justify-between px-3 py-2 border-b border-slate-100">
+              <span className="text-xs font-bold text-slate-800 truncate">
+                {lightboxImage.title || "Image Preview"}
+              </span>
+              <button
+                type="button"
+                onClick={() => setLightboxImage(null)}
+                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center cursor-pointer text-xs font-bold"
+              >
+                ✕
+              </button>
+            </div>
+            <img
+              src={lightboxImage.url}
+              alt="Full Preview"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = getSVGPlaceholder(lightboxImage.title || "Image Attachment");
+              }}
+              className="max-h-[80vh] w-auto object-contain rounded-lg p-2"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* AUDIO PLAYER MODAL */}
+      {audioPlayerModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-xs animate-fadeIn cursor-pointer"
+          onClick={() => {
+            stopAllAudio();
+            setAudioPlayerModal(null);
+          }}
+        >
+          <div
+            className="relative max-w-md w-full bg-white rounded-2xl p-5 shadow-2xl border border-slate-100 flex flex-col space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-full bg-amber-100 text-amber-700 flex items-center justify-center font-bold shrink-0">
+                  <FaMicrophone className="w-4 h-4 text-amber-700" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Audio Note Player
+                  </h3>
+                  <p className="text-xs text-slate-500 truncate max-w-[220px]">
+                    {audioPlayerModal.title || "Voice Recording"}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  stopAllAudio();
+                  setAudioPlayerModal(null);
+                }}
+                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center cursor-pointer text-xs font-bold transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Audio Controls Box */}
+            <div className="bg-amber-50/60 border border-amber-200/80 rounded-2xl p-5 flex flex-col items-center space-y-4">
+              <div className="w-14 h-14 rounded-full bg-amber-500 text-white flex items-center justify-center shadow-lg shadow-amber-500/30">
+                <FaMicrophone className="w-7 h-7" />
+              </div>
+
+              {/* Native HTML5 Audio Player with Play, Pause, Seek bar */}
+              {audioPlayerModal.url ? (
+                <audio
+                  controls
+                  autoPlay
+                  src={audioPlayerModal.url}
+                  className="w-full h-10 rounded-lg outline-none"
+                  onError={() => {
+                    toggleMediaPlay(audioPlayerModal.attId || "modal-synth", audioPlayerModal.url);
+                  }}
+                />
+              ) : (
+                /* Fallback Player Button for synth audio notes */
+                <div className="w-full space-y-2 text-center">
+                  <button
+                    type="button"
+                    onClick={() => toggleMediaPlay(audioPlayerModal.attId || "modal-synth", audioPlayerModal.url)}
+                    className={`w-full py-3 px-4 rounded-xl font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer ${
+                      playingMediaId === (audioPlayerModal.attId || "modal-synth")
+                        ? "bg-amber-600 text-white shadow-md animate-pulse"
+                        : "bg-amber-500 hover:bg-amber-600 text-white"
+                    }`}
+                  >
+                    {playingMediaId === (audioPlayerModal.attId || "modal-synth") ? (
+                      <>
+                        <FaPause className="w-4 h-4" /> <span>Pause Audio Note</span>
+                      </>
+                    ) : (
+                      <>
+                        <FaPlay className="w-4 h-4" /> <span>Play Audio Note</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  stopAllAudio();
+                  setAudioPlayerModal(null);
+                }}
+                className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold transition-colors cursor-pointer"
+              >
+                Close Player
               </button>
             </div>
           </div>

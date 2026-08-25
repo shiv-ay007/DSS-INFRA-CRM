@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from "react";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import Table from "../../../../Common/Components/Table";
+import ScopeTabs from "../../../../Common/Components/ScopeTabs";
 import { initialLostLeads } from "../../data/lostLeadsData";
 import { availableWorkTypes, workCategoryList, leadTypesList } from "../../data/addLeadData";
 import { FaFilter, FaSearch, FaUserPlus } from "react-icons/fa";
@@ -11,6 +12,15 @@ const leadModesList = [
   "By freelancer",
   "By sales Team",
   "Customer to customer"
+];
+
+const teamMembers = [
+  "Sales TL",
+  "Rahul Sharma",
+  "Pooja Verma",
+  "Vikram Malhotra",
+  "Ankit Patel",
+  "Sanjay Gupta"
 ];
 
 const Lostlead = () => {
@@ -35,6 +45,7 @@ const Lostlead = () => {
   // Filter States
   const [showFilters, setShowFilters] = useState(false);
   const [filterScope, setFilterScope] = useState("ALL"); // "ALL", "SELF", "TEAM"
+  const [filterSalesPerson, setFilterSalesPerson] = useState("ALL");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterLeadMode, setFilterLeadMode] = useState("ALL");
   const [filterLeadType, setFilterLeadType] = useState("ALL");
@@ -192,7 +203,13 @@ const Lostlead = () => {
 
       // 4. Scope Filter (ALL, SELF, TEAM)
       if (filterScope === "SELF" && item.assignedType !== "self") return false;
-      if (filterScope === "TEAM" && item.assignedType === "self") return false;
+      if (filterScope === "TEAM") {
+        if (item.assignedType === "self") return false;
+        if (filterSalesPerson !== "ALL") {
+          const assignee = (item.salesPerson || item.assignTo || item.assignedTo || "").toLowerCase();
+          if (!assignee.includes(filterSalesPerson.toLowerCase())) return false;
+        }
+      }
 
       return true;
     });
@@ -205,7 +222,8 @@ const Lostlead = () => {
     filterWorkType,
     filterStatus,
     filterDateFrom,
-    filterScope
+    filterScope,
+    filterSalesPerson
   ]);
 
   const totalLostAmount = useMemo(() => {
@@ -262,8 +280,8 @@ const Lostlead = () => {
             onClick={() => setShowFilters((prev) => !prev)}
             className={`h-9 px-3.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs ${
               showFilters
-                ? "bg-slate-900 text-white border-slate-900"
-                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                ? "bg-slate-900 text-white border-slate-900 shadow-md"
+                : "bg-[#FF5722] text-white border-[#FF5722] hover:bg-[#e64a19]"
             }`}
           >
             <FaFilter className="w-3.5 h-3.5" />
@@ -272,44 +290,20 @@ const Lostlead = () => {
         }
       />
 
-      {/* 2. TAB BUTTONS (All | + Self | 👥 Team) */}
-      <div className="flex justify-center w-full">
-        <div className="inline-flex p-1.5 rounded-2xl bg-emerald-50/80 border border-emerald-200 gap-2 shadow-2xs">
-          <button
-            type="button"
-            onClick={() => { setFilterScope("ALL"); setCurrentPage(1); }}
-            className={`px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
-              filterScope === "ALL" ? "bg-emerald-600 text-white shadow-md" : "bg-transparent text-emerald-900 hover:bg-white/80"
-            }`}
-          >
-            All
-          </button>
-
-          <button
-            type="button"
-            onClick={() => { setFilterScope("SELF"); setCurrentPage(1); }}
-            className={`px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              filterScope === "SELF" ? "bg-emerald-600 text-white shadow-md" : "bg-transparent text-emerald-900 hover:bg-white/80"
-            }`}
-          >
-            <FaUserPlus className="w-3.5 h-3.5" />
-            <span>Self</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => { setFilterScope("TEAM"); setCurrentPage(1); }}
-            className={`px-6 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              filterScope === "TEAM" ? "bg-emerald-600 text-white shadow-md" : "bg-transparent text-emerald-900 hover:bg-white/80"
-            }`}
-          >
-            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
-            </svg>
-            <span>Team</span>
-          </button>
-        </div>
-      </div>
+      {/* 2. SCOPE TABS WITH EXECUTIVE DROPDOWN */}
+      <ScopeTabs
+        activeTab={filterScope}
+        onTabChange={(tab) => {
+          setFilterScope(tab);
+          setCurrentPage(1);
+        }}
+        selectedExecutive={filterSalesPerson}
+        onExecutiveChange={(exec) => {
+          setFilterSalesPerson(exec);
+          setCurrentPage(1);
+        }}
+        executives={teamMembers}
+      />
 
       {/* 3. COLLAPSIBLE FILTER PANEL */}
       {showFilters && (

@@ -2,6 +2,7 @@ import React, { useState, useMemo, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import Table from "../../../../Common/Components/Table";
+import ScopeTabs from "../../../../Common/Components/ScopeTabs";
 import { initialLeadsData } from "../../data/leadManagementData";
 import { FaUserPlus, FaUsers } from "react-icons/fa";
 
@@ -57,6 +58,7 @@ const Lead = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [filterScope, setFilterScope] = useState("ALL");
+  const [filterSalesPerson, setFilterSalesPerson] = useState("ALL");
   const [filterStatus, setFilterStatus] = useState("All");
   const [filterLeadType, setFilterLeadType] = useState("All");
   const [filterJobType, setFilterJobType] = useState("All");
@@ -442,7 +444,10 @@ const Lead = () => {
       const sp = (lead.assignTo || lead.salesPerson || "").toLowerCase();
       const isSelfLead = sp.includes("sales tl") || sp.includes("current") || sp.includes("self") || sp.includes("john") || sp.includes("rahul");
       if (filterScope === "SELF" && !isSelfLead) return false;
-      if (filterScope === "TEAM" && isSelfLead) return false;
+      if (filterScope === "TEAM") {
+        if (isSelfLead) return false;
+        if (filterSalesPerson !== "ALL" && !sp.includes(filterSalesPerson.toLowerCase())) return false;
+      }
 
       if (filterStatus !== "All" && lead.status !== filterStatus) return false;
       if (filterLeadType !== "All" && lead.leadType !== filterLeadType) return false;
@@ -599,7 +604,7 @@ const Lead = () => {
               className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-center shadow-2xs font-bold text-xs sm:text-sm ${
                 showFilters
                   ? "bg-slate-900 text-white border-slate-900 shadow-md"
-                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+                  : "bg-[#FF5722] text-white border-[#FF5722] hover:bg-[#e64a19]"
               }`}
               title={showFilters ? "Hide Filter Options" : "Show Filter Options"}
             >
@@ -697,57 +702,20 @@ const Lead = () => {
 
       </div>
 
-      {/* ================= ALL / SELF / TEAM SCOPE FILTER PILL ================= */}
-      <div className="flex justify-center items-center my-1.5">
-        <div className="inline-flex items-center gap-1 p-1 bg-[#f0fdf4] border border-emerald-200/60 rounded-full shadow-2xs">
-          <button
-            type="button"
-            onClick={() => {
-              setFilterScope("ALL");
-              setCurrentPage(1);
-            }}
-            className={`px-5 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all cursor-pointer ${
-              filterScope === "ALL"
-                ? "bg-[#00b050] text-white shadow-sm"
-                : "text-[#00b050] hover:bg-emerald-100/60"
-            }`}
-          >
-            All
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setFilterScope("SELF");
-              setCurrentPage(1);
-            }}
-            className={`px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              filterScope === "SELF"
-                ? "bg-[#00b050] text-white shadow-sm"
-                : "text-[#00b050] hover:bg-emerald-100/60"
-            }`}
-          >
-            <FaUserPlus className="w-3.5 h-3.5" />
-            <span>Self</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => {
-              setFilterScope("TEAM");
-              setCurrentPage(1);
-            }}
-            className={`px-4 py-1.5 rounded-full text-xs sm:text-sm font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
-              filterScope === "TEAM"
-                ? "bg-[#00b050] text-white shadow-sm"
-                : "text-[#00b050] hover:bg-emerald-100/60"
-            }`}
-          >
-            <FaUsers className="w-3.5 h-3.5" />
-            <span>Team</span>
-          </button>
-        </div>
-      </div>
+      {/* ================= ALL / SELF / TEAM SCOPE FILTER WITH EXECUTIVE DROPDOWN ================= */}
+      <ScopeTabs
+        activeTab={filterScope}
+        onTabChange={(tab) => {
+          setFilterScope(tab);
+          setCurrentPage(1);
+        }}
+        selectedExecutive={filterSalesPerson}
+        onExecutiveChange={(exec) => {
+          setFilterSalesPerson(exec);
+          setCurrentPage(1);
+        }}
+        executives={teamMembers}
+      />
 
 
 

@@ -20,11 +20,20 @@ const LeadDetails = () => {
       return;
     }
 
-    // 2. Check localStorage
+    // 2. Check localStorage (dss_leads & dss_lead_management_sheet_v1)
     try {
-      const saved = localStorage.getItem("dss_lead_management_sheet_v1");
-      if (saved) {
-        const list = JSON.parse(saved);
+      const savedTotal = localStorage.getItem("dss_leads");
+      if (savedTotal) {
+        const list = JSON.parse(savedTotal);
+        const found = list.find((item) => item.id === id);
+        if (found) {
+          setLead(found);
+          return;
+        }
+      }
+      const savedSheet = localStorage.getItem("dss_lead_management_sheet_v1");
+      if (savedSheet) {
+        const list = JSON.parse(savedSheet);
         const found = list.find((item) => item.id === id);
         if (found) {
           setLead(found);

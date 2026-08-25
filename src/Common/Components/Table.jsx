@@ -29,9 +29,9 @@ const Table = ({
       <div className="w-full overflow-x-auto">
         <table className="w-full text-xs sm:text-sm text-left border-collapse">
           <thead>
-            <tr className="bg-black text-white text-xs sm:text-sm font-bold uppercase tracking-wider select-none">
+            <tr className="bg-black text-white text-xs font-bold uppercase tracking-wider select-none">
               {showSrNo && (
-                <th className="py-3.5 px-4 text-center w-12 font-bold uppercase bg-black text-white border-r border-slate-800">
+                <th className="py-2.5 px-2.5 text-center w-10 font-bold uppercase bg-black text-white border-r border-slate-800">
                   S. NO.
                 </th>
               )}
@@ -47,7 +47,7 @@ const Table = ({
                 return (
                   <th
                     key={col}
-                    className={`py-3.5 px-4 font-bold uppercase whitespace-nowrap bg-black text-white border-r border-slate-800 ${alignClass} ${
+                    className={`py-2.5 px-2.5 font-bold uppercase whitespace-nowrap bg-black text-white border-r border-slate-800 text-xs ${alignClass} ${
                       config?.headerClass || ""
                     }`}
                   >
@@ -57,12 +57,12 @@ const Table = ({
               })}
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-100 text-xs sm:text-sm bg-white">
+          <tbody className="divide-y divide-slate-100 text-xs bg-white">
             {data.length === 0 ? (
               <tr>
                 <td
                   colSpan={(showSrNo ? 1 : 0) + columns.length}
-                  className="px-4 py-8 text-center text-slate-500 text-sm font-medium"
+                  className="px-3 py-6 text-center text-slate-500 text-sm font-medium"
                 >
                   No Records Found
                 </td>
@@ -74,7 +74,7 @@ const Table = ({
                   className="hover:bg-slate-50/70 transition-colors"
                 >
                   {showSrNo && (
-                    <td className="py-4 px-4 text-center font-mono font-bold text-slate-700 text-xs whitespace-nowrap border-r border-slate-100">
+                    <td className="py-2 px-2.5 text-center font-mono font-bold text-slate-700 text-xs whitespace-nowrap border-r border-slate-100">
                       {startItem > 0 ? startItem + idx : idx + 1}
                     </td>
                   )}
@@ -90,7 +90,7 @@ const Table = ({
                     return (
                       <td
                         key={col}
-                        className={`py-4 px-4 whitespace-nowrap border-r border-slate-100 ${alignClass} ${
+                        className={`py-2 px-2.5 whitespace-nowrap border-r border-slate-100 ${alignClass} ${
                           config?.cellClass || ""
                         }`}
                       >

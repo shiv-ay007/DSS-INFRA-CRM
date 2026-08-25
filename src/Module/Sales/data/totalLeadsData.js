@@ -18,6 +18,7 @@ export const initialTotalLeads = [
     projectDetails: "P2.5 Indoor LED Video Wall for Flagship Store Entrance (12x8 ft) with Novastar Controller",
     requirement: "P2.5 Indoor LED Video Wall for Flagship Store Entrance (12x8 ft)",
     workType: "LED Video Wall",
+    workCategory: "Design",
     leadType: "FRESH",
     jobType: "NEW",
     leadLabel: "HOT",
@@ -33,7 +34,11 @@ export const initialTotalLeads = [
     nextFollowup: "2026-08-20 10:30 AM",
     leadMode: "Direct Call / Inbound",
     leadSource: "DIRECT CALL",
-    clientDesignation: "Project Head"
+    clientDesignation: "Project Head",
+    remarkAttachments: [
+      { id: 1, name: "site_layout.png", type: "image", url: "https://images.unsplash.com/photo-1541888946425-d0fbb186a5b7?w=600&auto=format&fit=crop&q=60" },
+      { id: 2, name: "client_audio_note.mp3", type: "audio", url: "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" }
+    ]
   },
   {
     id: "LD-1002",
@@ -53,6 +58,7 @@ export const initialTotalLeads = [
     projectDetails: "55-inch Ultra HD Interactive Digital Kiosks for Multiplex Lobby ticket booking",
     requirement: "55-inch Ultra HD Interactive Digital Kiosks",
     workType: "Interactive Kiosk",
+    workCategory: "Design",
     leadType: "REPEAT",
     jobType: "NEW",
     leadLabel: "WARM",
@@ -88,6 +94,7 @@ export const initialTotalLeads = [
     projectDetails: "Outdoor P6 Curved Billboard on Commercial Tower Facade with auto-brightness sensors",
     requirement: "Outdoor P6 Curved Billboard on Commercial Tower Facade",
     workType: "Outdoor Billboard",
+    workCategory: "Design",
     leadType: "FRESH",
     jobType: "NEW",
     leadLabel: "HOT",
