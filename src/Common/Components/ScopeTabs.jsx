@@ -24,9 +24,9 @@ const ScopeTabs = ({
   const isTeam = normalizedTab === "TEAM";
 
   return (
-    <div className="flex flex-col items-center justify-center w-full my-2.5 gap-3">
+    <div className="flex flex-wrap items-center justify-center w-full my-2.5 gap-3">
       {/* 1. Scope Tabs Bar */}
-      <div className="inline-flex items-center p-1.5 bg-[#f0fdf4] border border-emerald-200/90 rounded-2xl gap-2 shadow-2xs">
+      <div className="inline-flex items-center p-1 bg-[#f0fdf4] border border-emerald-200/90 rounded-2xl gap-1.5 shadow-2xs">
         <button
           type="button"
           onClick={() => {
@@ -74,16 +74,13 @@ const ScopeTabs = ({
         </button>
       </div>
 
-      {/* 2. FILTER BY EXECUTIVE DROPDOWN CARD (Matching Reference Design) */}
+      {/* 2. SIDE-BY-SIDE FILTER BY EXECUTIVE DROPDOWN (Matching Screenshot Exactly) */}
       {isTeam && (
-        <div className="bg-white border border-slate-200/90 rounded-2xl p-3.5 sm:p-4 shadow-md w-72 sm:w-80 text-center animate-in fade-in slide-in-from-top-2 duration-200">
-          <label className="block text-[11px] font-extrabold text-slate-500 uppercase tracking-widest font-mono mb-2">
-            FILTER BY EXECUTIVE
-          </label>
+        <div className="inline-flex items-center animate-in fade-in slide-in-from-left-2 duration-200">
           <select
             value={selectedExecutive}
             onChange={(e) => onExecutiveChange && onExecutiveChange(e.target.value)}
-            className="w-full px-3.5 py-2 rounded-xl border-2 border-emerald-500 text-xs sm:text-sm font-bold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400/30 cursor-pointer shadow-2xs transition-all"
+            className="px-4 py-2 rounded-2xl border-2 border-[#00b050] text-xs sm:text-sm font-bold text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-emerald-400/30 cursor-pointer shadow-2xs transition-all min-w-[200px] sm:min-w-[220px]"
           >
             <option value="ALL">All Executives</option>
             {executives
