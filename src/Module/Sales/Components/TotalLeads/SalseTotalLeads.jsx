@@ -453,24 +453,26 @@ const SalseTotalLeads = () => {
               </svg>
             </button>
 
-            {/* Assign Lead Icon Button */}
-            <button
-              type="button"
-              onClick={() => {
-                const assignee = row.assignTo || row.salesPerson || "Rahul Sharma";
-                const isSelf = assignee.includes("Current") || assignee.includes("TL") || assignee.includes("Self");
-                setAssignType(isSelf ? "self" : "executive");
-                if (!isSelf) {
-                  setSelectedExecutive(assignee);
-                  setExecutiveBranch(executiveBranchMap[assignee] || "Noida Branch");
-                }
-                setAssignModalLead(row);
-              }}
-              className="w-7 h-7 rounded-lg border border-blue-500 text-blue-600 hover:bg-blue-600 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
-              title="Assign Lead"
-            >
-              <FaUserPlus className="w-3.5 h-3.5" />
-            </button>
+            {/* Assign Lead Icon Button (ONLY SHOWN ON 'ALL' TAB) */}
+            {filterScope?.toUpperCase() === "ALL" && (
+              <button
+                type="button"
+                onClick={() => {
+                  const assignee = row.assignTo || row.salesPerson || "Rahul Sharma";
+                  const isSelf = assignee.includes("Current") || assignee.includes("TL") || assignee.includes("Self");
+                  setAssignType(isSelf ? "self" : "executive");
+                  if (!isSelf) {
+                    setSelectedExecutive(assignee);
+                    setExecutiveBranch(executiveBranchMap[assignee] || "Noida Branch");
+                  }
+                  setAssignModalLead(row);
+                }}
+                className="w-7 h-7 rounded-lg border border-blue-500 text-blue-600 hover:bg-blue-600 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
+                title="Assign Lead"
+              >
+                <FaUserPlus className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         );
       }
@@ -766,7 +768,7 @@ const SalseTotalLeads = () => {
         );
       }
     }
-  }), [currentPage, rowsPerPage]);
+  }), [currentPage, rowsPerPage, filterScope]);
 
   // Filter & Search Logic
   const filteredLeads = useMemo(() => {
