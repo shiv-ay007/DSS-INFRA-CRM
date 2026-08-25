@@ -43,7 +43,8 @@ const Addlead = () => {
     "Construction",
     "Interior",
     "Full Furnished",
-    "Fabrication"
+    "Fabrication",
+    "Other"
   ];
 
   // Lead Status options (Hot, Warm, Cold)
@@ -68,7 +69,8 @@ const Addlead = () => {
     "Site Visit Work",
     "3D Interior View Design",
     "2D Interior Design",
-    "3D Exterior View Design"
+    "3D Exterior View Design",
+    "Other"
   ];
 
   // Initial Form State
@@ -105,6 +107,7 @@ const Addlead = () => {
   };
 
   const [formData, setFormData] = useState(initialFormState);
+  const [customWorkType, setCustomWorkType] = useState("");
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFetchingPincode, setIsFetchingPincode] = useState(false);
@@ -114,6 +117,21 @@ const Addlead = () => {
   const [audioURL, setAudioURL] = useState(null);
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [audioChunks, setAudioChunks] = useState([]);
+  
+  // Helper to add custom work type tag
+  const handleAddCustomWorkType = () => {
+    const val = customWorkType.trim();
+    if (!val) return;
+
+    setFormData((prev) => {
+      const updated = prev.workType.filter((t) => t !== "Other");
+      if (!updated.includes(val)) {
+        updated.push(val);
+      }
+      return { ...prev, workType: updated };
+    });
+    setCustomWorkType("");
+  };
   
   // Refs for file inputs
   const imageInputRef = useRef(null);
@@ -293,7 +311,13 @@ const Addlead = () => {
     if (!formData.leadMode) newErrors.leadMode = "Please select lead mode";
     if (!formData.leadType) newErrors.leadType = "Please select lead type";
     if (!formData.workCategory) newErrors.workCategory = "Please select work category";
-    if (formData.workType.length === 0) newErrors.workType = "Please select at least one work type";
+
+    if (formData.workType.length === 0) {
+      newErrors.workType = "Please select at least one work type";
+    } else if (formData.workType.includes("Other") && formData.workType.length === 1 && !customWorkType.trim()) {
+      newErrors.workType = "Please enter custom work type";
+    }
+
     if (!formData.leadStatus) newErrors.leadStatus = "Please select lead status";
 
     if (!formData.clientName.trim()) {
@@ -318,16 +342,33 @@ const Addlead = () => {
     }
 
     if (!formData.address.trim()) newErrors.address = "Address is required";
-    if (!formData.city.trim()) newErrors.city = "City is required";
     if (!formData.pincode.trim()) {
       newErrors.pincode = "Pincode is required";
     } else if (!/^\d{6}$/.test(formData.pincode.trim())) {
       newErrors.pincode = "Pincode must be 6 digits";
     }
+    if (!formData.city.trim()) newErrors.city = "City is required";
     if (!formData.state) newErrors.state = "Please select state";
 
     setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+
+    const errorKeys = Object.keys(newErrors);
+    if (errorKeys.length > 0) {
+      const firstErrorKey = errorKeys[0];
+      setTimeout(() => {
+        const targetElement = document.getElementById(`field-${firstErrorKey}`);
+        if (targetElement) {
+          targetElement.scrollIntoView({ behavior: "smooth", block: "center" });
+          const inputEl = targetElement.querySelector("input, select, textarea");
+          if (inputEl && typeof inputEl.focus === "function") {
+            inputEl.focus();
+          }
+        }
+      }, 100);
+      return false;
+    }
+
+    return true;
   };
 
   // Handle Form Submit & Save to LocalStorage
@@ -335,7 +376,6 @@ const Addlead = () => {
     e.preventDefault();
 
     if (!validateForm()) {
-      window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
 
@@ -346,6 +386,17 @@ const Addlead = () => {
       const options = { day: '2-digit', month: 'short', year: 'numeric' };
       const formattedDate = today.toLocaleDateString('en-GB', options);
       const formattedTime = today.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+
+      let finalWorkType = [...formData.workType];
+      if (finalWorkType.includes("Other")) {
+        finalWorkType = finalWorkType.filter((t) => t !== "Other");
+        if (customWorkType.trim() && !finalWorkType.includes(customWorkType.trim())) {
+          finalWorkType.push(customWorkType.trim());
+        }
+      }
+      if (finalWorkType.length === 0) {
+        finalWorkType = ["Other"];
+      }
 
       const newLead = {
         id: `LM-${Math.floor(100000 + Math.random() * 900000)}`,
@@ -364,7 +415,7 @@ const Addlead = () => {
         workCategory: formData.workCategory || "Design",
         jobType: formData.jobType || "NEW",
         clientType: formData.clientType || "Individual",
-        workType: formData.workType,
+        workType: finalWorkType,
         requirement: formData.remark || "New Lead Registration",
         expectedBusiness: formData.expectedBusiness || "0",
         expectedRevenue: formData.expectedBusiness || "0",
@@ -426,6 +477,7 @@ const Addlead = () => {
   // Reset Form
   const handleReset = () => {
     setFormData(initialFormState);
+    setCustomWorkType("");
     setErrors({});
     setShowUploadOptions(false);
     setIsRecording(false);
@@ -464,7 +516,7 @@ const Addlead = () => {
         
         {/* ROW 1: Lead Mode | Lead Type | Work Category */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-x-2.5 sm:gap-x-3 gap-y-3">
-          <div>
+          <div id="field-leadMode">
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
               Lead Mode <span className="text-red-500">*</span>
             </label>
@@ -472,8 +524,8 @@ const Addlead = () => {
               name="leadMode"
               value={formData.leadMode}
               onChange={handleChange}
-              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all cursor-pointer ${
-                errors.leadMode ? "border-red-400 bg-red-50/20" : "border-black/20"
+              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-1 transition-all cursor-pointer ${
+                errors.leadMode ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
               }`}
             >
               <option value="">Select Lead Mode</option>
@@ -484,7 +536,7 @@ const Addlead = () => {
             {errors.leadMode && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.leadMode}</p>}
           </div>
 
-          <div>
+          <div id="field-leadType">
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
               Lead Type <span className="text-red-500">*</span>
             </label>
@@ -492,8 +544,8 @@ const Addlead = () => {
               name="leadType"
               value={formData.leadType}
               onChange={handleChange}
-              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all cursor-pointer ${
-                errors.leadType ? "border-red-400 bg-red-50/20" : "border-black/20"
+              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-1 transition-all cursor-pointer ${
+                errors.leadType ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
               }`}
             >
               <option value="FRESH">Fresh</option>
@@ -502,7 +554,7 @@ const Addlead = () => {
             {errors.leadType && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.leadType}</p>}
           </div>
 
-          <div>
+          <div id="field-workCategory">
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
               Work Category <span className="text-red-500">*</span>
             </label>
@@ -510,8 +562,8 @@ const Addlead = () => {
               name="workCategory"
               value={formData.workCategory}
               onChange={handleChange}
-              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all cursor-pointer ${
-                errors.workCategory ? "border-red-400 bg-red-50/20" : "border-black/20"
+              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-1 transition-all cursor-pointer ${
+                errors.workCategory ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
               }`}
             >
               <option value="">Select Work Category</option>
@@ -524,11 +576,11 @@ const Addlead = () => {
         </div>
 
         {/* ROW 2: Work Type (Full Width - Multi-select Pills) */}
-        <div className="pt-1">
+        <div id="field-workType" className="pt-1">
           <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
             Work Type <span className="text-red-500">*</span> <span className="text-slate-500 font-normal">(Select all that apply)</span>
           </label>
-          <div className="flex flex-wrap gap-1.5 pt-0.5">
+          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
             {workTypeOptions.map((type) => {
               const isSelected = formData.workType.includes(type);
               return (
@@ -547,13 +599,60 @@ const Addlead = () => {
                 </button>
               );
             })}
+
+            {/* Custom Work Types added dynamically */}
+            {formData.workType
+              .filter((t) => !workTypeOptions.includes(t))
+              .map((customType) => (
+                <button
+                  key={customType}
+                  type="button"
+                  onClick={() => toggleWorkType(customType)}
+                  className="px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-600 text-white shadow-2xs transition-all cursor-pointer flex items-center gap-1"
+                >
+                  <span>{customType}</span>
+                  <span>✓</span>
+                </button>
+              ))}
+
+            {/* Inline Custom Input Box when Other is selected */}
+            {formData.workType.includes("Other") && (
+              <div className="inline-flex items-center gap-1 my-0.5">
+                <input
+                  type="text"
+                  placeholder="Type custom work type..."
+                  value={customWorkType}
+                  onChange={(e) => {
+                    setCustomWorkType(e.target.value);
+                    if (errors.workType) setErrors((prev) => ({ ...prev, workType: "" }));
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      handleAddCustomWorkType();
+                    }
+                  }}
+                  className={`px-2.5 py-1 rounded-lg border bg-white text-slate-800 text-xs font-medium focus:outline-none focus:ring-1 transition-all w-48 placeholder:text-slate-400 ${
+                    errors.workType ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-slate-300 focus:border-blue-500"
+                  }`}
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  onClick={handleAddCustomWorkType}
+                  className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer shrink-0 shadow-2xs"
+                >
+                  + Add
+                </button>
+              </div>
+            )}
           </div>
           {errors.workType && <p className="text-xs text-red-500 font-medium mt-1">{errors.workType}</p>}
         </div>
 
         {/* ROW 3: Lead Status | Client Name | Phone Number */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-x-2.5 sm:gap-x-3 gap-y-3 pt-1">
-          <div>
+          <div id="field-leadStatus">
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
               Lead Status <span className="text-red-500">*</span>
             </label>
@@ -561,8 +660,8 @@ const Addlead = () => {
               name="leadStatus"
               value={formData.leadStatus}
               onChange={handleChange}
-              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all cursor-pointer ${
-                errors.leadStatus ? "border-red-400 bg-red-50/20" : "border-black/20"
+              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-1 transition-all cursor-pointer ${
+                errors.leadStatus ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
               }`}
             >
               <option value="">Select Lead Status</option>
@@ -573,7 +672,7 @@ const Addlead = () => {
             {errors.leadStatus && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.leadStatus}</p>}
           </div>
 
-          <div>
+          <div id="field-clientName">
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
               Client Name <span className="text-red-500">*</span>
             </label>
@@ -583,14 +682,14 @@ const Addlead = () => {
               placeholder="Enter Client Name"
               value={formData.clientName}
               onChange={handleChange}
-              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all placeholder:text-slate-400 ${
-                errors.clientName ? "border-red-400 bg-red-50/20" : "border-black/20"
+              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-1 transition-all placeholder:text-slate-400 ${
+                errors.clientName ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
               }`}
             />
             {errors.clientName && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.clientName}</p>}
           </div>
 
-          <div>
+          <div id="field-phoneNumber">
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
               Phone Number <span className="text-red-500">*</span>
             </label>
@@ -604,8 +703,8 @@ const Addlead = () => {
                 const val = e.target.value.replace(/\D/g, "");
                 handleChange({ target: { name: "phoneNumber", value: val } });
               }}
-              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all placeholder:text-slate-400 ${
-                errors.phoneNumber ? "border-red-400 bg-red-50/20" : "border-black/20"
+              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-1 transition-all placeholder:text-slate-400 ${
+                errors.phoneNumber ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
               }`}
             />
             {errors.phoneNumber && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.phoneNumber}</p>}
@@ -614,7 +713,7 @@ const Addlead = () => {
 
         {/* ROW 4: Alternate Number | Email Address */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-x-2.5 sm:gap-x-3 gap-y-3 pt-1">
-          <div>
+          <div id="field-alternateNumber">
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
               Alternate Number
             </label>
@@ -628,14 +727,14 @@ const Addlead = () => {
                 const val = e.target.value.replace(/\D/g, "");
                 handleChange({ target: { name: "alternateNumber", value: val } });
               }}
-              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all placeholder:text-slate-400 ${
-                errors.alternateNumber ? "border-red-400 bg-red-50/20" : "border-black/20"
+              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-1 transition-all placeholder:text-slate-400 ${
+                errors.alternateNumber ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
               }`}
             />
             {errors.alternateNumber && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.alternateNumber}</p>}
           </div>
 
-          <div>
+          <div id="field-emailAddress">
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
               Email Address
             </label>
@@ -645,8 +744,8 @@ const Addlead = () => {
               placeholder="Enter Email Address"
               value={formData.emailAddress}
               onChange={handleChange}
-              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all placeholder:text-slate-400 ${
-                errors.emailAddress ? "border-red-400 bg-red-50/20" : "border-black/20"
+              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-1 transition-all placeholder:text-slate-400 ${
+                errors.emailAddress ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
               }`}
             />
             {errors.emailAddress && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.emailAddress}</p>}
@@ -655,7 +754,7 @@ const Addlead = () => {
         </div>
 
         {/* ROW 5: Address (Full Width) */}
-        <div className="pt-1">
+        <div id="field-address" className="pt-1">
           <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
             Address <span className="text-red-500">*</span>
           </label>
@@ -665,8 +764,8 @@ const Addlead = () => {
             placeholder="Enter Address"
             value={formData.address}
             onChange={handleChange}
-            className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all placeholder:text-slate-400 resize-y ${
-              errors.address ? "border-red-400 bg-red-50/20" : "border-black/20"
+            className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-1 transition-all placeholder:text-slate-400 resize-y ${
+              errors.address ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
             }`}
           />
           {errors.address && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.address}</p>}
@@ -674,7 +773,7 @@ const Addlead = () => {
 
         {/* ROW 6: Pincode | City | State */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-x-2.5 sm:gap-x-3 gap-y-3 pt-1">
-          <div>
+          <div id="field-pincode">
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5 flex items-center justify-between">
               <span>Pincode <span className="text-red-500">*</span></span>
               {isFetchingPincode && <span className="text-xs text-blue-600 animate-pulse font-normal">Fetching City/State...</span>}
@@ -686,14 +785,14 @@ const Addlead = () => {
               placeholder="Enter 6-digit Pincode"
               value={formData.pincode}
               onChange={handlePincodeChange}
-              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all placeholder:text-slate-400 ${
-                errors.pincode ? "border-red-400 bg-red-50/20" : "border-black/20"
+              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-1 transition-all placeholder:text-slate-400 ${
+                errors.pincode ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
               }`}
             />
             {errors.pincode && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.pincode}</p>}
           </div>
 
-          <div>
+          <div id="field-city">
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
               City <span className="text-red-500">*</span>
             </label>
@@ -703,14 +802,14 @@ const Addlead = () => {
               placeholder="Enter City"
               value={formData.city}
               onChange={handleChange}
-              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all placeholder:text-slate-400 ${
-                errors.city ? "border-red-400 bg-red-50/20" : "border-black/20"
+              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-1 transition-all placeholder:text-slate-400 ${
+                errors.city ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
               }`}
             />
             {errors.city && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.city}</p>}
           </div>
 
-          <div>
+          <div id="field-state">
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
               State <span className="text-red-500">*</span>
             </label>
@@ -718,8 +817,8 @@ const Addlead = () => {
               name="state"
               value={formData.state}
               onChange={handleChange}
-              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all cursor-pointer ${
-                errors.state ? "border-red-400 bg-red-50/20" : "border-black/20"
+              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-1 transition-all cursor-pointer ${
+                errors.state ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
               }`}
             >
               <option value="">Select State</option>

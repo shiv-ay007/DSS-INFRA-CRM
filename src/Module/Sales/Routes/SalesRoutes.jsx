@@ -1,6 +1,7 @@
 import React from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Layout from '../Layout/Layout'
+import Login from '../Pages/Login'
 import Dashboard from '../Pages/Dashboard'
 import AddLead from '../Pages/AddLead'
 import TotalLeads from '../Pages/TotalLeads'
@@ -14,6 +15,10 @@ import LeadDetails from '../Pages/LeadDetails'
 const SalesRoutes = () => {
   return (
     <Routes>
+      {/* Module Level Login Route (/sales/login) */}
+      <Route path="login" element={<Login />} />
+
+      {/* Main Dashboard Layout Routes */}
       <Route element={<Layout />}>
         <Route index element={<Navigate to="dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />

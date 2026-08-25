@@ -43,7 +43,8 @@ export const workCategoryList = [
   "Construction",
   "Interior",
   "Full Furnished",
-  "Fabrication"
+  "Fabrication",
+  "Other"
 ];
 
 export const jobTypesList = [
@@ -121,5 +122,6 @@ export const availableWorkTypes = [
   "Site Visit Work",
   "3D Interior View Design",
   "2D Interior Design",
-  "3D Exterior View Design"
+  "3D Exterior View Design",
+  "Other"
 ];

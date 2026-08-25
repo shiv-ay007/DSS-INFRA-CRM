@@ -6,7 +6,7 @@ const departments = [
   {
     name: "Sales Department",
     icon: "/SalesLogo.png",
-    path: "/login",
+    path: "/sales/login",
   },
 ];
 
