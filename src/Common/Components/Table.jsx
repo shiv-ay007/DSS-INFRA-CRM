@@ -38,11 +38,11 @@ const Table = ({
               {columns.map((col) => {
                 const config = columnConfig[col];
                 const alignClass =
-                  config?.align === "center"
-                    ? "text-center"
+                  config?.align === "left"
+                    ? "text-left"
                     : config?.align === "right"
                     ? "text-right"
-                    : "text-left";
+                    : "text-center";
 
                 return (
                   <th
@@ -81,11 +81,11 @@ const Table = ({
                   {columns.map((col) => {
                     const config = columnConfig[col];
                     const alignClass =
-                      config?.align === "center"
-                        ? "text-center"
+                      config?.align === "left"
+                        ? "text-left"
                         : config?.align === "right"
                         ? "text-right"
-                        : "text-left";
+                        : "text-center";
 
                     return (
                       <td

@@ -491,45 +491,40 @@ const SalseTotalLeads = () => {
     },
     createdDate: {
       label: "CREATED DATE",
+      align: "center",
       render: (val, row) => {
         const dateStr = row.createdDate || row.date || "2026-08-18";
         const timeStr = row.createdTime || "11:00 am";
         return (
-          <div className="text-xs space-y-1 whitespace-nowrap">
-            <div>
-              <span className="inline-block px-2 py-0.5 rounded-md bg-blue-50 text-blue-900 border border-blue-200/80 font-extrabold text-xs shadow-2xs">
-                {dateStr}
-              </span>
-            </div>
-            <div>
-              <span className="inline-block px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200/80 font-mono text-[10px] font-extrabold shadow-2xs">
-                {timeStr}
-              </span>
-            </div>
+          <div className="inline-flex flex-col items-center px-2.5 py-1 rounded-lg bg-blue-50 text-blue-900 border border-blue-200/90 shadow-2xs">
+            <span className="font-extrabold text-xs whitespace-nowrap">{dateStr}</span>
+            <span className="font-mono text-[10px] font-bold text-blue-700 whitespace-nowrap">{timeStr}</span>
           </div>
         );
       }
     },
     clientDetails: {
       label: "CLIENT DETAILS",
+      align: "center",
       render: (val, row) => {
         const name = row.clientName || row.concernPersonName || "--";
         const phone = row.phoneNumber || row.contact || row.whatsappNumber || "--";
         const email = row.emailAddress || row.email || "--";
 
         return (
-          <div className="text-xs space-y-0.5 max-w-[160px]">
+          <div className="text-xs space-y-0.5 max-w-[160px] mx-auto text-center">
             {/* Line 1: Client Name (Highlighted with color badge) */}
             <div className="mb-0.5">
               <span
-                className="font-extrabold text-emerald-900 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-200 shadow-2xs inline-block truncate max-w-full text-xs"
+                className="font-extrabold text-emerald-900 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-200 shadow-2xs inline-block truncate max-w-full text-xs cursor-pointer hover:text-blue-600"
                 title={name}
+                onClick={() => row.id && navigate(`/sales/leads/details/${row.id}`, { state: { lead: row } })}
               >
                 {name}
               </span>
             </div>
 
-            {/* Line 2: Contact Number (Clickable, no phone icon) */}
+            {/* Line 2: Contact Number (Clickable) */}
             {phone !== "--" ? (
               <div>
                 <a
@@ -563,6 +558,7 @@ const SalseTotalLeads = () => {
     },
     leadType: {
       label: "LEAD TYPE",
+      align: "center",
       render: (val, row) => {
         const type = (row.leadType || val || "FRESH").toUpperCase();
         const isFresh = type === "FRESH";
@@ -581,6 +577,7 @@ const SalseTotalLeads = () => {
     },
     leadStatus: {
       label: "LEAD STATUS",
+      align: "center",
       render: (val, row) => {
         const status = (row.leadStatus || row.status || "Warm").toUpperCase();
         const colors = {
@@ -598,6 +595,7 @@ const SalseTotalLeads = () => {
     },
     leadMode: {
       label: "LEAD MODE",
+      align: "center",
       render: (val, row) => (
         <span className="text-xs font-semibold text-slate-700">
           {row.leadMode || row.leadSource || "Business networking"}
@@ -606,6 +604,7 @@ const SalseTotalLeads = () => {
     },
     workCategory: {
       label: "WORK CATEGORY",
+      align: "center",
       render: (val, row) => (
         <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
           {row.workCategory || "Design"}
@@ -614,12 +613,13 @@ const SalseTotalLeads = () => {
     },
     workType: {
       label: "WORK TYPE",
+      align: "center",
       render: (val, row) => {
         const wt = Array.isArray(row.workType)
           ? row.workType.join(", ")
           : (row.workType || "Concept Drawing");
         return (
-          <div className="max-w-[140px] truncate text-xs font-medium text-slate-700" title={wt}>
+          <div className="max-w-[140px] truncate text-xs font-medium text-slate-700 mx-auto text-center" title={wt}>
             {wt}
           </div>
         );
@@ -627,6 +627,7 @@ const SalseTotalLeads = () => {
     },
     alternateNumber: {
       label: "ALTERNATE NUMBER",
+      align: "center",
       render: (val, row) => {
         const alt = row.alternateNumber || "--";
         return alt !== "--" ? (
@@ -643,10 +644,11 @@ const SalseTotalLeads = () => {
     },
     address: {
       label: "ADDRESS",
+      align: "center",
       render: (val, row) => {
         const addr = row.address || row.siteAddress || "--";
         return (
-          <div className="max-w-[140px] truncate text-xs text-slate-700 font-medium" title={addr}>
+          <div className="max-w-[140px] truncate text-xs text-slate-700 font-medium mx-auto text-center" title={addr}>
             {addr}
           </div>
         );
@@ -654,6 +656,7 @@ const SalseTotalLeads = () => {
     },
     pincode: {
       label: "PINCODE",
+      align: "center",
       render: (val, row) => (
         <span className="font-mono text-xs text-slate-700 font-bold">
           {row.pincode || "--"}
@@ -662,6 +665,7 @@ const SalseTotalLeads = () => {
     },
     city: {
       label: "CITY",
+      align: "center",
       render: (val, row) => (
         <span className="text-xs font-semibold text-slate-700">
           {row.city || "--"}
@@ -670,6 +674,7 @@ const SalseTotalLeads = () => {
     },
     state: {
       label: "STATE",
+      align: "center",
       render: (val, row) => (
         <span className="text-xs font-semibold text-slate-700">
           {row.state || "--"}
@@ -678,6 +683,7 @@ const SalseTotalLeads = () => {
     },
     expectedBusiness: {
       label: "EXPECTED BUSINESS (₹)",
+      align: "center",
       render: (val, row) => {
         const amt = Number(row.expectedBusiness || row.expectedRevenue || 0);
         return (
@@ -689,6 +695,7 @@ const SalseTotalLeads = () => {
     },
     assignedTo: {
       label: "ASSIGNED TO",
+      align: "center",
       render: (val, row) => {
         const assignee = row.assignTo || row.assignedTo || row.salesPerson || "Sales TL";
         return (
@@ -701,10 +708,11 @@ const SalseTotalLeads = () => {
     },
     projectDetail: {
       label: "PROJECT DETAIL",
+      align: "center",
       render: (val, row) => {
         const pd = row.projectDetail || row.projectDetails || "--";
         return (
-          <div className="max-w-[150px] truncate text-xs text-slate-700 font-medium" title={pd}>
+          <div className="max-w-[150px] truncate text-xs text-slate-700 font-medium mx-auto text-center" title={pd}>
             {pd}
           </div>
         );
@@ -712,12 +720,13 @@ const SalseTotalLeads = () => {
     },
     remark: {
       label: "REMARK",
+      align: "center",
       render: (val, row) => {
         const rem = row.remark || row.requirement || "--";
         const attachments = row.remarkAttachments || row.attachments || [];
 
         return (
-          <div className="flex items-center gap-1.5 max-w-[200px]">
+          <div className="flex items-center justify-center gap-1.5 max-w-[200px] mx-auto text-center">
             {/* Remark Text */}
             <div className="truncate text-xs text-slate-700 font-medium flex-1" title={rem}>
               {rem}
@@ -1069,7 +1078,7 @@ const SalseTotalLeads = () => {
               onClick={() => setShowFilters((prev) => !prev)}
               className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-center shadow-2xs font-bold text-xs sm:text-sm ${
                 showFilters
-                  ? "bg-slate-900 text-white border-slate-900 shadow-md"
+                  ? "bg-white text-slate-800 border-slate-300 hover:bg-slate-50 shadow-2xs"
                   : "bg-[#FF5722] text-white border-[#FF5722] hover:bg-[#e64a19]"
               }`}
               title={showFilters ? "Hide Filter Options" : "Show Filter Options"}

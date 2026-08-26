@@ -78,6 +78,15 @@ const Lostlead = () => {
 
   // Table Column Configuration - Original Lost Leads Columns restored as requested
   const columnConfig = useMemo(() => ({
+    srNo: {
+      label: "SR. NO.",
+      align: "center",
+      render: (val, row, idx) => (
+        <span className="font-mono font-bold text-slate-700 text-xs">
+          {(currentPage - 1) * rowsPerPage + idx + 1}
+        </span>
+      )
+    },
     actions: {
       label: "ACTIONS",
       align: "center",
@@ -112,68 +121,230 @@ const Lostlead = () => {
     },
     lostDate: {
       label: "LOST DATE",
-      render: (val, row) => (
-        <span className="text-slate-700 text-xs font-sans font-medium whitespace-nowrap">
-          {row.lostDate || val || row.createdDate || row.date || "18/7/2026"}
-        </span>
-      )
+      align: "center",
+      render: (val, row) => {
+        const dateStr = row.lostDate || val || row.createdDate || row.date || "2026-08-18";
+        const timeStr = row.createdTime || row.lostTime || "11:00 am";
+        return (
+          <div className="inline-flex flex-col items-center px-2.5 py-1 rounded-lg bg-rose-50 text-rose-900 border border-rose-200/90 shadow-2xs">
+            <span className="font-extrabold text-xs whitespace-nowrap">{dateStr}</span>
+            <span className="font-mono text-[10px] font-bold text-rose-700 whitespace-nowrap">{timeStr}</span>
+          </div>
+        );
+      }
     },
     lostReason: {
       label: "LOST REASON",
+      align: "center",
       render: (val, row) => (
-        <span className="px-2.5 py-0.5 rounded text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
+        <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-rose-100 text-rose-800 border border-rose-200 uppercase">
           {row.lostReason || val || "Client Not Interested"}
         </span>
       )
     },
-    concernPersonName: {
-      label: "CONCERN PERSON NAME",
-      render: (val, row) => (
-        <div className="text-left font-medium text-slate-800 text-xs">
-          {row.concernPersonName || row.clientName || "--"}
-          {row.clientDesignation && <div className="text-[11px] text-slate-500 font-normal">{row.clientDesignation}</div>}
-        </div>
-      )
-    },
-    phoneNumber: {
-      label: "PHONE",
-      render: (val, row) => (
-        <a
-          href={`tel:${row.phoneNumber || row.contact || ''}`}
-          className="text-left font-sans text-slate-800 text-xs font-medium hover:text-orange-600 hover:underline"
-        >
-          {row.phoneNumber || row.contact || "--"}
-        </a>
-      )
-    },
-    expectedBusinessAmount: {
-      label: "EXPECTED REVENUE",
+    clientDetails: {
+      label: "CLIENT DETAILS",
+      align: "center",
       render: (val, row) => {
-        const amt = Number(row.expectedBusinessAmount || row.expectedBusiness || row.expectedRevenue || 0);
+        const name = row.clientName || row.concernPersonName || "--";
+        const phone = row.phoneNumber || row.contact || row.whatsappNumber || "--";
+        const email = row.emailAddress || row.email || "--";
+
         return (
-          <span className="font-mono font-bold text-rose-600 text-xs">
-            ₹ {amt.toLocaleString("en-IN")}
+          <div className="text-xs space-y-0.5 max-w-[160px] mx-auto text-center">
+            <div className="mb-0.5">
+              <span
+                className="font-extrabold text-emerald-900 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-200 shadow-2xs inline-block truncate max-w-full text-xs cursor-pointer hover:text-blue-600"
+                title={name}
+                onClick={() => setSelectedLead(row)}
+              >
+                {name}
+              </span>
+            </div>
+            {phone !== "--" ? (
+              <div>
+                <a
+                  href={`tel:${phone}`}
+                  className="font-semibold text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                >
+                  {phone}
+                </a>
+              </div>
+            ) : (
+              <div className="text-slate-400">--</div>
+            )}
+            {email !== "--" ? (
+              <div>
+                <a
+                  href={`mailto:${email}`}
+                  className="font-mono text-[11px] text-blue-600 hover:text-blue-800 hover:underline truncate block cursor-pointer"
+                  title={email}
+                >
+                  {email}
+                </a>
+              </div>
+            ) : (
+              <div className="text-slate-400 font-mono text-[11px]">--</div>
+            )}
+          </div>
+        );
+      }
+    },
+    leadType: {
+      label: "LEAD TYPE",
+      render: (val, row) => {
+        const type = (row.leadType || val || "FRESH").toUpperCase();
+        const isFresh = type === "FRESH";
+        return (
+          <span
+            className={`px-2 py-0.5 rounded-full text-[11px] font-black uppercase tracking-wide border shadow-2xs ${
+              isFresh
+                ? "bg-emerald-600 text-white border-emerald-700"
+                : "bg-blue-600 text-white border-blue-700"
+            }`}
+          >
+            {type}
           </span>
         );
       }
     },
-    salesPerson: {
-      label: "SALES PERSON",
+    leadStatus: {
+      label: "LEAD STATUS",
+      render: (val, row) => {
+        const status = (row.leadStatus || row.status || "Lost").toUpperCase();
+        return (
+          <span className="px-2 py-0.5 rounded-full text-[11px] font-extrabold uppercase border bg-rose-100 text-rose-800 border-rose-200">
+            {status}
+          </span>
+        );
+      }
+    },
+    leadMode: {
+      label: "LEAD MODE",
       render: (val, row) => (
-        <span className="text-xs font-semibold text-slate-800">
-          {val || row.salesPerson || row.assignedTo || row.assignTo || "Sales TL"}
+        <span className="text-xs font-semibold text-slate-700">
+          {row.leadMode || row.leadSource || "Business networking"}
         </span>
       )
     },
-    sourceType: {
-      label: "SOURCE / TYPE",
+    workCategory: {
+      label: "WORK CATEGORY",
       render: (val, row) => (
-        <span className="text-xs text-slate-700">
-          <strong className="text-slate-800">{row.leadMode || row.leadSource || "WEBSITE"}</strong> ({row.leadType || "FRESH"})
+        <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+          {row.workCategory || "Design"}
         </span>
       )
+    },
+    workType: {
+      label: "WORK TYPE",
+      render: (val, row) => {
+        const wt = Array.isArray(row.workType)
+          ? row.workType.join(", ")
+          : (row.workType || "Concept Drawing");
+        return (
+          <div className="max-w-[140px] truncate text-xs font-medium text-slate-700" title={wt}>
+            {wt}
+          </div>
+        );
+      }
+    },
+    alternateNumber: {
+      label: "ALTERNATE NUMBER",
+      render: (val, row) => {
+        const alt = row.alternateNumber || "--";
+        return alt !== "--" ? (
+          <a
+            href={`tel:${alt}`}
+            className="text-xs font-medium text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+          >
+            {alt}
+          </a>
+        ) : (
+          <span className="text-xs text-slate-400">--</span>
+        );
+      }
+    },
+    address: {
+      label: "ADDRESS",
+      render: (val, row) => {
+        const addr = row.address || row.siteAddress || "--";
+        return (
+          <div className="max-w-[140px] truncate text-xs text-slate-700 font-medium" title={addr}>
+            {addr}
+          </div>
+        );
+      }
+    },
+    pincode: {
+      label: "PINCODE",
+      render: (val, row) => (
+        <span className="font-mono text-xs text-slate-700 font-bold">
+          {row.pincode || "--"}
+        </span>
+      )
+    },
+    city: {
+      label: "CITY",
+      render: (val, row) => (
+        <span className="text-xs font-semibold text-slate-700">
+          {row.city || "--"}
+        </span>
+      )
+    },
+    state: {
+      label: "STATE",
+      render: (val, row) => (
+        <span className="text-xs font-semibold text-slate-700">
+          {row.state || "--"}
+        </span>
+      )
+    },
+    expectedBusiness: {
+      label: "EXPECTED BUSINESS (₹)",
+      render: (val, row) => {
+        const amt = Number(row.expectedBusinessAmount || row.expectedBusiness || row.expectedRevenue || 0);
+        return (
+          <span className="text-xs font-mono font-bold text-rose-700">
+            ₹{amt.toLocaleString('en-IN')}
+          </span>
+        );
+      }
+    },
+    assignedTo: {
+      label: "ASSIGNED TO",
+      render: (val, row) => {
+        const assignee = row.salesPerson || row.assignTo || row.assignedTo || "Sales TL";
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+            {assignee}
+          </span>
+        );
+      }
+    },
+    projectDetail: {
+      label: "PROJECT DETAIL",
+      render: (val, row) => {
+        const pd = row.projectDetail || row.projectDetails || "--";
+        return (
+          <div className="max-w-[150px] truncate text-xs text-slate-700 font-medium" title={pd}>
+            {pd}
+          </div>
+        );
+      }
+    },
+    remark: {
+      label: "REMARK",
+      render: (val, row) => {
+        const rem = row.remark || row.requirement || "--";
+        return (
+          <div className="max-w-[150px] truncate text-xs text-slate-700 font-medium" title={rem}>
+            {rem}
+          </div>
+        );
+      }
     }
-  }), []);
+  }), [currentPage, rowsPerPage]);
 
   // Filter & Search Logic
   const filteredLeads = useMemo(() => {
@@ -278,14 +449,16 @@ const Lostlead = () => {
           <button
             type="button"
             onClick={() => setShowFilters((prev) => !prev)}
-            className={`h-9 px-3.5 rounded-xl border text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-2xs ${
+            className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-center shadow-2xs font-bold text-xs sm:text-sm ${
               showFilters
-                ? "bg-slate-900 text-white border-slate-900 shadow-md"
+                ? "bg-white text-slate-800 border-slate-300 hover:bg-slate-50 shadow-2xs"
                 : "bg-[#FF5722] text-white border-[#FF5722] hover:bg-[#e64a19]"
             }`}
+            title={showFilters ? "Hide Filter Options" : "Show Filter Options"}
           >
-            <FaFilter className="w-3.5 h-3.5" />
-            <span>Filter</span>
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+            </svg>
           </button>
         }
       />
