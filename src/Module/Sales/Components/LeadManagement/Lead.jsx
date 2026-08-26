@@ -1,10 +1,20 @@
 import React, { useState, useMemo, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import Table from "../../../../Common/Components/Table";
 import ScopeTabs from "../../../../Common/Components/ScopeTabs";
+import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
 import { initialLeadsData } from "../../data/leadManagementData";
-import { FaUserPlus, FaUsers } from "react-icons/fa";
+import { FaUserPlus, FaUsers, FaUser } from "react-icons/fa";
+
+const notInterestedReasonsList = [
+  "High Price / Budget Out",
+  "Already Purchased / Competitor Chosen",
+  "Location / Distance Issue",
+  "Requirements Mismatch / Not Feasible",
+  "Other"
+];
 
 /**
  * Component: Lead (Lead Management Sheet)
@@ -107,12 +117,19 @@ const Lead = () => {
             </svg>
           </button>
 
-          {/* 3. Mark Follow-up Complete / Log Activity */}
+          {/* 3. Client Status (Interested / Not Interested) */}
           <button
             type="button"
-            onClick={() => setCompleteModalLead(row)}
+            onClick={() => {
+              setStatusModalLead(row);
+              setSelectedClientStatus("");
+              setNotInterestedReason("");
+              setCustomNotInterestedReason("");
+              setStatusRemark("");
+              setStatusRemarkAttachments([]);
+            }}
             className="w-6 h-6 rounded-lg border border-emerald-400 text-emerald-600 hover:bg-emerald-600 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
-            title="Mark Follow-up Complete / Log Activity"
+            title="Client Status (Interested / Not Interested)"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -376,6 +393,107 @@ const Lead = () => {
   const [scheduleModalLead, setScheduleModalLead] = useState(null);
   const [remarksModalLead, setRemarksModalLead] = useState(null);
   const [completeModalLead, setCompleteModalLead] = useState(null);
+
+  // Client Status Modal States
+  const [statusModalLead, setStatusModalLead] = useState(null);
+  const [selectedClientStatus, setSelectedClientStatus] = useState("");
+  const [notInterestedReason, setNotInterestedReason] = useState("");
+  const [customNotInterestedReason, setCustomNotInterestedReason] = useState("");
+  const [statusRemark, setStatusRemark] = useState("");
+  const [statusRemarkAttachments, setStatusRemarkAttachments] = useState([]);
+
+  // Handler to move lead to Lost Leads or update status based on Client Status
+  const handleSendToSalesManagement = () => {
+    if (!statusModalLead) return;
+
+    if (!selectedClientStatus) {
+      toast.error("Please select Client Status (INTERESTED or NOT INTERESTED)!");
+      return;
+    }
+
+    if (selectedClientStatus === "NOT INTERESTED") {
+      if (!notInterestedReason) {
+        toast.error("Please select a reason why the client is not interested!");
+        return;
+      }
+      if (notInterestedReason === "Other" && !customNotInterestedReason.trim()) {
+        toast.error("Please specify the reason in the text input box!");
+        return;
+      }
+    }
+
+    const today = new Date();
+    const formattedDate = today.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+    const formattedTime = today.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+
+    const finalReason = notInterestedReason === "Other" ? customNotInterestedReason.trim() : notInterestedReason;
+
+    const processedAttachments = (statusRemarkAttachments || []).map((item) => ({
+      id: item.id || `att-${Date.now()}-${Math.random()}`,
+      name: item.name || item.file?.name || "Attachment",
+      type: item.type || "file",
+      url: item.preview || item.url || ""
+    }));
+
+    if (selectedClientStatus === "INTERESTED") {
+      // Update status in leads list
+      const updatedLeads = leads.map((l) =>
+        l.id === statusModalLead.id
+          ? {
+              ...l,
+              leadStatus: "Hot",
+              status: "INTERESTED",
+              isInterested: true,
+              remark: statusRemark || l.remark || "",
+              remarkAttachments: processedAttachments.length > 0 ? processedAttachments : (l.remarkAttachments || []),
+              attachments: processedAttachments.length > 0 ? processedAttachments : (l.attachments || [])
+            }
+          : l
+      );
+      saveLeads(updatedLeads);
+      toast.success(`Lead ${statusModalLead.clientName || statusModalLead.concernPersonName} marked as INTERESTED! 🎯`);
+    } else if (selectedClientStatus === "NOT INTERESTED") {
+      // Move to Lost Leads (dss_lost_leads) and remove from current list
+      const lostLeadData = {
+        ...statusModalLead,
+        leadStatus: "Cold",
+        status: "NOT INTERESTED",
+        isInterested: false,
+        lostReason: finalReason,
+        remark: statusRemark || statusModalLead.remark || "",
+        remarkAttachments: processedAttachments.length > 0 ? processedAttachments : (statusModalLead.remarkAttachments || []),
+        attachments: processedAttachments.length > 0 ? processedAttachments : (statusModalLead.attachments || []),
+        lostDate: formattedDate,
+        lostTime: formattedTime
+      };
+
+      try {
+        const savedLost = localStorage.getItem("dss_lost_leads");
+        const currentLost = savedLost ? JSON.parse(savedLost) : [];
+        const filteredLost = currentLost.filter(l => l.id !== statusModalLead.id);
+        localStorage.setItem("dss_lost_leads", JSON.stringify([lostLeadData, ...filteredLost]));
+      } catch (e) {
+        console.error("Error saving to lost leads:", e);
+      }
+
+      // Remove from active lead management sheet
+      const filtered = leads.filter(l => l.id !== statusModalLead.id);
+      saveLeads(filtered);
+
+      toast.success(`Lead ${statusModalLead.clientName || statusModalLead.concernPersonName} marked as NOT INTERESTED (${finalReason}) and moved to Lost Leads! 📌`);
+    }
+
+    setStatusModalLead(null);
+    setSelectedClientStatus("");
+    setNotInterestedReason("");
+    setCustomNotInterestedReason("");
+    setStatusRemark("");
+    setStatusRemarkAttachments([]);
+
+    if (selectedClientStatus === "NOT INTERESTED") {
+      navigate("/sales/leads/lost");
+    }
+  };
 
   // Media Attachments and Audio Recording State
   const [attachments, setAttachments] = useState({
@@ -1037,137 +1155,25 @@ const Lead = () => {
               {/* Row 3: CURRENT DISCUSSION & NEXT DISCUSSION TOPIC (SPEECH CARDS) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-2">
-                    CURRENT DISCUSSION
-                  </label>
-                  <div className="p-4 rounded-2xl bg-slate-50/70 border border-slate-200/70 relative flex flex-col justify-between min-h-[120px] focus-within:bg-white focus-within:border-blue-400 transition-all shadow-2xs">
-                    <textarea
-                      rows={3}
-                      placeholder="Enter current discussion or record..."
-                      value={scheduleFormData.notes || ""}
-                      onChange={(e) => setScheduleFormData({ ...scheduleFormData, notes: e.target.value })}
-                      className="w-full bg-transparent text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none resize-none"
-                    />
-
-                    {/* Attachments Display */}
-                    {attachments.current && attachments.current.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-slate-200/60">
-                        {attachments.current.map((att, i) => (
-                          <div key={i} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-semibold text-slate-700 shadow-2xs">
-                            <span>{att.type === "image" ? "📷" : att.type === "video" ? "🎥" : "🎵"}</span>
-                            <span className="max-w-[100px] truncate">{att.name}</span>
-                            {att.url && att.type === "audio" && (
-                              <audio src={att.url} controls className="h-6 w-24 text-xs" />
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => removeAttachment("current", i)}
-                              className="text-slate-400 hover:text-red-500 font-bold ml-1 text-xs cursor-pointer"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-between mt-2 pt-1">
-                      {recordingState.current ? (
-                        <span className="text-[11px] font-bold text-red-500 animate-pulse flex items-center gap-1">
-                          🔴 Recording...
-                        </span>
-                      ) : (
-                        <span />
-                      )}
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => triggerFileUpload("current")}
-                          className="w-8 h-8 rounded-full bg-slate-200/80 hover:bg-slate-300 text-slate-700 font-bold flex items-center justify-center text-sm transition-colors cursor-pointer"
-                          title="Upload Image, Audio or Video"
-                        >
-                          +
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => toggleVoiceRecording("current")}
-                          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm shadow-xs transition-all cursor-pointer ${
-                            recordingState.current ? "bg-red-600 text-white animate-pulse" : "bg-emerald-500 hover:bg-emerald-600 text-white"
-                          }`}
-                          title={recordingState.current ? "Stop Recording" : "Record Voice Note"}
-                        >
-                          🎙️
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+                  <CommentWithMedia
+                    title="CURRENT DISCUSSION"
+                    placeholder="Enter current discussion or record..."
+                    value={scheduleFormData.notes || ""}
+                    onChange={(val) => setScheduleFormData((prev) => ({ ...prev, notes: val }))}
+                    files={attachments.current || []}
+                    onFilesChange={(newFiles) => setAttachments((prev) => ({ ...prev, current: newFiles }))}
+                  />
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-2">
-                    NEXT DISCUSSION TOPIC
-                  </label>
-                  <div className="p-4 rounded-2xl bg-slate-50/70 border border-slate-200/70 relative flex flex-col justify-between min-h-[120px] focus-within:bg-white focus-within:border-blue-400 transition-all shadow-2xs">
-                    <textarea
-                      rows={3}
-                      placeholder="Enter next topic or record..."
-                      value={scheduleFormData.nextDiscussionTopic || ""}
-                      onChange={(e) => setScheduleFormData({ ...scheduleFormData, nextDiscussionTopic: e.target.value })}
-                      className="w-full bg-transparent text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none resize-none"
-                    />
-
-                    {/* Attachments Display */}
-                    {attachments.next && attachments.next.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-slate-200/60">
-                        {attachments.next.map((att, i) => (
-                          <div key={i} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-semibold text-slate-700 shadow-2xs">
-                            <span>{att.type === "image" ? "📷" : att.type === "video" ? "🎥" : "🎵"}</span>
-                            <span className="max-w-[100px] truncate">{att.name}</span>
-                            {att.url && att.type === "audio" && (
-                              <audio src={att.url} controls className="h-6 w-24 text-xs" />
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => removeAttachment("next", i)}
-                              className="text-slate-400 hover:text-red-500 font-bold ml-1 text-xs cursor-pointer"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    <div className="flex items-center justify-between mt-2 pt-1">
-                      {recordingState.next ? (
-                        <span className="text-[11px] font-bold text-red-500 animate-pulse flex items-center gap-1">
-                          🔴 Recording...
-                        </span>
-                      ) : (
-                        <span />
-                      )}
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => triggerFileUpload("next")}
-                          className="w-8 h-8 rounded-full bg-slate-200/80 hover:bg-slate-300 text-slate-700 font-bold flex items-center justify-center text-sm transition-colors cursor-pointer"
-                          title="Upload Image, Audio or Video"
-                        >
-                          +
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => toggleVoiceRecording("next")}
-                          className={`w-8 h-8 rounded-full flex items-center justify-center text-sm shadow-xs transition-all cursor-pointer ${
-                            recordingState.next ? "bg-red-600 text-white animate-pulse" : "bg-emerald-500 hover:bg-emerald-600 text-white"
-                          }`}
-                          title={recordingState.next ? "Stop Recording" : "Record Voice Note"}
-                        >
-                          🎙️
-                        </button>
-                      </div>
-                    </div>
-                  </div>
+                  <CommentWithMedia
+                    title="NEXT DISCUSSION TOPIC"
+                    placeholder="Enter next topic or record..."
+                    value={scheduleFormData.nextDiscussionTopic || ""}
+                    onChange={(val) => setScheduleFormData((prev) => ({ ...prev, nextDiscussionTopic: val }))}
+                    files={attachments.next || []}
+                    onFilesChange={(newFiles) => setAttachments((prev) => ({ ...prev, next: newFiles }))}
+                  />
                 </div>
               </div>
 
@@ -1302,70 +1308,14 @@ const Lead = () => {
 
               {/* Row 7 (From Image 2): FOLLOW-UP REMARKS SPEECH CARD */}
               <div>
-                <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-2">
-                  FOLLOW-UP REMARKS
-                </label>
-                <div className="p-4 rounded-2xl bg-slate-50/70 border border-slate-200/70 relative flex flex-col justify-between min-h-[120px] focus-within:bg-white focus-within:border-blue-400 transition-all shadow-2xs">
-                  <textarea
-                    rows={3}
-                    placeholder="Enter remarks or record voice note..."
-                    value={scheduleFormData.followupRemarks || ""}
-                    onChange={(e) => setScheduleFormData({ ...scheduleFormData, followupRemarks: e.target.value })}
-                    className="w-full bg-transparent text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none resize-none"
-                  />
-
-                  {/* Attachments Display */}
-                  {attachments.remarks && attachments.remarks.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2 pt-2 border-t border-slate-200/60">
-                      {attachments.remarks.map((att, i) => (
-                        <div key={i} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-xs font-semibold text-slate-700 shadow-2xs">
-                          <span>{att.type === "image" ? "📷" : att.type === "video" ? "🎥" : "🎵"}</span>
-                          <span className="max-w-[100px] truncate">{att.name}</span>
-                          {att.url && att.type === "audio" && (
-                            <audio src={att.url} controls className="h-6 w-24 text-xs" />
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => removeAttachment("remarks", i)}
-                            className="text-slate-400 hover:text-red-500 font-bold ml-1 text-xs cursor-pointer"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  <div className="flex items-center justify-between mt-2 pt-1">
-                    {recordingState.remarks ? (
-                      <span className="text-[11px] font-bold text-red-500 animate-pulse flex items-center gap-1">
-                        🔴 Recording...
-                      </span>
-                    ) : (
-                      <span />
-                    )}
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={() => triggerFileUpload("remarks")}
-                        className="w-8 h-8 rounded-full bg-slate-200/80 hover:bg-slate-300 text-slate-700 font-bold flex items-center justify-center text-sm transition-colors cursor-pointer"
-                        title="Upload Image, Audio or Video"
-                      >
-                        +
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => toggleVoiceRecording("remarks")}
-                        className={`w-8 h-8 rounded-full flex items-center justify-center text-sm shadow-xs transition-all cursor-pointer ${
-                          recordingState.remarks ? "bg-red-600 text-white animate-pulse" : "bg-emerald-500 hover:bg-emerald-600 text-white"
-                        }`}
-                        title={recordingState.remarks ? "Stop Recording" : "Record Voice Note"}
-                      >
-                        🎙️
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                <CommentWithMedia
+                  title="FOLLOW-UP REMARKS"
+                  placeholder="Enter remarks or record voice note..."
+                  value={scheduleFormData.followupRemarks || ""}
+                  onChange={(val) => setScheduleFormData((prev) => ({ ...prev, followupRemarks: val }))}
+                  files={attachments.remarks || []}
+                  onFilesChange={(newFiles) => setAttachments((prev) => ({ ...prev, remarks: newFiles }))}
+                />
               </div>
 
             </form>
@@ -1598,6 +1548,178 @@ const Lead = () => {
                 Confirm Converted
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= CLIENT STATUS / LEAD DETAILS MODAL ================= */}
+      {statusModalLead && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100 p-6 space-y-5 animate-in zoom-in-95 duration-200">
+            
+            {/* Modal Title */}
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-extrabold text-slate-900">Lead Details</h3>
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusModalLead(null);
+                  setSelectedClientStatus("");
+                  setNotInterestedReason("");
+                  setCustomNotInterestedReason("");
+                  setStatusRemark("");
+                  setStatusRemarkAttachments([]);
+                }}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 text-sm font-bold transition-colors cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Top Cards: Client Info (Light Blue) & Expected Business (Light Green) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {/* Left Box: Client Info */}
+              <div className="p-4 rounded-2xl bg-blue-50/80 border border-blue-100 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-sm shrink-0">
+                  <FaUser className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-sm font-extrabold text-slate-900 truncate">
+                    {statusModalLead.clientName || statusModalLead.concernPersonName || "Client Name"}
+                  </h4>
+                  <p className="text-xs font-mono text-slate-600 font-semibold truncate">
+                    {statusModalLead.phoneNumber || statusModalLead.contact || "--"}
+                  </p>
+                  <p className="text-[11px] text-slate-500 font-medium truncate">
+                    {statusModalLead.emailAddress || statusModalLead.email || "--"}
+                  </p>
+                </div>
+              </div>
+
+              {/* Right Box: Expected Business */}
+              <div className="p-4 rounded-2xl bg-emerald-100/70 border border-emerald-200/80 text-center flex flex-col justify-center items-center">
+                <span className="text-xs font-bold text-slate-700 tracking-wide uppercase mb-1">
+                  Expected Business
+                </span>
+                <span className="text-2xl font-black text-slate-900 font-mono">
+                  {statusModalLead.expectedBusiness || statusModalLead.expectedRevenue || statusModalLead.expectedBusinessAmount || "0"}
+                </span>
+              </div>
+            </div>
+
+            {/* Form Section: Client Status Dropdown */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                Client Status <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={selectedClientStatus}
+                onChange={(e) => {
+                  setSelectedClientStatus(e.target.value);
+                  if (e.target.value !== "NOT INTERESTED") {
+                    setNotInterestedReason("");
+                    setCustomNotInterestedReason("");
+                  }
+                }}
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm font-bold text-slate-800 bg-white focus:outline-none focus:border-orange-500 shadow-2xs cursor-pointer"
+              >
+                <option value="">-- Select Status --</option>
+                <option value="INTERESTED">INTERESTED</option>
+                <option value="NOT INTERESTED">NOT INTERESTED</option>
+              </select>
+            </div>
+
+            {/* If NOT INTERESTED selected: Show Reason Dropdown, Custom Reason Input & Remarks with Media */}
+            {selectedClientStatus === "NOT INTERESTED" && (
+              <div className="space-y-4 pt-1 animate-in fade-in duration-200">
+                {/* Reason Dropdown (DDL) */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                    Reason For Not Interested <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={notInterestedReason}
+                    onChange={(e) => setNotInterestedReason(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm font-bold text-slate-800 bg-white focus:outline-none focus:border-red-500 shadow-2xs cursor-pointer"
+                  >
+                    <option value="">-- Select Reason --</option>
+                    {notInterestedReasonsList.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* If "Other" selected: Custom Reason Write-In Input Box */}
+                {notInterestedReason === "Other" && (
+                  <div className="animate-in fade-in duration-200">
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Specify Other Reason <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Type specific reason why client is not interested..."
+                      value={customNotInterestedReason}
+                      onChange={(e) => setCustomNotInterestedReason(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-800 bg-white focus:outline-none focus:border-red-500 shadow-2xs placeholder:text-slate-400"
+                    />
+                  </div>
+                )}
+
+                {/* Remarks Field with Media Attachments (Audio Recording, Photos, Videos, Documents) */}
+                <div className="pt-1">
+                  <CommentWithMedia
+                    title="Remarks & Attachments (Audio / Image)"
+                    placeholder="Write detailed remarks or record audio note..."
+                    value={statusRemark}
+                    onChange={(val) => setStatusRemark(val)}
+                    files={statusRemarkAttachments}
+                    onFilesChange={(newFiles) => setStatusRemarkAttachments(newFiles)}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* If INTERESTED selected: Optional Remarks with Media Attachment */}
+            {selectedClientStatus === "INTERESTED" && (
+              <div className="pt-1 animate-in fade-in duration-200">
+                <CommentWithMedia
+                  title="Remarks & Attachments (Optional)"
+                  placeholder="Write optional remark or record audio note..."
+                  value={statusRemark}
+                  onChange={(val) => setStatusRemark(val)}
+                  files={statusRemarkAttachments}
+                  onFilesChange={(newFiles) => setStatusRemarkAttachments(newFiles)}
+                />
+              </div>
+            )}
+
+            {/* Modal Footer Actions */}
+            <div className="pt-2 flex items-center justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusModalLead(null);
+                  setSelectedClientStatus("");
+                  setNotInterestedReason("");
+                  setCustomNotInterestedReason("");
+                  setStatusRemark("");
+                  setStatusRemarkAttachments([]);
+                }}
+                className="px-5 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSendToSalesManagement}
+                className="px-6 py-2.5 rounded-xl bg-[#ff5722] hover:bg-[#e64a19] text-white text-sm font-extrabold shadow-md shadow-orange-500/20 transition-all cursor-pointer"
+              >
+                Submit
+              </button>
+            </div>
+
           </div>
         </div>
       )}

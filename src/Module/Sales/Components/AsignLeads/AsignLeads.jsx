@@ -119,6 +119,8 @@ const AsignLeads = () => {
       url: item.preview || item.url || ""
     }));
 
+    const targetPath = selectedClientStatus === "INTERESTED" ? "/sales/leads/all" : "/sales/leads/lost";
+
     if (selectedClientStatus === "INTERESTED") {
       // 1. Move to Lead Management (dss_lead_management_sheet_v1) & Followup Leads
       const leadData = {
@@ -195,6 +197,11 @@ const AsignLeads = () => {
     setCustomNotInterestedReason("");
     setStatusRemark("");
     setStatusRemarkAttachments([]);
+
+    // Redirect to corresponding page
+    if (targetPath) {
+      navigate(targetPath);
+    }
   };
 
   // Table Column Configuration matching Total Leads exactly
