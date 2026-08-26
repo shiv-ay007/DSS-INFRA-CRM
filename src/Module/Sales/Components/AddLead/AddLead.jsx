@@ -31,7 +31,7 @@ const Addlead = () => {
 
   // Lead Mode options
   const leadModeList = [
-    "Business networking",
+    "Business Networking",
     "By Freelancer",
     "By Sales Team",
     "Customer to Customer"

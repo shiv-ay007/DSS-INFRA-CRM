@@ -6,6 +6,7 @@ import Table from "../../../../Common/Components/Table";
 import ScopeTabs from "../../../../Common/Components/ScopeTabs";
 import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
 import { initialTotalLeads } from "../../data/totalLeadsData";
+import { initialAssignedLeads } from "../../data/assignedLeadsData";
 import { availableWorkTypes, workCategoryList, indianStatesList } from "../../data/addLeadData";
 import { FaUserPlus, FaUsers, FaUserCheck, FaImage, FaVideo, FaMicrophone, FaFileAlt, FaPaperclip, FaTimes, FaDownload, FaPlay, FaPause } from "react-icons/fa";
 
@@ -407,7 +408,17 @@ const SalseTotalLeads = () => {
     // 2. Save / prepend to dss_assigned_leads (Assigned Leads)
     try {
       const savedAssigned = localStorage.getItem("dss_assigned_leads");
-      const currentAssigned = savedAssigned ? JSON.parse(savedAssigned) : [];
+      let currentAssigned = [];
+      if (savedAssigned) {
+        try {
+          const parsed = JSON.parse(savedAssigned);
+          if (Array.isArray(parsed) && parsed.length > 0) currentAssigned = parsed;
+        } catch (e) {}
+      }
+      if (currentAssigned.length === 0) {
+        currentAssigned = initialAssignedLeads;
+      }
+
       const filteredAssigned = currentAssigned.filter((item) => item.id !== assignModalLead.id);
       localStorage.setItem(
         "dss_assigned_leads",
@@ -417,10 +428,11 @@ const SalseTotalLeads = () => {
       console.error("Error saving assigned lead:", e);
     }
 
-    toast.success(`Lead ${assignModalLead.id} assigned to ${assignedPerson} successfully! 🎯`);
+    toast.success(`Lead ${assignModalLead.clientName || assignModalLead.concernPersonName || assignModalLead.id} assigned to ${assignedPerson} successfully! 🎯`);
     setAssignModalLead(null);
     setAssignmentRemark("");
     setAssignmentFiles([]);
+    navigate("/sales/leads/assigned");
   };
 
   // Table Column Configuration matching AddLead form fields in exact sequence
@@ -478,14 +490,22 @@ const SalseTotalLeads = () => {
       }
     },
     createdDate: {
-      label: "CREATED DATE & TIME",
+      label: "CREATED DATE",
       render: (val, row) => {
         const dateStr = row.createdDate || row.date || "2026-08-18";
         const timeStr = row.createdTime || "11:00 am";
         return (
-          <div className="text-xs font-medium text-slate-700 whitespace-nowrap">
-            <div>{dateStr}</div>
-            <div className="text-[11px] font-mono text-slate-500 font-bold">{timeStr}</div>
+          <div className="text-xs space-y-1 whitespace-nowrap">
+            <div>
+              <span className="inline-block px-2 py-0.5 rounded-md bg-blue-50 text-blue-900 border border-blue-200/80 font-extrabold text-xs shadow-2xs">
+                {dateStr}
+              </span>
+            </div>
+            <div>
+              <span className="inline-block px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200/80 font-mono text-[10px] font-extrabold shadow-2xs">
+                {timeStr}
+              </span>
+            </div>
           </div>
         );
       }
@@ -663,6 +683,18 @@ const SalseTotalLeads = () => {
         return (
           <span className="text-xs font-mono font-bold text-slate-900">
             ₹{amt.toLocaleString('en-IN')}
+          </span>
+        );
+      }
+    },
+    assignedTo: {
+      label: "ASSIGNED TO",
+      render: (val, row) => {
+        const assignee = row.assignTo || row.assignedTo || row.salesPerson || "Sales TL";
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+            {assignee}
           </span>
         );
       }

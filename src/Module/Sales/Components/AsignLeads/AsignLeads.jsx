@@ -203,14 +203,22 @@ const AsignLeads = () => {
       }
     },
     createdDate: {
-      label: "CREATED DATE & TIME",
+      label: "CREATED DATE",
       render: (val, row) => {
         const dateStr = row.createdDate || row.date || row.assignedDate || "2026-08-18";
         const timeStr = row.createdTime || row.assignedTime || "11:00 am";
         return (
-          <div className="text-xs font-medium text-slate-700 whitespace-nowrap">
-            <div>{dateStr}</div>
-            <div className="text-[10px] font-mono text-slate-500 font-bold">{timeStr}</div>
+          <div className="text-xs space-y-1 whitespace-nowrap">
+            <div>
+              <span className="inline-block px-2 py-0.5 rounded-md bg-blue-50 text-blue-900 border border-blue-200/80 font-extrabold text-xs shadow-2xs">
+                {dateStr}
+              </span>
+            </div>
+            <div>
+              <span className="inline-block px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-800 border border-amber-200/80 font-mono text-[10px] font-extrabold shadow-2xs">
+                {timeStr}
+              </span>
+            </div>
           </div>
         );
       }
@@ -917,7 +925,7 @@ const AsignLeads = () => {
                 onClick={handleSendToSalesManagement}
                 className="px-6 py-2.5 rounded-xl bg-[#ff5722] hover:bg-[#e64a19] text-white text-sm font-extrabold shadow-md shadow-orange-500/20 transition-all cursor-pointer"
               >
-                Send To Sales Management
+                Submit
               </button>
             </div>
 
