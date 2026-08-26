@@ -4,6 +4,7 @@ import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import Table from "../../../../Common/Components/Table";
 import ScopeTabs from "../../../../Common/Components/ScopeTabs";
+import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
 import { initialAssignedLeads, teamMembers } from "../../data/assignedLeadsData";
 import { availableWorkTypes, workCategoryList, leadTypesList } from "../../data/addLeadData";
 import { FaUserPlus, FaSearch, FaFilter, FaUserCheck, FaUser, FaRegCheckCircle } from "react-icons/fa";
@@ -14,6 +15,14 @@ const leadModesList = [
   "By freelancer",
   "By sales Team",
   "Customer to customer"
+];
+
+const notInterestedReasonsList = [
+  "High Price / Budget Out",
+  "Already Purchased / Competitor Chosen",
+  "Location / Distance Issue",
+  "Requirements Mismatch / Not Feasible",
+  "Other"
 ];
 
 const AsignLeads = () => {
@@ -59,6 +68,10 @@ const AsignLeads = () => {
   const [newAssignee, setNewAssignee] = useState("");
   const [statusModalLead, setStatusModalLead] = useState(null);
   const [selectedClientStatus, setSelectedClientStatus] = useState("");
+  const [notInterestedReason, setNotInterestedReason] = useState("");
+  const [customNotInterestedReason, setCustomNotInterestedReason] = useState("");
+  const [statusRemark, setStatusRemark] = useState("");
+  const [statusRemarkAttachments, setStatusRemarkAttachments] = useState([]);
 
   const handleResetFilters = () => {
     setSearchTerm("");
@@ -82,9 +95,29 @@ const AsignLeads = () => {
       return;
     }
 
+    if (selectedClientStatus === "NOT INTERESTED") {
+      if (!notInterestedReason) {
+        toast.error("Please select a reason why the client is not interested!");
+        return;
+      }
+      if (notInterestedReason === "Other" && !customNotInterestedReason.trim()) {
+        toast.error("Please specify the reason in the text input box!");
+        return;
+      }
+    }
+
     const today = new Date();
     const formattedDate = today.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
     const formattedTime = today.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+
+    const finalReason = notInterestedReason === "Other" ? customNotInterestedReason.trim() : notInterestedReason;
+
+    const processedAttachments = (statusRemarkAttachments || []).map((item) => ({
+      id: item.id || `att-${Date.now()}-${Math.random()}`,
+      name: item.name || item.file?.name || "Attachment",
+      type: item.type || "file",
+      url: item.preview || item.url || ""
+    }));
 
     if (selectedClientStatus === "INTERESTED") {
       // 1. Move to Lead Management (dss_lead_management_sheet_v1) & Followup Leads
@@ -93,6 +126,9 @@ const AsignLeads = () => {
         leadStatus: "Hot",
         status: "INTERESTED",
         isInterested: true,
+        remark: statusRemark || statusModalLead.remark || "",
+        remarkAttachments: processedAttachments.length > 0 ? processedAttachments : (statusModalLead.remarkAttachments || []),
+        attachments: processedAttachments.length > 0 ? processedAttachments : (statusModalLead.attachments || []),
         movedToFollowupDate: formattedDate,
         movedToFollowupTime: formattedTime,
         nextFollowupDate: formattedDate,
@@ -129,7 +165,10 @@ const AsignLeads = () => {
         leadStatus: "Cold",
         status: "NOT INTERESTED",
         isInterested: false,
-        lostReason: "Client Not Interested",
+        lostReason: finalReason,
+        remark: statusRemark || statusModalLead.remark || "",
+        remarkAttachments: processedAttachments.length > 0 ? processedAttachments : (statusModalLead.remarkAttachments || []),
+        attachments: processedAttachments.length > 0 ? processedAttachments : (statusModalLead.attachments || []),
         lostDate: formattedDate,
         lostTime: formattedTime
       };
@@ -143,7 +182,7 @@ const AsignLeads = () => {
         console.error("Error saving to lost leads:", e);
       }
 
-      toast.success(`Lead ${statusModalLead.clientName || statusModalLead.concernPersonName} marked as NOT INTERESTED and moved to Lost Leads! 📌`);
+      toast.success(`Lead ${statusModalLead.clientName || statusModalLead.concernPersonName} marked as NOT INTERESTED (${finalReason}) and moved to Lost Leads! 📌`);
     }
 
     // Remove from dss_assigned_leads list
@@ -152,6 +191,10 @@ const AsignLeads = () => {
 
     setStatusModalLead(null);
     setSelectedClientStatus("");
+    setNotInterestedReason("");
+    setCustomNotInterestedReason("");
+    setStatusRemark("");
+    setStatusRemarkAttachments([]);
   };
 
   // Table Column Configuration matching Total Leads exactly
@@ -191,6 +234,10 @@ const AsignLeads = () => {
                 onClick={() => {
                   setStatusModalLead(row);
                   setSelectedClientStatus("");
+                  setNotInterestedReason("");
+                  setCustomNotInterestedReason("");
+                  setStatusRemark("");
+                  setStatusRemarkAttachments([]);
                 }}
                 className="w-6.5 h-6.5 rounded-md border border-emerald-500 text-emerald-600 hover:bg-emerald-600 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
                 title="Client Status (Interested / Not Interested)"
@@ -853,10 +900,10 @@ const AsignLeads = () => {
         </div>
       )}
 
-      {/* ================= CLIENT STATUS / LEAD DETAILS MODAL (MATCHING IMAGE 1) ================= */}
+      {/* ================= CLIENT STATUS / LEAD DETAILS MODAL ================= */}
       {statusModalLead && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl overflow-hidden border border-slate-100 p-6 space-y-6 animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-3xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100 p-6 space-y-5 animate-in zoom-in-95 duration-200">
             
             {/* Modal Title */}
             <div className="flex items-center justify-between">
@@ -866,6 +913,10 @@ const AsignLeads = () => {
                 onClick={() => {
                   setStatusModalLead(null);
                   setSelectedClientStatus("");
+                  setNotInterestedReason("");
+                  setCustomNotInterestedReason("");
+                  setStatusRemark("");
+                  setStatusRemarkAttachments([]);
                 }}
                 className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 text-sm font-bold transition-colors cursor-pointer"
               >
@@ -907,11 +958,17 @@ const AsignLeads = () => {
             {/* Form Section: Client Status Dropdown */}
             <div>
               <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                Client Status
+                Client Status <span className="text-red-500">*</span>
               </label>
               <select
                 value={selectedClientStatus}
-                onChange={(e) => setSelectedClientStatus(e.target.value)}
+                onChange={(e) => {
+                  setSelectedClientStatus(e.target.value);
+                  if (e.target.value !== "NOT INTERESTED") {
+                    setNotInterestedReason("");
+                    setCustomNotInterestedReason("");
+                  }
+                }}
                 className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm font-bold text-slate-800 bg-white focus:outline-none focus:border-orange-500 shadow-2xs cursor-pointer"
               >
                 <option value="">-- Select Status --</option>
@@ -920,6 +977,72 @@ const AsignLeads = () => {
               </select>
             </div>
 
+            {/* If NOT INTERESTED selected: Show Reason Dropdown, Custom Reason Input & Remarks with Media */}
+            {selectedClientStatus === "NOT INTERESTED" && (
+              <div className="space-y-4 pt-1 animate-in fade-in duration-200">
+                {/* Reason Dropdown (DDL) */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                    Reason For Not Interested <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={notInterestedReason}
+                    onChange={(e) => setNotInterestedReason(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm font-bold text-slate-800 bg-white focus:outline-none focus:border-red-500 shadow-2xs cursor-pointer"
+                  >
+                    <option value="">-- Select Reason --</option>
+                    {notInterestedReasonsList.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* If "Other" selected: Custom Reason Write-In Input Box */}
+                {notInterestedReason === "Other" && (
+                  <div className="animate-in fade-in duration-200">
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Specify Other Reason <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Type specific reason why client is not interested..."
+                      value={customNotInterestedReason}
+                      onChange={(e) => setCustomNotInterestedReason(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-800 bg-white focus:outline-none focus:border-red-500 shadow-2xs placeholder:text-slate-400"
+                    />
+                  </div>
+                )}
+
+                {/* Remarks Field with Media Attachments (Audio Recording, Photos, Videos, Documents) */}
+                <div className="pt-1">
+                  <CommentWithMedia
+                    title="Remarks & Attachments (Audio / Image)"
+                    placeholder="Write detailed remarks or record audio note..."
+                    value={statusRemark}
+                    onChange={(val) => setStatusRemark(val)}
+                    files={statusRemarkAttachments}
+                    onFilesChange={(newFiles) => setStatusRemarkAttachments(newFiles)}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* If INTERESTED selected: Optional Remarks with Media Attachment */}
+            {selectedClientStatus === "INTERESTED" && (
+              <div className="pt-1 animate-in fade-in duration-200">
+                <CommentWithMedia
+                  title="Remarks & Attachments (Optional)"
+                  placeholder="Write optional remark or record audio note..."
+                  value={statusRemark}
+                  onChange={(val) => setStatusRemark(val)}
+                  files={statusRemarkAttachments}
+                  onFilesChange={(newFiles) => setStatusRemarkAttachments(newFiles)}
+                />
+              </div>
+            )}
+
             {/* Modal Footer Actions */}
             <div className="pt-2 flex items-center justify-end gap-3">
               <button
@@ -927,6 +1050,10 @@ const AsignLeads = () => {
                 onClick={() => {
                   setStatusModalLead(null);
                   setSelectedClientStatus("");
+                  setNotInterestedReason("");
+                  setCustomNotInterestedReason("");
+                  setStatusRemark("");
+                  setStatusRemarkAttachments([]);
                 }}
                 className="px-5 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold transition-colors cursor-pointer"
               >
