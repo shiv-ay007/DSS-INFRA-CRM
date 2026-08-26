@@ -41,19 +41,55 @@ const Follow = () => {
   // State for all scheduled leads
   const [leads, setLeads] = useState(() => {
     try {
-      const saved = localStorage.getItem("dss_scheduled_leads_sheet");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      const savedScheduled = localStorage.getItem("dss_scheduled_leads_sheet");
+      const savedMgmt = localStorage.getItem("dss_lead_management_sheet_v1");
+
+      const scheduledLeads = savedScheduled ? JSON.parse(savedScheduled) : [];
+      const mgmtLeads = savedMgmt ? JSON.parse(savedMgmt) : [];
+
+      const mergedMap = new Map();
+
+      if (Array.isArray(mgmtLeads)) {
+        mgmtLeads.forEach((l) => {
+          if (l.nextFollowupDate || (l.followupHistory && l.followupHistory.length > 0)) {
+            mergedMap.set(l.id, l);
+          }
+        });
       }
-    } catch (e) {}
-    return initialScheduledLeads;
+
+      if (Array.isArray(scheduledLeads)) {
+        scheduledLeads.forEach((l) => {
+          mergedMap.set(l.id, l);
+        });
+      }
+
+      const mergedList = Array.from(mergedMap.values());
+      return mergedList.length > 0 ? mergedList : initialScheduledLeads;
+    } catch (e) {
+      return initialScheduledLeads;
+    }
   });
 
   const saveLeads = (newLeads) => {
     setLeads(newLeads);
     try {
       localStorage.setItem("dss_scheduled_leads_sheet", JSON.stringify(newLeads));
+
+      // Also sync to Lead Management sheet
+      const savedMgmt = localStorage.getItem("dss_lead_management_sheet_v1");
+      const currentMgmt = savedMgmt ? JSON.parse(savedMgmt) : [];
+
+      const mgmtMap = new Map();
+      if (Array.isArray(currentMgmt)) {
+        currentMgmt.forEach((item) => mgmtMap.set(item.id, item));
+      }
+
+      newLeads.forEach((l) => {
+        mgmtMap.set(l.id, l);
+      });
+
+      const updatedMgmtList = Array.from(mgmtMap.values());
+      localStorage.setItem("dss_lead_management_sheet_v1", JSON.stringify(updatedMgmtList));
     } catch (e) {}
   };
 

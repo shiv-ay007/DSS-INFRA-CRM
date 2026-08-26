@@ -59,6 +59,24 @@ const Lead = () => {
     setLeads(newLeads);
     try {
       localStorage.setItem("dss_lead_management_sheet_v1", JSON.stringify(newLeads));
+
+      // Sync scheduled leads to dss_scheduled_leads_sheet for Followup page
+      const savedScheduled = localStorage.getItem("dss_scheduled_leads_sheet");
+      const currentScheduled = savedScheduled ? JSON.parse(savedScheduled) : [];
+      
+      const scheduledMap = new Map();
+      if (Array.isArray(currentScheduled)) {
+        currentScheduled.forEach((item) => scheduledMap.set(item.id, item));
+      }
+
+      newLeads.forEach((l) => {
+        if (l.nextFollowupDate || (l.followupHistory && l.followupHistory.length > 0)) {
+          scheduledMap.set(l.id, l);
+        }
+      });
+
+      const updatedScheduledList = Array.from(scheduledMap.values());
+      localStorage.setItem("dss_scheduled_leads_sheet", JSON.stringify(updatedScheduledList));
     } catch (e) {
       console.error(e);
     }
@@ -207,6 +225,42 @@ const Lead = () => {
               </div>
             ) : (
               <div className="text-slate-400 font-mono text-[11px]">--</div>
+            )}
+          </div>
+        );
+      }
+    },
+    followupRemarks: {
+      label: "FOLLOW-UP REMARK",
+      align: "center",
+      render: (val, row) => {
+        const count = (row.followupHistory && row.followupHistory.length > 0)
+          ? row.followupHistory.length
+          : (row.followupRemarksCount || 1);
+        return (
+          <button
+            type="button"
+            onClick={() => setRemarksModalLead(row)}
+            className="px-3 py-1 rounded-full bg-blue-50/90 text-blue-600 border border-blue-200 text-xs font-semibold hover:bg-blue-100 transition-colors cursor-pointer shadow-2xs"
+          >
+            {count} Follow-up{count > 1 ? "s" : ""}
+          </button>
+        );
+      }
+    },
+    nextFollowup: {
+      label: "NEXT FOLLOW-UP",
+      align: "center",
+      render: (val, row) => {
+        if (!row.nextFollowupDate) return <span className="text-slate-400 font-medium text-xs">--</span>;
+        return (
+          <div className="text-center text-xs">
+            <div className="font-bold text-rose-600">{row.nextFollowupDate}</div>
+            {row.nextFollowupTime && (
+              <div className="text-[10px] text-slate-500 font-mono">{row.nextFollowupTime}</div>
+            )}
+            {row.channelType && (
+              <div className="text-[10px] text-blue-500 font-semibold">{row.channelType}</div>
             )}
           </div>
         );
