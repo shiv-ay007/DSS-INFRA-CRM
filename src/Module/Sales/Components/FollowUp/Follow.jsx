@@ -317,13 +317,24 @@ const Follow = () => {
     },
     nextFollowup: {
       label: "NEXT FOLLOW-UP",
-      render: (val, row) => (
-        <div className="text-center text-xs">
-          <div className="font-bold text-rose-600">{row.nextFollowupDate}</div>
-          <div className="text-[10px] text-slate-500 font-mono">{row.nextFollowupTime}</div>
-          <div className="text-[10px] text-blue-500 font-semibold">{row.channelType}</div>
-        </div>
-      )
+      align: "center",
+      render: (val, row) => {
+        const nextDate = row.nextFollowupDate || row.nextFollowup || "--";
+        const nextTime = row.nextFollowupTime || "";
+        const channel = row.channelType || row.channel || "";
+
+        return (
+          <div className="inline-flex flex-col items-center px-2.5 py-1 rounded-lg bg-rose-50 text-rose-900 border border-rose-200/90 shadow-2xs">
+            <span className="font-extrabold text-xs text-rose-600 whitespace-nowrap">{nextDate}</span>
+            {nextTime && (
+              <span className="font-mono text-[10px] font-bold text-slate-600 whitespace-nowrap">{nextTime}</span>
+            )}
+            {channel && (
+              <span className="text-[10px] font-extrabold text-blue-600 whitespace-nowrap">{channel}</span>
+            )}
+          </div>
+        );
+      }
     },
     followupRemarks: {
       label: "FOLLOW-UP REMARK",

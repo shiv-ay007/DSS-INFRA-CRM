@@ -3,6 +3,7 @@ import { initialLeadsData } from "../data/leadManagementData";
 import { initialAssignedLeads } from "../data/assignedLeadsData";
 import { initialScheduledLeads } from "../data/followUpData";
 import { initialLostLeads } from "../data/lostLeadsData";
+import { initialSalesData } from "../data/salesManagementData";
 
 const STORAGE_KEYS = [
   "dss_leads",
@@ -10,7 +11,8 @@ const STORAGE_KEYS = [
   "dss_assigned_leads",
   "dss_followup_leads",
   "dss_scheduled_leads_sheet",
-  "dss_lost_leads"
+  "dss_lost_leads",
+  "dss_sales_management_sheet_v1"
 ];
 
 const INITIAL_DATA_MAP = {
@@ -19,7 +21,8 @@ const INITIAL_DATA_MAP = {
   dss_assigned_leads: initialAssignedLeads,
   dss_followup_leads: initialScheduledLeads,
   dss_scheduled_leads_sheet: initialScheduledLeads,
-  dss_lost_leads: initialLostLeads
+  dss_lost_leads: initialLostLeads,
+  dss_sales_management_sheet_v1: initialSalesData
 };
 
 const cleanDigits = (str) => (str ? String(str).replace(/\D/g, "") : "");

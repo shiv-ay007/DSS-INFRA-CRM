@@ -7,7 +7,9 @@ import ScopeTabs from "../../../../Common/Components/ScopeTabs";
 import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
 import { initialLeadsData } from "../../data/leadManagementData";
 import { FaUserPlus, FaUsers, FaUser } from "react-icons/fa";
-import { subscribeToLeadUpdates, getStoredLeads } from "../../utils/leadStorageUtils";
+import { subscribeToLeadUpdates, getStoredLeads, updateLeadInStorage } from "../../utils/leadStorageUtils";
+import LeadKpiSlider from "./LeadKpiSlider";
+import SalesTransferModal from "./SalesTransferModal";
 
 const notInterestedReasonsList = [
   "High Price / Budget Out",
@@ -256,15 +258,19 @@ const Lead = () => {
       label: "NEXT FOLLOW-UP",
       align: "center",
       render: (val, row) => {
-        if (!row.nextFollowupDate) return <span className="text-slate-400 font-medium text-xs">--</span>;
+        const nextDate = row.nextFollowupDate || row.nextFollowup;
+        if (!nextDate) return <span className="text-slate-400 font-medium text-xs">--</span>;
+        const nextTime = row.nextFollowupTime || "";
+        const channel = row.channelType || row.channel || "";
+
         return (
-          <div className="text-center text-xs">
-            <div className="font-bold text-rose-600">{row.nextFollowupDate}</div>
-            {row.nextFollowupTime && (
-              <div className="text-[10px] text-slate-500 font-mono">{row.nextFollowupTime}</div>
+          <div className="inline-flex flex-col items-center px-2.5 py-1 rounded-lg bg-rose-50 text-rose-900 border border-rose-200/90 shadow-2xs">
+            <span className="font-extrabold text-xs text-rose-600 whitespace-nowrap">{nextDate}</span>
+            {nextTime && (
+              <span className="font-mono text-[10px] font-bold text-slate-600 whitespace-nowrap">{nextTime}</span>
             )}
-            {row.channelType && (
-              <div className="text-[10px] text-blue-500 font-semibold">{row.channelType}</div>
+            {channel && (
+              <span className="text-[10px] font-extrabold text-blue-600 whitespace-nowrap">{channel}</span>
             )}
           </div>
         );
@@ -460,7 +466,11 @@ const Lead = () => {
   const [statusRemark, setStatusRemark] = useState("");
   const [statusRemarkAttachments, setStatusRemarkAttachments] = useState([]);
 
-  // Handler to move lead to Lost Leads or update status based on Client Status
+  // Sales Management Transfer Modal State
+  const [transferModalLead, setTransferModalLead] = useState(null);
+  const [transferInitialRemark, setTransferInitialRemark] = useState("");
+
+  // Handler to move lead to Lost Leads or open pre-filled Sales Transfer Form
   const handleSendToSalesManagement = () => {
     if (!statusModalLead) return;
 
@@ -494,22 +504,17 @@ const Lead = () => {
     }));
 
     if (selectedClientStatus === "INTERESTED") {
-      // Update status in leads list
-      const updatedLeads = leads.map((l) =>
-        l.id === statusModalLead.id
-          ? {
-              ...l,
-              leadStatus: "Hot",
-              status: "INTERESTED",
-              isInterested: true,
-              remark: statusRemark || l.remark || "",
-              remarkAttachments: processedAttachments.length > 0 ? processedAttachments : (l.remarkAttachments || []),
-              attachments: processedAttachments.length > 0 ? processedAttachments : (l.attachments || [])
-            }
-          : l
-      );
-      saveLeads(updatedLeads);
-      toast.success(`Lead ${statusModalLead.clientName || statusModalLead.concernPersonName} marked as INTERESTED! 🎯`);
+      // Open the pre-filled Sales Management transfer form modal
+      setTransferModalLead(statusModalLead);
+      setTransferInitialRemark(statusRemark || statusModalLead.remark || "");
+
+      setStatusModalLead(null);
+      setSelectedClientStatus("");
+      setNotInterestedReason("");
+      setCustomNotInterestedReason("");
+      setStatusRemark("");
+      setStatusRemarkAttachments([]);
+      return;
     } else if (selectedClientStatus === "NOT INTERESTED") {
       // Move to Lost Leads (dss_lost_leads) and remove from current list
       const lostLeadData = {
@@ -551,6 +556,57 @@ const Lead = () => {
     if (selectedClientStatus === "NOT INTERESTED") {
       navigate("/sales/leads/lost");
     }
+  };
+
+  // Handler on confirming pre-filled Sales Management Transfer Form
+  const handleConfirmSalesTransfer = (formData) => {
+    if (!transferModalLead) return;
+
+    const formattedDate = new Date().toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+    const formattedTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+
+    const finalLeadData = {
+      ...transferModalLead,
+      clientName: formData.clientName,
+      concernPersonName: formData.clientName,
+      phoneNumber: formData.phoneNumber,
+      alternateNumber: formData.alternateNumber,
+      whatsappNumber: formData.whatsappNumber,
+      emailAddress: formData.emailAddress,
+      companyName: formData.companyName,
+      businessType: formData.businessType,
+      clientDesignation: formData.clientDesignation,
+      amount: Number(formData.expectedBusiness) || 0,
+      expectedBusiness: Number(formData.expectedBusiness) || 0,
+      priority: formData.priority,
+      status: "INTERESTED",
+      leadStatus: "Hot",
+      isInterested: true,
+      jobType: formData.jobType,
+      city: formData.city,
+      state: formData.state,
+      pincode: formData.pincode,
+      address: formData.address,
+      requirement: formData.requirement,
+      remark: formData.transferRemark || transferModalLead.remark || "",
+      clientRating: Number(formData.clientRating) || 4.5,
+      assignTo: formData.assignedTo,
+      salesPerson: formData.assignedTo,
+      createdAt: transferModalLead.createdDate || formattedDate,
+      createdTime: transferModalLead.createdTime || formattedTime,
+      clientId: transferModalLead.clientId || `DSS${Math.floor(10000 + Math.random() * 90000)}`
+    };
+
+    // Update across all localStorage keys including dss_sales_management_sheet_v1
+    updateLeadInStorage(finalLeadData);
+
+    toast.success(`Lead "${finalLeadData.clientName}" successfully submitted & transferred to Sales Management Sheet! 🚀`);
+
+    setTransferModalLead(null);
+    setTransferInitialRemark("");
+
+    // Navigate directly to Sales Management Sheet page
+    navigate("/sales/management-sheet");
   };
 
   // Media Attachments and Audio Recording State
@@ -886,91 +942,8 @@ const Lead = () => {
         }
       />
 
-      {/* ================= 2. TOP 9 COLORFUL KPI STAT CARDS (Exact Screenshot Match) ================= */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-9 gap-3">
-        
-        {/* 1. Total Leads (Pastel Purple/Pink) */}
-        <div className="p-3.5 rounded-2xl bg-[#FDF2F8] border border-pink-200/80 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-purple-600 text-base">📊</span>
-            <span className="text-xl sm:text-2xl font-black text-slate-900 font-mono">{stats.total}</span>
-          </div>
-          <span className="text-[11px] font-bold text-pink-900 mt-2">Total Leads</span>
-        </div>
-
-        {/* 2. Fresh Leads (Pastel Blue) */}
-        <div className="p-3.5 rounded-2xl bg-[#EFF6FF] border border-blue-200/80 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-blue-600 text-base">👤+</span>
-            <span className="text-xl sm:text-2xl font-black text-slate-900 font-mono">{stats.fresh}</span>
-          </div>
-          <span className="text-[11px] font-bold text-blue-900 mt-2">Fresh Leads</span>
-        </div>
-
-        {/* 3. Converted Leads (Pastel Mint Green) */}
-        <div className="p-3.5 rounded-2xl bg-[#F0FDF4] border border-emerald-200/80 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-emerald-600 text-base">📈</span>
-            <span className="text-xl sm:text-2xl font-black text-slate-900 font-mono">{stats.converted}</span>
-          </div>
-          <span className="text-[11px] font-bold text-emerald-900 mt-2">Converted Leads</span>
-        </div>
-
-        {/* 4. Interested Leads (Pastel Yellow) */}
-        <div className="p-3.5 rounded-2xl bg-[#FEFCE8] border border-yellow-200/80 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-amber-600 text-base">👍</span>
-            <span className="text-xl sm:text-2xl font-black text-slate-900 font-mono">{stats.interested}</span>
-          </div>
-          <span className="text-[11px] font-bold text-yellow-900 mt-2">Interested Leads</span>
-        </div>
-
-        {/* 5. Conversion Rate (Pastel Amber) */}
-        <div className="p-3.5 rounded-2xl bg-[#FFFBEB] border border-amber-200/80 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
-          <div className="flex items-center gap-2">
-            <span className="text-amber-600 text-base">↗️</span>
-            <span className="text-lg sm:text-xl font-black text-slate-900 font-mono">{stats.conversionRate}</span>
-          </div>
-          <span className="text-[11px] font-bold text-amber-900 mt-2">Conversion Rate</span>
-        </div>
-
-        {/* 6. Total Revenue (Pastel Emerald) */}
-        <div className="p-3.5 rounded-2xl bg-[#ECFDF5] border border-emerald-200/80 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
-          <div className="flex items-center gap-1.5">
-            <span className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs">₹</span>
-            <span className="text-base sm:text-lg font-black text-emerald-800 font-mono truncate">{stats.totalRevenue}</span>
-          </div>
-          <span className="text-[11px] font-bold text-emerald-900 mt-2">Total Revenue</span>
-        </div>
-
-        {/* 7. Expected Revenue (Pastel Rose) */}
-        <div className="p-3.5 rounded-2xl bg-[#FFF1F2] border border-rose-200/80 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
-          <div className="flex items-center gap-1.5">
-            <span className="w-5 h-5 rounded-full bg-rose-100 text-rose-700 flex items-center justify-center font-bold text-xs">₹</span>
-            <span className="text-base sm:text-lg font-black text-rose-800 font-mono truncate">{stats.expectedRevenue}</span>
-          </div>
-          <span className="text-[11px] font-bold text-rose-900 mt-2">Expected Revenue</span>
-        </div>
-
-        {/* 8. Total Incentives (Pastel Teal) */}
-        <div className="p-3.5 rounded-2xl bg-[#F0FDFA] border border-teal-200/80 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
-          <div className="flex items-center gap-1.5">
-            <span className="w-5 h-5 rounded-full bg-teal-100 text-teal-700 flex items-center justify-center font-bold text-xs">₹</span>
-            <span className="text-base sm:text-lg font-black text-teal-800 font-mono truncate">{stats.totalIncentives}</span>
-          </div>
-          <span className="text-[11px] font-bold text-teal-900 mt-2">Total Incentives</span>
-        </div>
-
-        {/* 9. Expect. Incentive (Pastel Lavender) */}
-        <div className="p-3.5 rounded-2xl bg-[#FAF5FF] border border-purple-200/80 shadow-2xs hover:shadow-xs transition-shadow flex flex-col justify-between">
-          <div className="flex items-center gap-1.5">
-            <span className="w-5 h-5 rounded-full bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xs">₹</span>
-            <span className="text-base sm:text-lg font-black text-purple-800 font-mono truncate">{stats.expectedIncentives}</span>
-          </div>
-          <span className="text-[11px] font-bold text-purple-900 mt-2">Expect. Incentive</span>
-        </div>
-
-      </div>
+      {/* ================= 2. DASHBOARD STYLE SLIDABLE KPI STAT CARDS ================= */}
+      <LeadKpiSlider stats={stats} />
 
       {/* ================= ALL / SELF / TEAM SCOPE FILTER WITH EXECUTIVE DROPDOWN ================= */}
       <ScopeTabs
@@ -1781,6 +1754,18 @@ const Lead = () => {
           </div>
         </div>
       )}
+
+      {/* ================= PRE-FILLED SALES MANAGEMENT TRANSFER MODAL ================= */}
+      <SalesTransferModal
+        isOpen={Boolean(transferModalLead)}
+        lead={transferModalLead}
+        initialRemark={transferInitialRemark}
+        onClose={() => {
+          setTransferModalLead(null);
+          setTransferInitialRemark("");
+        }}
+        onSubmit={handleConfirmSalesTransfer}
+      />
 
     </div>
   );
