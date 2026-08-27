@@ -9,6 +9,8 @@ import { initialAssignedLeads, teamMembers } from "../../data/assignedLeadsData"
 import { availableWorkTypes, workCategoryList, leadTypesList } from "../../data/addLeadData";
 import { FaUserPlus, FaSearch, FaFilter, FaUserCheck, FaUser, FaRegCheckCircle } from "react-icons/fa";
 
+import { subscribeToLeadUpdates, getStoredLeads } from "../../utils/leadStorageUtils";
+
 const leadModesList = [
   "ALL",
   "Business networking",
@@ -28,17 +30,18 @@ const notInterestedReasonsList = [
 const AsignLeads = () => {
   const navigate = useNavigate();
 
-  // Leads state with LocalStorage support
+  // Leads state with LocalStorage support & automatic seeding
   const [leads, setLeads] = useState(() => {
-    try {
-      const saved = localStorage.getItem("dss_assigned_leads");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {}
-    return initialAssignedLeads;
+    return getStoredLeads("dss_assigned_leads");
   });
+
+  React.useEffect(() => {
+    const handleRefresh = () => {
+      setLeads(getStoredLeads("dss_assigned_leads"));
+    };
+    const unsubscribe = subscribeToLeadUpdates(handleRefresh);
+    return () => unsubscribe();
+  }, []);
 
   const saveLeads = (newLeads) => {
     setLeads(newLeads);

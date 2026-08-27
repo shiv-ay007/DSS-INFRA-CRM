@@ -1,42 +1,46 @@
-import React, { useState } from "react";
+import React from "react";
+import { FaClock, FaCalendarAlt, FaUser, FaTag, FaFileAlt } from "react-icons/fa";
 
-const FollowupTimelineCard = ({ lead, onAddRemark }) => {
-  const [newRemark, setNewRemark] = useState("");
-  const [newNextDate, setNewNextDate] = useState("");
-  const [newStatus, setNewStatus] = useState(lead?.status || "INTERESTED");
-
-  const followupHistory = lead?.followupHistory || [
+const FollowupTimelineCard = ({ lead }) => {
+  // Determine history array safely
+  const hasHistory = Array.isArray(lead?.followupHistory) && lead.followupHistory.length > 0;
+  
+  const defaultHistory = [
     {
-      date: lead?.createdDate || "Today",
+      date: lead?.nextFollowup || lead?.nextFollowupDate || lead?.createdDate || "Today",
+      time: lead?.nextFollowupTime || "11:00 AM",
+      author: lead?.assignTo || lead?.salesPerson || "Sales Representative",
+      remark: lead?.remark || lead?.notes || `Follow-up discussion scheduled with ${lead?.clientName || lead?.concernPersonName || "client"}. Requirement: ${lead?.requirement || lead?.projectDetail || "Sales Inquiry"}.`,
+      status: lead?.status || "INTERESTED"
+    },
+    {
+      date: lead?.createdDate || lead?.date || "16 Aug 2026",
       time: lead?.createdTime || "10:00 AM",
-      author: lead?.salesPerson || "Sales TL",
-      remark: "Initial lead inquiry registered in pipeline.",
-      status: lead?.status || "NEW"
+      author: lead?.assignTo || lead?.salesPerson || "Sales Representative",
+      remark: `Initial lead inquiry registered in pipeline. Channel: ${lead?.channelType || lead?.channel || "Sales"}.`,
+      status: "NEW"
     }
   ];
 
-  const handleAddRemarkSubmit = (e) => {
-    e.preventDefault();
-    if (!newRemark.trim()) return;
+  const followupHistory = hasHistory ? lead.followupHistory : defaultHistory;
 
-    if (onAddRemark) {
-      onAddRemark({
-        remark: newRemark,
-        nextDate: newNextDate,
-        status: newStatus
-      });
-    }
-
-    setNewRemark("");
-    setNewNextDate("");
+  const getStatusBadgeClass = (st) => {
+    const s = (st || "").toUpperCase();
+    if (s.includes("HOT")) return "bg-rose-100 text-rose-800 border-rose-300";
+    if (s.includes("WARM") || s.includes("INTERESTED")) return "bg-amber-100 text-amber-800 border-amber-300";
+    if (s.includes("COLD")) return "bg-sky-100 text-sky-800 border-sky-300";
+    if (s.includes("CONVERTED")) return "bg-emerald-100 text-emerald-800 border-emerald-300";
+    if (s.includes("LOST")) return "bg-slate-200 text-slate-800 border-slate-300";
+    return "bg-blue-100 text-blue-800 border-blue-300";
   };
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 sm:p-6 space-y-4">
-      <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-        <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-lg border border-amber-100 shadow-2xs">
-            ⏰
+    <div className="bg-white rounded-2xl border border-slate-200/90 shadow-sm p-5 sm:p-6 space-y-6">
+      {/* HEADER */}
+      <div className="flex flex-wrap items-center justify-between gap-3 pb-4 border-b border-slate-100">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-lg border border-amber-100 shadow-2xs">
+            <FaClock />
           </div>
           <div>
             <h2 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
@@ -46,83 +50,72 @@ const FollowupTimelineCard = ({ lead, onAddRemark }) => {
           </div>
         </div>
 
-        <span className="px-3 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-xs font-mono font-bold">
-          {lead?.nextFollowup || lead?.nextFollowupDate || "Today 11:00 AM"}
+        <span className="px-3.5 py-1.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-xs font-mono font-extrabold flex items-center gap-1.5 shadow-2xs">
+          <FaCalendarAlt className="text-amber-600 text-xs" />
+          <span>Next Follow-up:</span>
+          <span>{lead?.nextFollowup || lead?.nextFollowupDate || "Today 11:00 AM"}</span>
         </span>
       </div>
 
-      {/* Quick Add Remark Input Form */}
-      <form onSubmit={handleAddRemarkSubmit} className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 space-y-3">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700">Add New Follow-up Remark</h3>
-        <textarea
-          rows={2}
-          value={newRemark}
-          onChange={(e) => setNewRemark(e.target.value)}
-          placeholder="Enter detailed conversation remarks or update status..."
-          className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-medium focus:outline-none focus:border-black/50 placeholder:text-slate-400"
-        />
-
-        <div className="flex flex-wrap items-center gap-2.5">
-          <div className="flex-1 min-w-[140px]">
-            <label className="block text-[11px] font-bold text-slate-600 mb-0.5">Next Follow-up Date</label>
-            <input
-              type="date"
-              value={newNextDate}
-              onChange={(e) => setNewNextDate(e.target.value)}
-              className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-medium cursor-pointer"
-            />
-          </div>
-
-          <div className="flex-1 min-w-[140px]">
-            <label className="block text-[11px] font-bold text-slate-600 mb-0.5">Update Lead Status</label>
-            <select
-              value={newStatus}
-              onChange={(e) => setNewStatus(e.target.value)}
-              className="w-full px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-bold cursor-pointer"
-            >
-              <option value="NEW">NEW ⚪</option>
-              <option value="INTERESTED">INTERESTED ⚡</option>
-              <option value="HOT">HOT LEAD 🔥</option>
-              <option value="WARM">WARM LEAD ⚡</option>
-              <option value="COLD">COLD LEAD ❄️</option>
-              <option value="CONVERTED">CONVERTED 🟢</option>
-            </select>
-          </div>
-
-          <button
-            type="submit"
-            className="self-end px-4 py-1.5 rounded-xl bg-slate-900 hover:bg-black text-white text-xs sm:text-sm font-bold shadow-xs transition-all cursor-pointer"
-          >
-            Save Remark
-          </button>
+      {/* TIMELINE LOG HISTORY */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+            <FaClock className="text-slate-500 text-xs" />
+            <span>Timeline Activity Log</span>
+          </h3>
+          <span className="px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-[11px] font-bold text-slate-600 font-mono">
+            {followupHistory.length} Entries
+          </span>
         </div>
-      </form>
 
-      {/* Timeline List */}
-      <div className="space-y-3 pt-2">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">Remarks History</h3>
+        <div className="relative border-l-2 border-slate-200 ml-4 space-y-4 pl-4 py-1">
+          {followupHistory.map((item, idx) => {
+            const remarkText = item.remark || item.notes || item.comment || item.text || "No remarks added.";
+            const authorText = item.author || item.rep || item.user || "Sales Representative";
+            const dateText = item.date || item.createdDate || "Today";
+            const timeText = item.time || item.createdTime || "";
+            const statusText = item.status || lead?.status || "NEW";
+            const attachments = item.remarkAttachments || item.attachments || [];
 
-        {followupHistory.map((item, idx) => (
-          <div key={idx} className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 flex items-start gap-3">
-            <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs shrink-0 mt-0.5">
-              #{idx + 1}
-            </div>
-            <div className="flex-1 space-y-1">
-              <div className="flex items-center justify-between flex-wrap gap-1">
-                <span className="text-xs font-bold text-slate-900">{item.author || "Sales Representative"}</span>
-                <span className="text-[11px] font-mono text-slate-500">{item.date} {item.time && `• ${item.time}`}</span>
+            return (
+              <div key={idx} className="relative group">
+                <div className="absolute -left-[25px] top-1.5 w-4 h-4 rounded-full bg-amber-500 border-2 border-white shadow-xs group-hover:scale-110 transition-transform"></div>
+                <div className="p-4 rounded-2xl bg-slate-50/90 border border-slate-200/80 space-y-2 hover:bg-slate-100/70 hover:border-slate-300 transition-all shadow-2xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-1.5 text-slate-900 font-extrabold">
+                      <FaUser className="text-slate-500 text-[10px]" />
+                      <span>{authorText}</span>
+                    </div>
+                    <span className="font-mono text-slate-500 text-[11px] font-semibold flex items-center gap-1">
+                      <FaCalendarAlt className="text-[10px]" />
+                      <span>{dateText}</span>
+                      {timeText && <span>• {timeText}</span>}
+                    </span>
+                  </div>
+
+                  <p className="text-slate-800 font-medium text-xs sm:text-sm leading-relaxed whitespace-pre-line">
+                    {remarkText}
+                  </p>
+
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                    <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-[11px] font-extrabold border ${getStatusBadgeClass(statusText)}`}>
+                      <FaTag className="text-[9px]" />
+                      <span>Status: {statusText}</span>
+                    </span>
+
+                    {attachments.length > 0 && (
+                      <div className="flex items-center gap-1 text-[11px] font-bold text-slate-600">
+                        <FaFileAlt className="text-slate-500" />
+                        <span>{attachments.length} Attachment(s)</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-              <p className="text-xs sm:text-sm text-slate-700 font-medium">
-                {item.remark}
-              </p>
-              {item.status && (
-                <span className="inline-block px-2 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-bold">
-                  Status: {item.status}
-                </span>
-              )}
-            </div>
-          </div>
-        ))}
+            );
+          })}
+        </div>
       </div>
     </div>
   );

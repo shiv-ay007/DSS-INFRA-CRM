@@ -1,0 +1,142 @@
+import { initialTotalLeads } from "../data/totalLeadsData";
+import { initialLeadsData } from "../data/leadManagementData";
+import { initialAssignedLeads } from "../data/assignedLeadsData";
+import { initialScheduledLeads } from "../data/followUpData";
+import { initialLostLeads } from "../data/lostLeadsData";
+
+const STORAGE_KEYS = [
+  "dss_leads",
+  "dss_lead_management_sheet_v1",
+  "dss_assigned_leads",
+  "dss_followup_leads",
+  "dss_scheduled_leads_sheet",
+  "dss_lost_leads"
+];
+
+const INITIAL_DATA_MAP = {
+  dss_leads: initialTotalLeads,
+  dss_lead_management_sheet_v1: initialLeadsData,
+  dss_assigned_leads: initialAssignedLeads,
+  dss_followup_leads: initialScheduledLeads,
+  dss_scheduled_leads_sheet: initialScheduledLeads,
+  dss_lost_leads: initialLostLeads
+};
+
+const cleanDigits = (str) => (str ? String(str).replace(/\D/g, "") : "");
+const cleanStr = (str) => (str ? String(str).trim().toLowerCase() : "");
+
+/**
+ * Dispatches a custom window event to notify all components of lead updates.
+ */
+export const notifyLeadChange = (updatedLead) => {
+  try {
+    const event = new CustomEvent("dss_leads_updated", { detail: { lead: updatedLead } });
+    window.dispatchEvent(event);
+  } catch (err) {
+    console.error("Error dispatching lead update event:", err);
+  }
+};
+
+/**
+ * Safely gets stored leads for a given key, seeding with initial dataset if missing.
+ */
+export const getStoredLeads = (key) => {
+  try {
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    }
+  } catch (e) {
+    console.error(`Error reading ${key} from localStorage:`, e);
+  }
+  const defaultData = INITIAL_DATA_MAP[key] || [];
+  try {
+    localStorage.setItem(key, JSON.stringify(defaultData));
+  } catch (e) {}
+  return defaultData;
+};
+
+/**
+ * Updates a lead in all localStorage datasets where it exists (or inserts it into primary datasets).
+ * @param {Object} updatedLead - The updated lead object
+ */
+export const updateLeadInStorage = (updatedLead) => {
+  if (!updatedLead) return;
+
+  const targetId = updatedLead.id ? String(updatedLead.id) : "";
+  const targetPhone = cleanDigits(updatedLead.phoneNumber || updatedLead.contact || updatedLead.whatsappNumber);
+  const targetName = cleanStr(updatedLead.clientName || updatedLead.concernPersonName);
+
+  STORAGE_KEYS.forEach((key) => {
+    try {
+      let list = getStoredLeads(key);
+      if (!Array.isArray(list)) list = [];
+
+      let updatedIndex = -1;
+
+      // 1. Try matching by ID
+      if (targetId) {
+        updatedIndex = list.findIndex((item) => String(item.id) === targetId);
+      }
+
+      // 2. Try matching by phone number if not found
+      if (updatedIndex === -1 && targetPhone.length >= 7) {
+        updatedIndex = list.findIndex((item) => {
+          const itemPhone = cleanDigits(item.phoneNumber || item.contact || item.whatsappNumber);
+          return itemPhone && (itemPhone === targetPhone || itemPhone.endsWith(targetPhone) || targetPhone.endsWith(itemPhone));
+        });
+      }
+
+      // 3. Try matching by client name if not found
+      if (updatedIndex === -1 && targetName.length >= 3) {
+        updatedIndex = list.findIndex((item) => {
+          const itemName = cleanStr(item.clientName || item.concernPersonName);
+          return itemName && itemName === targetName;
+        });
+      }
+
+      if (updatedIndex !== -1) {
+        // Merge existing item with updated lead properties
+        list[updatedIndex] = {
+          ...list[updatedIndex],
+          ...updatedLead,
+          id: list[updatedIndex].id || updatedLead.id
+        };
+      } else {
+        // If not found in this dataset, unshift so it appears in the list
+        list.unshift(updatedLead);
+      }
+
+      localStorage.setItem(key, JSON.stringify(list));
+    } catch (err) {
+      console.error(`Error updating lead in localStorage key ${key}:`, err);
+    }
+  });
+
+  notifyLeadChange(updatedLead);
+};
+
+/**
+ * Subscribes a callback to lead update events (both custom window events and browser storage events).
+ * @param {Function} callback - Function called when leads change
+ * @returns {Function} Unsubscribe function
+ */
+export const subscribeToLeadUpdates = (callback) => {
+  const handleCustomEvent = (e) => callback(e.detail);
+  const handleStorageEvent = (e) => {
+    if (STORAGE_KEYS.includes(e.key)) {
+      callback();
+    }
+  };
+
+  window.addEventListener("dss_leads_updated", handleCustomEvent);
+  window.addEventListener("storage", handleStorageEvent);
+
+  return () => {
+    window.removeEventListener("dss_leads_updated", handleCustomEvent);
+    window.removeEventListener("storage", handleStorageEvent);
+  };
+};

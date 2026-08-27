@@ -10,6 +10,8 @@ import { initialAssignedLeads } from "../../data/assignedLeadsData";
 import { availableWorkTypes, workCategoryList, indianStatesList } from "../../data/addLeadData";
 import { FaUserPlus, FaUsers, FaUserCheck, FaImage, FaVideo, FaMicrophone, FaFileAlt, FaPaperclip, FaTimes, FaDownload, FaPlay, FaPause } from "react-icons/fa";
 
+import { subscribeToLeadUpdates } from "../../utils/leadStorageUtils";
+
 const salesPersonsList = [
   "ALL",
   "Sales TL (Current User)",
@@ -173,6 +175,10 @@ const SalseTotalLeads = () => {
 
   useEffect(() => {
     loadLeadsFromStorage();
+    const unsubscribe = subscribeToLeadUpdates(() => {
+      loadLeadsFromStorage();
+    });
+    return () => unsubscribe();
   }, [location, loadLeadsFromStorage]);
 
   const saveLeadsToStorage = (newLeads) => {

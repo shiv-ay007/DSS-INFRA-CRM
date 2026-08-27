@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
@@ -7,6 +7,7 @@ import ScopeTabs from "../../../../Common/Components/ScopeTabs";
 import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
 import { initialLeadsData } from "../../data/leadManagementData";
 import { FaUserPlus, FaUsers, FaUser } from "react-icons/fa";
+import { subscribeToLeadUpdates, getStoredLeads } from "../../utils/leadStorageUtils";
 
 const notInterestedReasonsList = [
   "High Price / Budget Out",
@@ -45,15 +46,18 @@ const timeOptions = [
 const Lead = () => {
   const navigate = useNavigate();
 
-  // Leads state with localStorage cache
+  // Leads state with localStorage cache & automatic seeding
   const [leads, setLeads] = useState(() => {
-    try {
-      const saved = localStorage.getItem("dss_lead_management_sheet_v1");
-      return saved ? JSON.parse(saved) : initialLeadsData;
-    } catch {
-      return initialLeadsData;
-    }
+    return getStoredLeads("dss_lead_management_sheet_v1");
   });
+
+  useEffect(() => {
+    const handleRefresh = () => {
+      setLeads(getStoredLeads("dss_lead_management_sheet_v1"));
+    };
+    const unsubscribe = subscribeToLeadUpdates(handleRefresh);
+    return () => unsubscribe();
+  }, []);
 
   const saveLeads = (newLeads) => {
     setLeads(newLeads);

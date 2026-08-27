@@ -23,17 +23,20 @@ const teamMembers = [
   "Sanjay Gupta"
 ];
 
+import { subscribeToLeadUpdates, getStoredLeads } from "../../utils/leadStorageUtils";
+
 const Lostlead = () => {
   const [leads, setLeads] = useState(() => {
-    try {
-      const saved = localStorage.getItem("dss_lost_leads");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {}
-    return initialLostLeads;
+    return getStoredLeads("dss_lost_leads");
   });
+
+  React.useEffect(() => {
+    const handleRefresh = () => {
+      setLeads(getStoredLeads("dss_lost_leads"));
+    };
+    const unsubscribe = subscribeToLeadUpdates(handleRefresh);
+    return () => unsubscribe();
+  }, []);
 
   const saveLeads = (newLeads) => {
     setLeads(newLeads);

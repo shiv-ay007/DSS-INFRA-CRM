@@ -19,6 +19,8 @@ import {
   initialScheduledLeads
 } from "../../data/followUpData";
 
+import { subscribeToLeadUpdates } from "../../utils/leadStorageUtils";
+
 const leadModesList = [
   "ALL",
   "Business networking",
@@ -38,8 +40,7 @@ const notInterestedReasonsList = [
 const Follow = () => {
   const navigate = useNavigate();
 
-  // State for all scheduled leads
-  const [leads, setLeads] = useState(() => {
+  const loadLeadsData = React.useCallback(() => {
     try {
       const savedScheduled = localStorage.getItem("dss_scheduled_leads_sheet");
       const savedMgmt = localStorage.getItem("dss_lead_management_sheet_v1");
@@ -68,7 +69,18 @@ const Follow = () => {
     } catch (e) {
       return initialScheduledLeads;
     }
-  });
+  }, []);
+
+  // State for all scheduled leads
+  const [leads, setLeads] = useState(loadLeadsData);
+
+  React.useEffect(() => {
+    const handleRefresh = () => {
+      setLeads(loadLeadsData());
+    };
+    const unsubscribe = subscribeToLeadUpdates(handleRefresh);
+    return () => unsubscribe();
+  }, [loadLeadsData]);
 
   const saveLeads = (newLeads) => {
     setLeads(newLeads);
