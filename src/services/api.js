@@ -1,4 +1,5 @@
-const API_BASE_URL = "http://localhost:8000/api/v1";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
+  (window.location.hostname === "localhost" ? "http://localhost:8000/api/v1" : "https://dss-infra-crm.onrender.com/api/v1");
 
 const getAuthHeaders = () => {
   const token = localStorage.getItem("accessToken");
