@@ -19,7 +19,8 @@ import {
   initialScheduledLeads
 } from "../../data/followUpData";
 
-import { subscribeToLeadUpdates } from "../../utils/leadStorageUtils";
+import { subscribeToLeadUpdates, updateLeadInStorage } from "../../utils/leadStorageUtils";
+import { addFollowupApi } from "../../../../services/api";
 
 const leadModesList = [
   "ALL",
@@ -841,24 +842,40 @@ const Follow = () => {
       status: scheduleFormData.type || "Scheduled"
     };
 
-    const updated = leads.map((l) =>
-      l.id === scheduleModalLead.id
-        ? {
-            ...l,
-            nextFollowupDate: formattedDisplayDate,
-            nextFollowupDateRaw: scheduleFormData.date,
-            nextFollowupTime: scheduleFormData.time || "10:00 am",
-            assignTo: scheduleFormData.assignedTo,
-            clientRating: scheduleFormData.clientRating,
-            reminder: scheduleFormData.reminder,
-            reminderHours: scheduleFormData.reminderHours,
-            followupRemarksCount: (l.followupRemarksCount || 0) + 1,
-            followupHistory: [newHistoryEntry, ...(l.followupHistory || [])]
-          }
-        : l
-    );
+    let targetUpdatedLead = null;
+    const updated = leads.map((l) => {
+      if (l.id === scheduleModalLead.id) {
+        targetUpdatedLead = {
+          ...l,
+          nextFollowupDate: formattedDisplayDate,
+          nextFollowupDateRaw: scheduleFormData.date,
+          nextFollowupTime: scheduleFormData.time || "10:00 am",
+          assignTo: scheduleFormData.assignedTo,
+          clientRating: scheduleFormData.clientRating,
+          reminder: scheduleFormData.reminder,
+          reminderHours: scheduleFormData.reminderHours,
+          followupRemarksCount: (l.followupRemarksCount || 0) + 1,
+          followupHistory: [newHistoryEntry, ...(l.followupHistory || [])]
+        };
+        return targetUpdatedLead;
+      }
+      return l;
+    });
 
     saveLeads(updated);
+    if (targetUpdatedLead) {
+      updateLeadInStorage(targetUpdatedLead);
+    }
+
+    if (scheduleModalLead.id && !String(scheduleModalLead.id).startsWith("LM-")) {
+      addFollowupApi({
+        leadId: scheduleModalLead.id,
+        remarks: activeNotes,
+        scheduledDate: scheduleFormData.date ? new Date(scheduleFormData.date) : new Date(),
+        status: "SCHEDULED"
+      }).catch((err) => console.error("Error calling addFollowupApi:", err));
+    }
+
     setScheduleModalLead(null);
   };
 

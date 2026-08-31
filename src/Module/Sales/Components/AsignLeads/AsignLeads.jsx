@@ -9,7 +9,8 @@ import { initialAssignedLeads, teamMembers } from "../../data/assignedLeadsData"
 import { availableWorkTypes, workCategoryList, leadTypesList } from "../../data/addLeadData";
 import { FaUserPlus, FaSearch, FaFilter, FaUserCheck, FaUser, FaRegCheckCircle } from "react-icons/fa";
 
-import { subscribeToLeadUpdates, getStoredLeads } from "../../utils/leadStorageUtils";
+import { subscribeToLeadUpdates, getStoredLeads, updateLeadInStorage } from "../../utils/leadStorageUtils";
+import { updateLeadApi, getAllLeadsApi } from "../../../../services/api";
 
 const leadModesList = [
   "ALL",
@@ -40,6 +41,66 @@ const AsignLeads = () => {
       setLeads(getStoredLeads("dss_assigned_leads"));
     };
     const unsubscribe = subscribeToLeadUpdates(handleRefresh);
+
+    const fetchBackendAssignedLeads = async () => {
+      try {
+        const res = await getAllLeadsApi();
+        if (res && res.success && res.data && res.data.leads) {
+          const stored = getStoredLeads("dss_assigned_leads");
+          const backendAssigned = res.data.leads.map((backendLead) => {
+            const dateObj = new Date(backendLead.createdAt || Date.now());
+            const formattedDate = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+            const formattedTime = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+            const assignee = backendLead.salesPerson || (typeof backendLead.assignedTo === "object" ? backendLead.assignedTo?.name : backendLead.assignedTo) || "Sales TL";
+
+            return {
+              id: backendLead._id,
+              clientName: backendLead.clientName || "Client",
+              concernPersonName: backendLead.clientName || "Client",
+              phoneNumber: backendLead.phoneNumber || backendLead.phone || "--",
+              contact: backendLead.phoneNumber || backendLead.phone || "--",
+              alternateNumber: backendLead.alternateNumber || "--",
+              emailAddress: backendLead.emailAddress || backendLead.email || "--",
+              email: backendLead.emailAddress || backendLead.email || "--",
+              status: backendLead.leadStatus || backendLead.status || "Warm",
+              leadStatus: backendLead.leadStatus || backendLead.status || "Warm",
+              leadType: backendLead.leadType || "FRESH",
+              leadMode: backendLead.leadMode || backendLead.leadSource || "DIRECT",
+              leadSource: backendLead.leadSource || backendLead.leadMode || "DIRECT",
+              workCategory: backendLead.workCategory || "Design",
+              workType: backendLead.workType || [],
+              address: backendLead.address || "--",
+              city: backendLead.city || "--",
+              pincode: backendLead.pincode || "--",
+              state: backendLead.state || "--",
+              expectedBusiness: backendLead.expectedBusiness || backendLead.budget || 0,
+              assignTo: assignee,
+              salesPerson: assignee,
+              assignedTo: assignee,
+              assignedDate: formattedDate,
+              assignedTime: formattedTime,
+              remark: backendLead.remark || backendLead.requirement || "--"
+            };
+          });
+
+          const merged = [...stored];
+          backendAssigned.forEach((bLead) => {
+            if (!merged.some((m) => String(m.id) === String(bLead.id))) {
+              merged.push(bLead);
+            }
+          });
+          setLeads(merged);
+          try {
+            localStorage.setItem("dss_assigned_leads", JSON.stringify(merged));
+          } catch (e) {}
+        }
+      } catch (e) {
+        console.error("Error fetching backend assigned leads:", e);
+      }
+    };
+
+    fetchBackendAssignedLeads();
+
     return () => unsubscribe();
   }, []);
 
@@ -584,37 +645,36 @@ const AsignLeads = () => {
     return filteredLeads.slice(start, start + rowsPerPage);
   }, [filteredLeads, currentPage, rowsPerPage]);
 
-  const handleConfirmReassign = () => {
+  const handleConfirmReassign = async () => {
     if (!reassignModalLead || !newAssignee) {
       toast.error("Please select a team member to reassign!");
       return;
     }
     const isSelf = newAssignee.includes("Self") || newAssignee.includes("TL");
+    const updatedLeadData = {
+      ...reassignModalLead,
+      assignTo: newAssignee,
+      assignedTo: newAssignee,
+      salesPerson: newAssignee,
+      assignedType: isSelf ? "self" : "executive",
+      assignedDate: new Date().toLocaleDateString("en-GB")
+    };
+
     const updated = leads.map((l) =>
-      l.id === reassignModalLead.id
-        ? {
-            ...l,
-            assignTo: newAssignee,
-            assignedTo: newAssignee,
-            salesPerson: newAssignee,
-            assignedType: isSelf ? "self" : "executive",
-            assignedDate: new Date().toLocaleDateString("en-GB")
-          }
-        : l
+      String(l.id) === String(reassignModalLead.id) ? updatedLeadData : l
     );
     saveLeads(updated);
+    updateLeadInStorage(updatedLeadData);
 
-    // Also update dss_leads
-    try {
-      const savedTotal = localStorage.getItem("dss_leads");
-      if (savedTotal) {
-        const parsedTotal = JSON.parse(savedTotal);
-        const updatedTotal = parsedTotal.map((l) =>
-          l.id === reassignModalLead.id ? { ...l, assignTo: newAssignee, salesPerson: newAssignee } : l
-        );
-        localStorage.setItem("dss_leads", JSON.stringify(updatedTotal));
+    if (reassignModalLead.id && !String(reassignModalLead.id).startsWith("LM-")) {
+      try {
+        await updateLeadApi(reassignModalLead.id, {
+          salesPerson: newAssignee
+        });
+      } catch (err) {
+        console.error("Backend reassign sync error:", err);
       }
-    } catch (e) {}
+    }
 
     toast.success(`Lead ${reassignModalLead.clientName || reassignModalLead.concernPersonName} reassigned to ${newAssignee} successfully! 👤`);
     setReassignModalLead(null);

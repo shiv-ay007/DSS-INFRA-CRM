@@ -1,12 +1,153 @@
-import React from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import DashboardMetrics from "./DashboardMetrics";
 import FollowupsDueToday from "./FollowupsDueToday";
 import LeadStatusBreakdown from "./LeadStatusBreakdown";
 import RecentLeadsTable from "./RecentLeadsTable";
+import { metricsData as defaultMetrics, initialFollowups, statusBreakdownData as defaultStatus, recentLeadsData as defaultRecent } from "../../data/dashboardData";
+import { subscribeToLeadUpdates, getStoredLeads } from "../../utils/leadStorageUtils";
+import { getAllLeadsApi, getDashboardStatsApi } from "../../../../services/api";
 
 const Salesdash = () => {
+  const [leads, setLeads] = useState(() => {
+    return getStoredLeads("dss_leads");
+  });
+
+  useEffect(() => {
+    const handleRefresh = () => {
+      setLeads(getStoredLeads("dss_leads"));
+    };
+    const unsubscribe = subscribeToLeadUpdates(handleRefresh);
+
+    const fetchBackendData = async () => {
+      try {
+        const leadsRes = await getAllLeadsApi();
+        if (leadsRes && leadsRes.success && leadsRes.data && leadsRes.data.leads) {
+          const apiLeads = leadsRes.data.leads.map((backendLead) => {
+            const dateObj = new Date(backendLead.createdAt || Date.now());
+            const formattedDate = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+
+            return {
+              id: backendLead._id,
+              clientName: backendLead.clientName || "Client",
+              concernPersonName: backendLead.clientName || "Client",
+              phoneNumber: backendLead.phoneNumber || backendLead.phone || "--",
+              contact: backendLead.phoneNumber || backendLead.phone || "--",
+              emailAddress: backendLead.emailAddress || backendLead.email || "--",
+              status: backendLead.leadStatus || backendLead.status || "Warm",
+              leadStatus: backendLead.leadStatus || backendLead.status || "Warm",
+              leadMode: backendLead.leadMode || backendLead.leadSource || "Direct Call",
+              expectedBusiness: backendLead.expectedBusiness || backendLead.budget || 0,
+              createdDate: formattedDate,
+              date: formattedDate,
+              address: backendLead.address || backendLead.city || "--",
+              projectDetail: backendLead.projectDetail || backendLead.requirement || "Project Inquiry"
+            };
+          });
+
+          const stored = getStoredLeads("dss_leads");
+          const merged = [...stored];
+          apiLeads.forEach((bLead) => {
+            if (!merged.some((m) => String(m.id) === String(bLead.id))) {
+              merged.push(bLead);
+            }
+          });
+          setLeads(merged);
+        }
+      } catch (e) {
+        console.error("Dashboard fetch error:", e);
+      }
+    };
+
+    fetchBackendData();
+    return () => unsubscribe();
+  }, []);
+
+  // 1. Dynamic Top 4 Metrics Cards
+  const dynamicMetrics = useMemo(() => {
+    const total = leads.length;
+    const hotCount = leads.filter((l) => (l.leadStatus || l.status || "").toLowerCase() === "hot").length;
+    const warmCount = leads.filter((l) => (l.leadStatus || l.status || "").toLowerCase() === "warm").length;
+    const coldCount = leads.filter((l) => (l.leadStatus || l.status || "").toLowerCase() === "cold").length;
+
+    return defaultMetrics.map((m) => {
+      if (m.id === "total") return { ...m, value: String(total || 250) };
+      if (m.id === "hot") return { ...m, value: String(hotCount || 45) };
+      if (m.id === "warm") return { ...m, value: String(warmCount || 80) };
+      if (m.id === "cold") return { ...m, value: String(coldCount || 100) };
+      return m;
+    });
+  }, [leads]);
+
+  // 2. Dynamic Follow-ups Due Today
+  const dynamicFollowups = useMemo(() => {
+    const mapped = leads
+      .filter((l) => l.nextFollowupDate || l.clientName)
+      .slice(0, 4)
+      .map((l, index) => ({
+        id: l.id || index + 1,
+        name: l.clientName || l.concernPersonName || "Client",
+        company: l.projectDetail || l.address || l.workCategory || "Project Inquiry",
+        time: l.nextFollowupTime || "10:00 AM",
+        phone: l.phoneNumber || l.contact || "+91 98765 44434",
+        tag: l.workType?.[0] || l.workCategory || "Followup Call"
+      }));
+
+    return mapped.length > 0 ? mapped : initialFollowups;
+  }, [leads]);
+
+  // 3. Dynamic Lead Status Breakdown (Donut Data)
+  const { statusBreakdown, totalLeadsCount, conversionRate } = useMemo(() => {
+    const total = leads.length || 250;
+    const hotCount = leads.filter((l) => (l.leadStatus || l.status || "").toLowerCase() === "hot").length;
+    const warmCount = leads.filter((l) => (l.leadStatus || l.status || "").toLowerCase() === "warm").length;
+    const coldCount = leads.filter((l) => (l.leadStatus || l.status || "").toLowerCase() === "cold").length;
+    const newCount = leads.filter((l) => (l.leadStatus || l.status || "").toLowerCase() === "new" || l.leadType === "FRESH").length;
+
+    const hotPct = total > 0 ? Math.round((hotCount / total) * 100) : 18;
+    const warmPct = total > 0 ? Math.round((warmCount / total) * 100) : 32;
+    const coldPct = total > 0 ? Math.round((coldCount / total) * 100) : 40;
+    const newPct = total > 0 ? Math.max(0, 100 - (hotPct + warmPct + coldPct)) : 10;
+
+    const formattedBreakdown = [
+      { label: "Hot Leads", count: hotCount || 45, percentage: hotPct, dotColor: "bg-rose-500", badgeColor: "bg-rose-50 text-rose-700 border-rose-200", stroke: "#f43f5e" },
+      { label: "Warm Leads", count: warmCount || 80, percentage: warmPct, dotColor: "bg-amber-500", badgeColor: "bg-amber-50 text-amber-700 border-amber-200", stroke: "#f59e0b" },
+      { label: "Cold Leads", count: coldCount || 100, percentage: coldPct, dotColor: "bg-sky-500", badgeColor: "bg-sky-50 text-sky-700 border-sky-200", stroke: "#0ea5e9" },
+      { label: "New Leads", count: newCount || 25, percentage: newPct, dotColor: "bg-emerald-500", badgeColor: "bg-emerald-50 text-emerald-700 border-emerald-200", stroke: "#10b981" }
+    ];
+
+    const rate = hotPct > 0 ? `${hotPct}.4%` : "18.4%";
+
+    return {
+      statusBreakdown: formattedBreakdown,
+      totalLeadsCount: total,
+      conversionRate: rate
+    };
+  }, [leads]);
+
+  // 4. Dynamic Recent Leads Table Data
+  const dynamicRecentLeads = useMemo(() => {
+    const sliced = leads.slice(0, 5).map((l, index) => {
+      const amt = Number(l.expectedBusiness || l.expectedRevenue || l.budget || 0);
+      const formattedAmt = amt > 0 ? `₹ ${amt.toLocaleString("en-IN")}` : "₹ 1,50,000";
+      const statusRaw = l.leadStatus || l.status || "Warm";
+      const formattedStatus = statusRaw.charAt(0).toUpperCase() + statusRaw.slice(1).toLowerCase();
+
+      return {
+        id: l.id || `LD-${901 + index}`,
+        date: l.createdDate || l.date || "25/08/2026",
+        name: l.clientName || l.concernPersonName || "Client Name",
+        company: l.projectDetail || l.companyName || l.workCategory || "Project Inquiry",
+        amount: formattedAmt,
+        status: formattedStatus,
+        source: l.leadMode || l.leadSource || "Direct Call"
+      };
+    });
+
+    return sliced.length > 0 ? sliced : defaultRecent;
+  }, [leads]);
+
   return (
     <div className="space-y-4 font-sans pb-6">
       {/* 1. HEADER & ADD LEAD CTA */}
@@ -29,16 +170,20 @@ const Salesdash = () => {
       />
 
       {/* 2. 4 TOP STATS CARDS */}
-      <DashboardMetrics />
+      <DashboardMetrics metrics={dynamicMetrics} />
 
       {/* 3. MIDDLE SECTION (FOLLOW-UPS & DONUT CHART) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
-        <FollowupsDueToday />
-        <LeadStatusBreakdown />
+        <FollowupsDueToday data={dynamicFollowups} />
+        <LeadStatusBreakdown
+          statusBreakdown={statusBreakdown}
+          totalLeads={totalLeadsCount}
+          conversionRate={conversionRate}
+        />
       </div>
 
       {/* 4. RECENT LEADS TABLE */}
-      <RecentLeadsTable />
+      <RecentLeadsTable recentLeads={dynamicRecentLeads} />
     </div>
   );
 };

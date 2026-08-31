@@ -2,6 +2,21 @@ import React from "react";
 import { statusBreakdownData } from "../../data/dashboardData";
 
 const LeadStatusBreakdown = ({ statusBreakdown = statusBreakdownData, totalLeads = 250, conversionRate = "18.4%" }) => {
+  const hotItem = statusBreakdown.find((i) => i.label.toLowerCase().includes("hot")) || { percentage: 18 };
+  const warmItem = statusBreakdown.find((i) => i.label.toLowerCase().includes("warm")) || { percentage: 32 };
+  const coldItem = statusBreakdown.find((i) => i.label.toLowerCase().includes("cold")) || { percentage: 40 };
+  const newItem = statusBreakdown.find((i) => i.label.toLowerCase().includes("new")) || { percentage: 10 };
+
+  const hotPct = Number(hotItem.percentage) || 0;
+  const warmPct = Number(warmItem.percentage) || 0;
+  const coldPct = Number(coldItem.percentage) || 0;
+  const newPct = Number(newItem.percentage) || 0;
+
+  const hotOffset = 0;
+  const warmOffset = -hotPct;
+  const coldOffset = -(hotPct + warmPct);
+  const newOffset = -(hotPct + warmPct + coldPct);
+
   return (
     <div className="lg:col-span-5 bg-white rounded-xl border border-slate-200/90 shadow-2xs p-3.5 sm:p-4 flex flex-col justify-between">
       <div>
@@ -25,42 +40,42 @@ const LeadStatusBreakdown = ({ statusBreakdown = statusBreakdownData, totalLeads
                 fill="none"
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
               />
-              {/* Hot 18% */}
+              {/* Hot */}
               <path
                 stroke="#f43f5e"
                 strokeWidth="4.5"
-                strokeDasharray="18, 100"
-                strokeDashoffset="0"
+                strokeDasharray={`${hotPct}, 100`}
+                strokeDashoffset={`${hotOffset}`}
                 fill="none"
                 strokeLinecap="round"
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
               />
-              {/* Warm 32% */}
+              {/* Warm */}
               <path
                 stroke="#f59e0b"
                 strokeWidth="4.5"
-                strokeDasharray="32, 100"
-                strokeDashoffset="-18"
+                strokeDasharray={`${warmPct}, 100`}
+                strokeDashoffset={`${warmOffset}`}
                 fill="none"
                 strokeLinecap="round"
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
               />
-              {/* Cold 40% */}
+              {/* Cold */}
               <path
                 stroke="#0ea5e9"
                 strokeWidth="4.5"
-                strokeDasharray="40, 100"
-                strokeDashoffset="-50"
+                strokeDasharray={`${coldPct}, 100`}
+                strokeDashoffset={`${coldOffset}`}
                 fill="none"
                 strokeLinecap="round"
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
               />
-              {/* New 10% */}
+              {/* New */}
               <path
                 stroke="#10b981"
                 strokeWidth="4.5"
-                strokeDasharray="10, 100"
-                strokeDashoffset="-90"
+                strokeDasharray={`${newPct}, 100`}
+                strokeDashoffset={`${newOffset}`}
                 fill="none"
                 strokeLinecap="round"
                 d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"

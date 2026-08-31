@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { FaUser, FaLock, FaArrowLeft, FaSignInAlt } from "react-icons/fa";
 import { toast } from "react-toastify";
+import { loginApi } from "../../../services/api";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -18,16 +19,39 @@ const Login = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    toast.success("Sales Module Login Successful! Redirecting to Dashboard...", {
-      position: "top-right",
-      autoClose: 2000,
-    });
-    setTimeout(() => {
-      navigate("/sales/dashboard");
-    }, 600);
+
+    try {
+      const res = await loginApi(formData);
+      if (res && res.success && res.data) {
+        if (res.data.accessToken) localStorage.setItem("accessToken", res.data.accessToken);
+        if (res.data.refreshToken) localStorage.setItem("refreshToken", res.data.refreshToken);
+        if (res.data.user) localStorage.setItem("dss_user", JSON.stringify(res.data.user));
+
+        toast.success(res.message || `Sales Login Successful! Welcome ${res.data.user?.name || ""}`, {
+          position: "top-right",
+          autoClose: 2000,
+        });
+
+        setTimeout(() => {
+          navigate("/sales/dashboard");
+        }, 600);
+        return;
+      } else {
+        toast.error(res?.message || "Invalid credentials or unauthorized role. Only Admin & Executive can log in.", {
+          position: "top-right"
+        });
+      }
+    } catch (err) {
+      console.warn("Sales login error:", err);
+      toast.error(err?.message || "Sales Login failed. Please check your credentials.", {
+        position: "top-right"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -41,9 +65,6 @@ const Login = () => {
           <FaArrowLeft className="w-3.5 h-3.5" />
           <span>Back to Portal</span>
         </Link>
-        {/* <span className="text-xs font-bold text-orange-400 bg-orange-500/10 px-2.5 py-1 rounded-full border border-orange-500/20">
-          Sales Module
-        </span> */}
       </div>
 
       <div 
@@ -77,7 +98,7 @@ const Login = () => {
                 type="email"
                 name="email"
                 required
-                placeholder="sales@dssinfra.com"
+                placeholder="sales.tl@crm.com"
                 value={formData.email}
                 onChange={handleChange}
                 className="w-full pl-10 pr-4 py-2.5 bg-[#1f1e1e] border border-neutral-700 rounded-xl text-white placeholder-neutral-500 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 text-sm transition-all font-medium"

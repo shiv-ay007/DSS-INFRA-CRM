@@ -10,8 +10,20 @@ const SalesHeader = ({
   toggleSidebar
 }) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [user, setUser] = useState(null);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    try {
+      const storedUser = localStorage.getItem("dss_user");
+      if (storedUser) {
+        setUser(JSON.parse(storedUser));
+      }
+    } catch (e) {
+      console.warn("Error parsing user profile:", e);
+    }
+  }, []);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -23,17 +35,33 @@ const SalesHeader = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Handle Logout with Toast
+  // Format user role display
+  const getFormattedRole = (userRole) => {
+    if (!userRole) return role;
+    if (userRole === "ADMIN") return "Admin";
+    if (userRole === "MANAGER") return "Sales TL";
+    if (userRole === "SALES_EXECUTIVE") return "Sales Executive";
+    return userRole;
+  };
+
+  const userName = user?.name || user?.username || department;
+  const userRoleDisplay = getFormattedRole(user?.role);
+
+  // Handle Logout with Toast & Local Storage Cleanup
   const handleLogout = () => {
     setIsProfileOpen(false);
+
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
+    localStorage.removeItem("dss_user");
     
     toast.info("Logged out successfully! See you soon 👋", {
       position: "top-right",
       autoClose: 2500,
     });
 
-    // Navigate to home page
-    navigate("/");
+    // Navigate to sales login page
+    navigate("/sales/login");
     
     // Call the onLogout callback if provided
     if (onLogout) onLogout();
@@ -113,11 +141,11 @@ const SalesHeader = ({
                 </svg>
               </div>
               <div className="text-left leading-tight">
-                <div className="text-xs font-bold text-slate-900">
-                  {department}
+                <div className="text-xs font-bold text-slate-900 truncate max-w-[130px]">
+                  {userName}
                 </div>
                 <div className="text-[10px] text-slate-400 font-medium mt-0.5">
-                  {role}
+                  {userRoleDisplay}
                 </div>
               </div>
             </div>

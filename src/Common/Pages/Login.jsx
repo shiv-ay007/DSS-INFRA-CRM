@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { FaUser, FaLock, FaArrowLeft, FaSignInAlt } from "react-icons/fa";
 import { toast } from "react-toastify";
+import { loginApi } from "../../services/api";
 
 const Login = () => {
   const navigate = useNavigate();
@@ -18,16 +19,39 @@ const Login = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-    toast.success("Login Successful! Redirecting to Sales Dashboard...", {
-      position: "top-right",
-      autoClose: 2000,
-    });
-    setTimeout(() => {
-      navigate("/sales/dashboard");
-    }, 600);
+
+    try {
+      const res = await loginApi(formData);
+      if (res && res.success && res.data) {
+        if (res.data.accessToken) localStorage.setItem("accessToken", res.data.accessToken);
+        if (res.data.refreshToken) localStorage.setItem("refreshToken", res.data.refreshToken);
+        if (res.data.user) localStorage.setItem("dss_user", JSON.stringify(res.data.user));
+
+        toast.success(res.message || `Login Successful! Welcome ${res.data.user?.name || ""}`, {
+          position: "top-right",
+          autoClose: 2000,
+        });
+
+        setTimeout(() => {
+          navigate("/sales/dashboard");
+        }, 600);
+        return;
+      } else {
+        toast.error(res?.message || "Invalid credentials or unauthorized role. Only Admin & Executive can log in.", {
+          position: "top-right"
+        });
+      }
+    } catch (err) {
+      console.warn("Login error:", err);
+      toast.error(err?.message || "Login failed. Please check your credentials.", {
+        position: "top-right"
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (

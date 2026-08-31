@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
+import { createLeadApi } from "../../../../services/api";
 import {
   salesPersonsList,
   leadSourcesList,
@@ -595,6 +596,13 @@ const Addlead = () => {
       };
 
       try {
+        // Save lead to backend MongoDB Atlas Database with all form fields & attachments
+        const apiRes = await createLeadApi(newLead);
+        if (apiRes && apiRes.success && apiRes.data && apiRes.data._id) {
+          newLead.id = apiRes.data._id;
+          newLead._id = apiRes.data._id;
+        }
+
         // 1. Save to dss_leads (Used by Total Leads Directory)
         const savedTotal = localStorage.getItem("dss_leads");
         const currentTotalLeads = savedTotal ? JSON.parse(savedTotal) : initialTotalLeads;

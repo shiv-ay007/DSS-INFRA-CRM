@@ -10,7 +10,8 @@ import { initialAssignedLeads } from "../../data/assignedLeadsData";
 import { availableWorkTypes, workCategoryList, indianStatesList } from "../../data/addLeadData";
 import { FaUserPlus, FaUsers, FaUserCheck, FaImage, FaVideo, FaMicrophone, FaFileAlt, FaPaperclip, FaTimes, FaDownload, FaPlay, FaPause } from "react-icons/fa";
 
-import { subscribeToLeadUpdates } from "../../utils/leadStorageUtils";
+import { subscribeToLeadUpdates, updateLeadInStorage } from "../../utils/leadStorageUtils";
+import { getAllLeadsApi, updateLeadApi } from "../../../../services/api";
 
 const salesPersonsList = [
   "ALL",
@@ -122,7 +123,8 @@ const SalseTotalLeads = () => {
             }
             return item;
           });
-          setLeads(processed);
+          const filtered = processed.filter((l) => !l.clientName?.toLowerCase().includes("vikram"));
+          setLeads(filtered);
           return;
         }
       } catch (e) {
@@ -175,6 +177,74 @@ const SalseTotalLeads = () => {
 
   useEffect(() => {
     loadLeadsFromStorage();
+
+    // Fetch leads from backend MongoDB Atlas database
+    const fetchBackendLeads = async () => {
+      try {
+        const res = await getAllLeadsApi();
+        if (res && res.success && res.data && res.data.leads) {
+          const apiLeads = res.data.leads.map((backendLead) => {
+            const dateObj = new Date(backendLead.createdAt || Date.now());
+            const formattedDate = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+            const formattedTime = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+
+            return {
+              id: backendLead._id || `LM-${Math.floor(100000 + Math.random() * 900000)}`,
+              clientName: backendLead.clientName || "Client",
+              concernPersonName: backendLead.clientName || "Client",
+              phoneNumber: backendLead.phoneNumber || backendLead.phone || "--",
+              contact: backendLead.phoneNumber || backendLead.phone || "--",
+              alternateNumber: backendLead.alternateNumber || "--",
+              emailAddress: backendLead.emailAddress || backendLead.email || "--",
+              email: backendLead.emailAddress || backendLead.email || "--",
+              status: backendLead.leadStatus || backendLead.status || "Warm",
+              leadStatus: backendLead.leadStatus || backendLead.status || "Warm",
+              leadLabel: (backendLead.leadStatus || backendLead.status || "Warm").toUpperCase(),
+              leadMode: backendLead.leadMode || backendLead.leadSource || backendLead.source || "Business networking",
+              leadSource: backendLead.leadMode || backendLead.leadSource || backendLead.source || "Business networking",
+              leadType: backendLead.leadType || "FRESH",
+              workCategory: backendLead.workCategory || "Design",
+              workType: Array.isArray(backendLead.workType) ? backendLead.workType : (backendLead.workType ? [backendLead.workType] : ["Concept Drawing"]),
+              requirement: backendLead.remark || backendLead.projectDetail || backendLead.notes || "Lead Registration",
+              expectedBusiness: String(backendLead.expectedBusiness || backendLead.budget || 0),
+              expectedRevenue: String(backendLead.expectedBusiness || backendLead.budget || 0),
+              pincode: backendLead.pincode || "--",
+              city: backendLead.city || "--",
+              state: backendLead.state || "--",
+              leadBy: backendLead.salesPerson || backendLead.assignedTo?.name || "Sales TL (Current User)",
+              salesPerson: backendLead.salesPerson || backendLead.assignedTo?.name || "Sales TL (Current User)",
+              assignTo: backendLead.salesPerson || backendLead.assignedTo?.name || "Sales TL (Current User)",
+              address: backendLead.address || backendLead.notes || "--",
+              projectDetail: backendLead.projectDetail || backendLead.notes || "",
+              remark: backendLead.remark || backendLead.notes || "",
+              remarkAttachments: backendLead.remarkAttachments || [],
+              attachments: backendLead.remarkAttachments || [],
+              createdDate: formattedDate,
+              date: backendLead.date || dateObj.toISOString().split("T")[0],
+              createdTime: formattedTime,
+              leadAge: "0 Days",
+              channelType: backendLead.channel || "Sales"
+            };
+          });
+
+          if (apiLeads.length > 0) {
+            setLeads((prevLeads) => {
+              const cleanPrev = prevLeads.filter((l) => !l.clientName?.toLowerCase().includes("vikram"));
+              const apiIds = new Set(apiLeads.map((l) => l.id));
+              const localOnlyLeads = cleanPrev.filter((l) => !apiIds.has(l.id));
+              const combined = [...apiLeads, ...localOnlyLeads];
+              try { localStorage.setItem("dss_leads", JSON.stringify(combined)); } catch (e) {}
+              return combined;
+            });
+          }
+        }
+      } catch (err) {
+        console.warn("Backend API fetch leads warning:", err);
+      }
+    };
+
+    fetchBackendLeads();
+
     const unsubscribe = subscribeToLeadUpdates(() => {
       loadLeadsFromStorage();
     });
@@ -222,7 +292,7 @@ const SalseTotalLeads = () => {
 
   // Sort State
   const [sortConfig, setSortConfig] = useState({
-    key: "date",
+    key: null,
     direction: "desc"
   });
 
@@ -367,7 +437,7 @@ const SalseTotalLeads = () => {
     setExecutiveBranch(executiveBranchMap[execName] || "Noida Branch");
   };
 
-  const handleAssignLeadSubmit = () => {
+  const handleAssignLeadSubmit = async () => {
     if (!assignModalLead) return;
 
     const assignedPerson =
@@ -405,13 +475,10 @@ const SalseTotalLeads = () => {
       }))
     };
 
-    // 1. Update in dss_leads (Total Leads Directory)
-    const updatedTotalLeads = leads.map((l) =>
-      l.id === assignModalLead.id ? updatedLeadData : l
-    );
-    saveLeadsToStorage(updatedTotalLeads);
+    // 1. Centralized update in all storage keys & dispatch update event
+    updateLeadInStorage(updatedLeadData);
 
-    // 2. Save / prepend to dss_assigned_leads (Assigned Leads)
+    // 2. Save / prepend to dss_assigned_leads
     try {
       const savedAssigned = localStorage.getItem("dss_assigned_leads");
       let currentAssigned = [];
@@ -425,13 +492,26 @@ const SalseTotalLeads = () => {
         currentAssigned = initialAssignedLeads;
       }
 
-      const filteredAssigned = currentAssigned.filter((item) => item.id !== assignModalLead.id);
+      const filteredAssigned = currentAssigned.filter((item) => String(item.id) !== String(assignModalLead.id));
       localStorage.setItem(
         "dss_assigned_leads",
         JSON.stringify([updatedLeadData, ...filteredAssigned])
       );
     } catch (e) {
       console.error("Error saving assigned lead:", e);
+    }
+
+    // 3. Sync assignment to MongoDB backend DB if valid ID
+    if (assignModalLead.id && !String(assignModalLead.id).startsWith("LM-")) {
+      try {
+        await updateLeadApi(assignModalLead.id, {
+          salesPerson: assignedPerson,
+          leadStatus: assignModalLead.status || assignModalLead.leadStatus || "Warm",
+          requirement: assignmentRemark || assignModalLead.remark || ""
+        });
+      } catch (err) {
+        console.error("Backend assign lead sync error:", err);
+      }
     }
 
     toast.success(`Lead ${assignModalLead.clientName || assignModalLead.concernPersonName || assignModalLead.id} assigned to ${assignedPerson} successfully! 🎯`);
