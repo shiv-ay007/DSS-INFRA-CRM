@@ -12,7 +12,7 @@ const LeadOverviewCard = ({ lead }) => {
   const leadAge = lead?.leadAge || "0 Days";
   const createdDate = lead?.createdDate || lead?.date || "--";
   const createdTime = lead?.createdTime || "";
-  const assignTo = lead?.assignTo || lead?.salesPerson || "Sales TL (Current User)";
+  const assignTo = lead?.assignTo || lead?.salesPerson || "Sales TL";
 
   const getStatusBadge = (s) => {
     if (s.includes("HOT")) return "bg-rose-100 text-rose-800 border-rose-300 font-extrabold";

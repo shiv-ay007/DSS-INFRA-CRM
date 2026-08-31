@@ -18,7 +18,7 @@ export const initialAssignedLeads = [
     createdDate: "18/8/2026, 11:17:29 am",
     timestamp: new Date("2026-08-18T11:17:29").getTime(),
     leadAge: "0 Days",
-    assignedTo: "Sales TL (Self)",
+    assignedTo: "Sales TL",
     assignedType: "self",
     assignedDate: "18/8/2026, 11:30:00 am",
     pincode: "273001",
@@ -74,7 +74,7 @@ export const initialAssignedLeads = [
     createdDate: "16/7/2026, 12:25:39 pm",
     timestamp: new Date("2026-07-16T12:25:39").getTime(),
     leadAge: "33 Days",
-    assignedTo: "Sales TL (Self)",
+    assignedTo: "Sales TL",
     assignedType: "self",
     assignedDate: "16/7/2026, 12:45:00 pm",
     pincode: "226010",
@@ -130,7 +130,7 @@ export const initialAssignedLeads = [
     createdDate: "10/6/2026, 10:45:10 am",
     timestamp: new Date("2026-06-10T10:45:10").getTime(),
     leadAge: "69 Days",
-    assignedTo: "Sales TL (Self)",
+    assignedTo: "Sales TL",
     assignedType: "self",
     assignedDate: "10/6/2026, 11:00:00 am",
     pincode: "122002",
@@ -186,7 +186,7 @@ export const leadStatusOptions = ["Lead Status", "INTERESTED", "HOT", "WARM", "C
 export const leadLabelOptions = ["Lead Label", "Hot Lead 🔥", "Warm Lead ⚡", "Cold Lead ❄️"];
 export const jobTypeOptions = ["Job Type", "NEW", "REPAIR / AMC", "EXPANSION", "UPGRADE"];
 export const teamMembers = [
-  "Sales TL (Self)",
+  "Sales TL",
   "Rahul Sharma",
   "Pooja Verma",
   "Vikram Malhotra",

@@ -143,11 +143,13 @@ const LeadDetails = () => {
     <div className="w-full min-h-screen bg-[#F8FAFC] pb-16 font-sans">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* 1. HEADER BANNER */}
-        <LeadHeaderBanner
-          lead={lead}
-          onOpenFollowupModal={() => setShowFollowupModal(true)}
-          onOpenEditModal={() => setIsEditModalOpen(true)}
-        />
+        <div className="sticky top-0 z-30 bg-[#F8FAFC] pt-1 pb-2">
+          <LeadHeaderBanner
+            lead={lead}
+            onOpenFollowupModal={() => setShowFollowupModal(true)}
+            onOpenEditModal={() => setIsEditModalOpen(true)}
+          />
+        </div>
 
         {/* 2. GRID LAYOUT */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">

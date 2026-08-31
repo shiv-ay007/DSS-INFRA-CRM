@@ -273,36 +273,38 @@ const Salse = () => {
     <div className="space-y-5 font-sans pb-16 w-full min-h-screen bg-[#F8FAFC]">
       
       {/* ================= 1. SUB-HEADER BANNER ================= */}
-      <PageHeader
-        title="Sales Management Sheet"
-        badge="Executive Overview"
-        badgeColor="bg-purple-100 text-purple-800 border-purple-300"
-        description="Real-time sales deal tracking, client requirement log, priority matrix, and revenue valuation."
-        showBackButton={true}
-        rightActions={
-          <div className="flex items-center gap-2">
-            <Link
-              to="/sales/leads/add"
-              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs sm:text-sm font-bold shadow-md shadow-emerald-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
-            >
-              <span>+</span> Add Lead
-            </Link>
+      <div className="sticky top-0 z-30 bg-[#F8FAFC] pt-1 pb-2">
+        <PageHeader
+          title="Sales Management Sheet"
+          badge="Executive Overview"
+          badgeColor="bg-purple-100 text-purple-800 border-purple-300"
+          description="Real-time sales deal tracking, client requirement log, priority matrix, and revenue valuation."
+          showBackButton={true}
+          rightActions={
+            <div className="flex items-center gap-2">
+              <Link
+                to="/sales/leads/add"
+                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs sm:text-sm font-bold shadow-md shadow-emerald-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>+</span> Add Lead
+              </Link>
 
-            <button
-              type="button"
-              onClick={() => setShowFilters((prev) => !prev)}
-              className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-center shadow-2xs font-bold text-xs sm:text-sm ${
-                showFilters
-                  ? "bg-white text-slate-800 border-slate-300 hover:bg-slate-50 shadow-2xs"
-                  : "bg-[#FF5722] text-white border-[#FF5722] hover:bg-[#e64a19]"
-              }`}
-              title={showFilters ? "Hide Filter Options" : "Show Filter Options"}
-            >
-              <FaFilter className="w-4 h-4" />
-            </button>
-          </div>
-        }
-      />
+              <button
+                type="button"
+                onClick={() => setShowFilters((prev) => !prev)}
+                className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-center shadow-2xs font-bold text-xs sm:text-sm ${
+                  showFilters
+                    ? "bg-white text-slate-800 border-slate-300 hover:bg-slate-50 shadow-2xs"
+                    : "bg-[#FF5722] text-white border-[#FF5722] hover:bg-[#e64a19]"
+                }`}
+                title={showFilters ? "Hide Filter Options" : "Show Filter Options"}
+              >
+                <FaFilter className="w-4 h-4" />
+              </button>
+            </div>
+          }
+        />
+      </div>
 
       {/* ================= 2. TOP 3 COLORFUL KPI METRIC CARDS ================= */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

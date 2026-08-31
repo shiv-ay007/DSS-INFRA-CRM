@@ -442,29 +442,31 @@ const Lostlead = () => {
     <div className="space-y-5 font-sans pb-12 w-full min-h-screen bg-[#F8FAFC]">
       
       {/* 1. SUB-HEADER BAR */}
-      <PageHeader
-        title="Lost Leads Directory"
-        badge="Closed / Lost"
-        badgeColor="bg-rose-100 text-rose-800 border-rose-300"
-        description="Analyze lost deal reasons and revive opportunities back into the active pipeline."
-        showBackButton={true}
-        rightActions={
-          <button
-            type="button"
-            onClick={() => setShowFilters((prev) => !prev)}
-            className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-center shadow-2xs font-bold text-xs sm:text-sm ${
-              showFilters
-                ? "bg-white text-slate-800 border-slate-300 hover:bg-slate-50 shadow-2xs"
-                : "bg-[#FF5722] text-white border-[#FF5722] hover:bg-[#e64a19]"
-            }`}
-            title={showFilters ? "Hide Filter Options" : "Show Filter Options"}
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-            </svg>
-          </button>
-        }
-      />
+      <div className="sticky top-0 z-30 bg-[#F8FAFC] pt-1 pb-2">
+        <PageHeader
+          title="Lost Leads Directory"
+          badge="Closed / Lost"
+          badgeColor="bg-rose-100 text-rose-800 border-rose-300"
+          description="Analyze lost deal reasons and revive opportunities back into the active pipeline."
+          showBackButton={true}
+          rightActions={
+            <button
+              type="button"
+              onClick={() => setShowFilters((prev) => !prev)}
+              className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-center shadow-2xs font-bold text-xs sm:text-sm ${
+                showFilters
+                  ? "bg-white text-slate-800 border-slate-300 hover:bg-slate-50 shadow-2xs"
+                  : "bg-[#FF5722] text-white border-[#FF5722] hover:bg-[#e64a19]"
+              }`}
+              title={showFilters ? "Hide Filter Options" : "Show Filter Options"}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+              </svg>
+            </button>
+          }
+        />
+      </div>
 
       {/* 2. SCOPE TABS WITH EXECUTIVE DROPDOWN */}
       <ScopeTabs

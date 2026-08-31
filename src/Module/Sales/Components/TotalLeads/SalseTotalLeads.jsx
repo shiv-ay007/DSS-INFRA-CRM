@@ -10,12 +10,12 @@ import { initialAssignedLeads } from "../../data/assignedLeadsData";
 import { availableWorkTypes, workCategoryList, indianStatesList } from "../../data/addLeadData";
 import { FaUserPlus, FaUsers, FaUserCheck, FaImage, FaVideo, FaMicrophone, FaFileAlt, FaPaperclip, FaTimes, FaDownload, FaPlay, FaPause } from "react-icons/fa";
 
-import { subscribeToLeadUpdates, updateLeadInStorage } from "../../utils/leadStorageUtils";
+import { subscribeToLeadUpdates, updateLeadInStorage, getStoredLeads } from "../../utils/leadStorageUtils";
 import { getAllLeadsApi, updateLeadApi } from "../../../../services/api";
 
 const salesPersonsList = [
   "ALL",
-  "Sales TL (Current User)",
+  "Sales TL",
   "Rahul Sharma",
   "Pooja Verma",
   "Vikram Malhotra",
@@ -89,90 +89,68 @@ const SalseTotalLeads = () => {
   const location = useLocation();
 
   const loadLeadsFromStorage = useCallback(() => {
-    const saved = localStorage.getItem("dss_leads");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed && Array.isArray(parsed) && parsed.length > 0) {
-          const processed = parsed.map((item) => {
-            const rawAtts = item.remarkAttachments || item.attachments;
-            if (rawAtts && Array.isArray(rawAtts) && rawAtts.length > 0) {
-              const updatedAtts = rawAtts.map((att) => {
-                const name = (att.name || "").toLowerCase();
-                const type = (att.type || "").toLowerCase();
-                const isImg = name.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i) || type.includes("image");
-                const isAud = name.match(/\.(mp3|wav|ogg|m4a|webm|aac)$/i) || name.includes("audio") || type.includes("audio");
+    const stored = getStoredLeads("dss_leads");
+    const processed = stored.map((item) => {
+      const rawAtts = item.remarkAttachments || item.attachments;
+      if (rawAtts && Array.isArray(rawAtts) && rawAtts.length > 0) {
+        const updatedAtts = rawAtts.map((att) => {
+          const name = (att.name || "").toLowerCase();
+          const type = (att.type || "").toLowerCase();
+          const isImg = name.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i) || type.includes("image");
+          const isAud = name.match(/\.(mp3|wav|ogg|m4a|webm|aac)$/i) || name.includes("audio") || type.includes("audio");
 
-                let newUrl = att.url || att.preview || "";
-                if (window.__DSS_MEDIA_CACHE?.[att.id] || window.__DSS_MEDIA_CACHE?.[att.name]) {
-                  newUrl = window.__DSS_MEDIA_CACHE[att.id] || window.__DSS_MEDIA_CACHE[att.name];
-                }
-                if (!newUrl) {
-                  if (isImg) {
-                    newUrl = getImagePreviewUrl(att);
-                  }
-                }
-
-                return {
-                  ...att,
-                  type: isImg ? "image" : isAud ? "audio" : (att.type || "document"),
-                  url: newUrl
-                };
-              });
-              return { ...item, remarkAttachments: updatedAtts, attachments: updatedAtts };
+          let newUrl = att.url || att.preview || "";
+          if (window.__DSS_MEDIA_CACHE?.[att.id] || window.__DSS_MEDIA_CACHE?.[att.name]) {
+            newUrl = window.__DSS_MEDIA_CACHE[att.id] || window.__DSS_MEDIA_CACHE[att.name];
+          }
+          if (!newUrl) {
+            if (isImg) {
+              newUrl = getImagePreviewUrl(att);
             }
-            return item;
-          });
-          const filtered = processed.filter((l) => !l.clientName?.toLowerCase().includes("vikram"));
-          setLeads(filtered);
-          return;
-        }
-      } catch (e) {
-        console.error("Error loading leads from localStorage:", e);
+          }
+
+          return {
+            ...att,
+            type: isImg ? "image" : isAud ? "audio" : (att.type || "document"),
+            url: newUrl
+          };
+        });
+        return { ...item, remarkAttachments: updatedAtts, attachments: updatedAtts };
       }
-    }
-    setLeads(initialTotalLeads);
+      return item;
+    });
+    setLeads(processed);
   }, []);
 
   // Load leads from localStorage or default dataset
   const [leads, setLeads] = useState(() => {
-    const saved = localStorage.getItem("dss_leads");
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed && Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((item) => {
-            const rawAtts = item.remarkAttachments || item.attachments;
-            if (rawAtts && Array.isArray(rawAtts) && rawAtts.length > 0) {
-              const updatedAtts = rawAtts.map((att) => {
-                const name = (att.name || "").toLowerCase();
-                const type = (att.type || "").toLowerCase();
-                const isImg = name.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i) || type.includes("image");
-                const isAud = name.match(/\.(mp3|wav|ogg|m4a|webm|aac)$/i) || name.includes("audio") || type.includes("audio");
+    const stored = getStoredLeads("dss_leads");
+    return stored.map((item) => {
+      const rawAtts = item.remarkAttachments || item.attachments;
+      if (rawAtts && Array.isArray(rawAtts) && rawAtts.length > 0) {
+        const updatedAtts = rawAtts.map((att) => {
+          const name = (att.name || "").toLowerCase();
+          const type = (att.type || "").toLowerCase();
+          const isImg = name.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i) || type.includes("image");
+          const isAud = name.match(/\.(mp3|wav|ogg|m4a|webm|aac)$/i) || name.includes("audio") || type.includes("audio");
 
-                let newUrl = att.url || att.preview || "";
-                if (!newUrl || newUrl.startsWith("blob:")) {
-                  if (isImg) {
-                    newUrl = getImagePreviewUrl(att);
-                  }
-                }
-
-                return {
-                  ...att,
-                  type: isImg ? "image" : isAud ? "audio" : (att.type || "document"),
-                  url: newUrl
-                };
-              });
-              return { ...item, remarkAttachments: updatedAtts, attachments: updatedAtts };
+          let newUrl = att.url || att.preview || "";
+          if (!newUrl || newUrl.startsWith("blob:")) {
+            if (isImg) {
+              newUrl = getImagePreviewUrl(att);
             }
-            return item;
-          });
-        }
-      } catch (e) {
-        return initialTotalLeads;
+          }
+
+          return {
+            ...att,
+            type: isImg ? "image" : isAud ? "audio" : (att.type || "document"),
+            url: newUrl
+          };
+        });
+        return { ...item, remarkAttachments: updatedAtts, attachments: updatedAtts };
       }
-    }
-    return initialTotalLeads;
+      return item;
+    });
   });
 
   useEffect(() => {
@@ -187,6 +165,20 @@ const SalseTotalLeads = () => {
             const dateObj = new Date(backendLead.createdAt || Date.now());
             const formattedDate = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
             const formattedTime = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+
+            const rawPerson = (
+              backendLead.salesPerson ||
+              (typeof backendLead.assignedTo === 'object' ? backendLead.assignedTo?.name : backendLead.assignedTo) ||
+              ""
+            ).replace(" (Current User)", "").replace("(Current User)", "").trim();
+
+            const explicitAssignees = ["Rahul Sharma", "Pooja Verma", "Vikram Malhotra", "Ankit Patel", "Sanjay Gupta"];
+            const isExplicitBackendAssign = 
+              backendLead.isAssigned === true || 
+              !!backendLead.assignedType || 
+              explicitAssignees.includes(rawPerson);
+
+            const finalPerson = isExplicitBackendAssign ? rawPerson : "";
 
             return {
               id: backendLead._id || `LM-${Math.floor(100000 + Math.random() * 900000)}`,
@@ -211,9 +203,10 @@ const SalseTotalLeads = () => {
               pincode: backendLead.pincode || "--",
               city: backendLead.city || "--",
               state: backendLead.state || "--",
-              leadBy: backendLead.salesPerson || backendLead.assignedTo?.name || "Sales TL (Current User)",
-              salesPerson: backendLead.salesPerson || backendLead.assignedTo?.name || "Sales TL (Current User)",
-              assignTo: backendLead.salesPerson || backendLead.assignedTo?.name || "Sales TL (Current User)",
+              leadBy: finalPerson,
+              salesPerson: finalPerson,
+              assignTo: finalPerson,
+              isAssigned: isExplicitBackendAssign,
               address: backendLead.address || backendLead.notes || "--",
               projectDetail: backendLead.projectDetail || backendLead.notes || "",
               remark: backendLead.remark || backendLead.notes || "",
@@ -429,7 +422,7 @@ const SalseTotalLeads = () => {
     "Vikram Malhotra": "Gurugram Branch",
     "Ankit Patel": "Mumbai Branch",
     "Sanjay Gupta": "Bengaluru Branch",
-    "Sales TL (Current User)": "Head Office Main"
+    "Sales TL": "Head Office Main"
   }), []);
 
   const handleExecutiveChange = (execName) => {
@@ -442,7 +435,7 @@ const SalseTotalLeads = () => {
 
     const assignedPerson =
       assignType === "self"
-        ? "Sales TL (Current User)"
+        ? "Sales TL"
         : selectedExecutive || "Rahul Sharma";
 
     const assignedBranch =
@@ -783,7 +776,14 @@ const SalseTotalLeads = () => {
       label: "ASSIGNED TO",
       align: "center",
       render: (val, row) => {
-        const assignee = row.assignTo || row.assignedTo || row.salesPerson || "Sales TL";
+        // Show assignee name ONLY if lead has been explicitly assigned
+        const isAssigned = row.isAssigned === true;
+        const assignee = row.assignTo || row.assignedTo || row.salesPerson;
+
+        if (!isAssigned || !assignee || assignee === "Unassigned" || assignee === "") {
+          return <span className="text-slate-400 font-medium text-xs">--</span>;
+        }
+
         return (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
@@ -1132,50 +1132,52 @@ const SalseTotalLeads = () => {
     <div className="space-y-4 font-sans pb-16">
       
       {/* ================= 1. SUB-HEADER / ACTIONS ================= */}
-      <PageHeader
-        title="Total Leads Directory"
-        badge="Master Directory"
-        badgeColor="bg-blue-100 text-blue-800 border-blue-300"
-        description={`Showing ${filteredLeads.length} of ${leads.length} registered pipeline leads`}
-        showBackButton={true}
-        rightActions={
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleExportCSV}
-              className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-bold shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
-              title="Export CSV"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-              </svg>
-              <span>Export CSV</span>
-            </button>
+      <div className="sticky top-0 z-30 bg-[#F8FAFC] pt-1 pb-2">
+        <PageHeader
+          title="Total Leads Directory"
+          badge="Master Directory"
+          badgeColor="bg-blue-100 text-blue-800 border-blue-300"
+          description={`Showing ${filteredLeads.length} of ${leads.length} registered pipeline leads`}
+          showBackButton={true}
+          rightActions={
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleExportCSV}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-bold shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
+                title="Export CSV"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                <span>Export CSV</span>
+              </button>
 
-            <Link
-              to="/sales/leads/add"
-              className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs sm:text-sm font-bold shadow-md shadow-emerald-600/20 transition-all shrink-0 flex items-center gap-1.5 cursor-pointer"
-            >
-              <span>+</span> Add Lead
-            </Link>
+              <Link
+                to="/sales/leads/add"
+                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs sm:text-sm font-bold shadow-md shadow-emerald-600/20 transition-all shrink-0 flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>+</span> Add Lead
+              </Link>
 
-            <button
-              type="button"
-              onClick={() => setShowFilters((prev) => !prev)}
-              className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-center shadow-2xs font-bold text-xs sm:text-sm ${
-                showFilters
-                  ? "bg-white text-slate-800 border-slate-300 hover:bg-slate-50 shadow-2xs"
-                  : "bg-[#FF5722] text-white border-[#FF5722] hover:bg-[#e64a19]"
-              }`}
-              title={showFilters ? "Hide Filter Options" : "Show Filter Options"}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-              </svg>
-            </button>
-          </div>
-        }
-      />
+              <button
+                type="button"
+                onClick={() => setShowFilters((prev) => !prev)}
+                className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-center shadow-2xs font-bold text-xs sm:text-sm ${
+                  showFilters
+                    ? "bg-white text-slate-800 border-slate-300 hover:bg-slate-50 shadow-2xs"
+                    : "bg-[#FF5722] text-white border-[#FF5722] hover:bg-[#e64a19]"
+                }`}
+                title={showFilters ? "Hide Filter Options" : "Show Filter Options"}
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                </svg>
+              </button>
+            </div>
+          }
+        />
+      </div>
 
       {/* ================= ALL / SELF / TEAM SCOPE FILTER WITH EXECUTIVE DROPDOWN ================= */}
       <ScopeTabs
@@ -1463,7 +1465,7 @@ const SalseTotalLeads = () => {
         </div>
       )}
 
-      {/* ================= ASSIGN LEAD MODAL (EXACT SCREENSHOT DESIGN) ================= */}
+      {/* ================= ASSIGN LEAD MODAL ================= */}
       {assignModalLead && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200">
@@ -1505,7 +1507,7 @@ const SalseTotalLeads = () => {
                       checked={assignType === "self"}
                       onChange={() => {
                         setAssignType("self");
-                        setSelectedExecutive("Sales TL (Current User)");
+                        setSelectedExecutive("Sales TL");
                         setExecutiveBranch("Head Office Main");
                       }}
                       className="w-4 h-4 text-[#ff5722] focus:ring-[#ff5722] accent-[#ff5722] cursor-pointer"

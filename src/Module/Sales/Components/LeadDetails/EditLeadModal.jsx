@@ -42,7 +42,7 @@ const EditLeadModal = ({ lead, isOpen, onClose, onSaveSuccess }) => {
     leadType: "FRESH",
     jobType: "NEW",
     clientType: "Individual",
-    assignTo: "Sales TL (Current User)",
+    assignTo: "Sales TL",
     expectedBusiness: "",
     workCategory: "",
     workType: [],
@@ -86,7 +86,7 @@ const EditLeadModal = ({ lead, isOpen, onClose, onSaveSuccess }) => {
         leadType: lead.leadType || "FRESH",
         jobType: lead.jobType || "NEW",
         clientType: lead.clientType || "Individual",
-        assignTo: lead.assignTo || lead.salesPerson || "Sales TL (Current User)",
+        assignTo: lead.assignTo || lead.salesPerson || "Sales TL",
         expectedBusiness: lead.expectedBusiness || lead.expectedRevenue || lead.amount || "",
         workCategory: lead.workCategory || "",
         workType: parsedWorkType,
@@ -377,7 +377,7 @@ const EditLeadModal = ({ lead, isOpen, onClose, onSaveSuccess }) => {
                   onChange={handleChange}
                   className="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 font-bold"
                 >
-                  {(salesPersonsList || ["Sales TL (Current User)", "Rahul Sharma", "Pooja Verma", "Vikram Malhotra"]).map((sp, i) => (
+                  {(salesPersonsList || ["Sales TL", "Rahul Sharma", "Pooja Verma", "Vikram Malhotra"]).map((sp, i) => (
                     <option key={i} value={sp}>{sp}</option>
                   ))}
                 </select>

@@ -129,13 +129,33 @@ const AsignLeads = () => {
 
   // Modal States
   const [reassignModalLead, setReassignModalLead] = useState(null);
-  const [newAssignee, setNewAssignee] = useState("");
+  const [reassignType, setReassignType] = useState("executive");
+  const [selectedExecutive, setSelectedExecutive] = useState("Rahul Sharma");
+  const [executiveBranch, setExecutiveBranch] = useState("Noida Branch");
+  const [leadPriority, setLeadPriority] = useState("Medium");
+  const [reassignmentRemark, setReassignmentRemark] = useState("");
+  const [reassignmentFiles, setReassignmentFiles] = useState([]);
   const [statusModalLead, setStatusModalLead] = useState(null);
   const [selectedClientStatus, setSelectedClientStatus] = useState("");
   const [notInterestedReason, setNotInterestedReason] = useState("");
   const [customNotInterestedReason, setCustomNotInterestedReason] = useState("");
   const [statusRemark, setStatusRemark] = useState("");
   const [statusRemarkAttachments, setStatusRemarkAttachments] = useState([]);
+
+  const executiveBranchMap = useMemo(() => ({
+    "Rahul Sharma": "Noida Branch",
+    "Pooja Verma": "Delhi NCR Branch",
+    "Vikram Malhotra": "Gurugram Branch",
+    "Ankit Patel": "Mumbai Branch",
+    "Sanjay Gupta": "Bengaluru Branch",
+    "Neha Verma": "Delhi NCR Branch",
+    "Sales TL": "Head Office Main"
+  }), []);
+
+  const handleExecutiveChange = (execName) => {
+    setSelectedExecutive(execName);
+    setExecutiveBranch(executiveBranchMap[execName] || "Noida Branch");
+  };
 
   const handleResetFilters = () => {
     setSearchTerm("");
@@ -296,6 +316,25 @@ const AsignLeads = () => {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
               </svg>
+            </button>
+
+            {/* Re-assign Lead Icon Button (Right next to View Details) */}
+            <button
+              type="button"
+              onClick={() => {
+                const currentAssignee = row.assignTo || row.assignedTo || "Rahul Sharma";
+                const isSelf = currentAssignee.includes("TL") || currentAssignee.includes("Self");
+                setReassignType(isSelf ? "self" : "executive");
+                if (!isSelf) {
+                  setSelectedExecutive(currentAssignee);
+                  setExecutiveBranch(executiveBranchMap[currentAssignee] || "Noida Branch");
+                }
+                setReassignModalLead(row);
+              }}
+              className="w-6.5 h-6.5 rounded-md border border-blue-500 text-blue-600 hover:bg-blue-600 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
+              title="Re-assign Lead"
+            >
+              <FaUserPlus className="w-3.5 h-3.5" />
             </button>
 
             {/* ONLY ON SELF TAB: 1 Single Green Check-Circle Icon Button for Client Status Modal */}
@@ -528,7 +567,13 @@ const AsignLeads = () => {
       label: "ASSIGNED TO",
       align: "center",
       render: (val, row) => {
-        const assignee = row.assignTo || row.assignedTo || row.salesPerson || "Sales TL";
+        const assignee = row.assignTo || row.assignedTo || row.salesPerson;
+        const isAssigned = row.isAssigned || (assignee && assignee !== "Unassigned" && assignee !== "");
+
+        if (!isAssigned || !assignee || assignee === "Unassigned") {
+          return <span className="text-slate-400 font-medium text-xs">--</span>;
+        }
+
         return (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
@@ -646,18 +691,41 @@ const AsignLeads = () => {
   }, [filteredLeads, currentPage, rowsPerPage]);
 
   const handleConfirmReassign = async () => {
-    if (!reassignModalLead || !newAssignee) {
-      toast.error("Please select a team member to reassign!");
-      return;
-    }
-    const isSelf = newAssignee.includes("Self") || newAssignee.includes("TL");
+    if (!reassignModalLead) return;
+
+    const assignedPerson =
+      reassignType === "self"
+        ? "Sales TL"
+        : selectedExecutive || "Rahul Sharma";
+
+    const assignedBranch =
+      reassignType === "self"
+        ? "Head Office Main"
+        : executiveBranchMap[assignedPerson] || "Noida Branch";
+
+    const today = new Date();
+    const formattedDate = today.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+    const formattedTime = today.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+
     const updatedLeadData = {
       ...reassignModalLead,
-      assignTo: newAssignee,
-      assignedTo: newAssignee,
-      salesPerson: newAssignee,
-      assignedType: isSelf ? "self" : "executive",
-      assignedDate: new Date().toLocaleDateString("en-GB")
+      assignTo: assignedPerson,
+      assignedTo: assignedPerson,
+      salesPerson: assignedPerson,
+      leadBy: assignedPerson,
+      assignedType: reassignType,
+      assignedBranch: assignedBranch,
+      priority: leadPriority,
+      leadPriority: leadPriority,
+      isAssigned: true,
+      assignedDate: formattedDate,
+      assignedTime: formattedTime,
+      assignmentRemark: reassignmentRemark,
+      assignmentFiles: reassignmentFiles.map((f) => ({
+        name: f.name,
+        type: f.type,
+        size: f.size
+      }))
     };
 
     const updated = leads.map((l) =>
@@ -669,28 +737,30 @@ const AsignLeads = () => {
     if (reassignModalLead.id && !String(reassignModalLead.id).startsWith("LM-")) {
       try {
         await updateLeadApi(reassignModalLead.id, {
-          salesPerson: newAssignee
+          salesPerson: assignedPerson
         });
       } catch (err) {
         console.error("Backend reassign sync error:", err);
       }
     }
 
-    toast.success(`Lead ${reassignModalLead.clientName || reassignModalLead.concernPersonName} reassigned to ${newAssignee} successfully! 👤`);
+    toast.success(`Lead ${reassignModalLead.clientName || reassignModalLead.concernPersonName} reassigned to ${assignedPerson} successfully! 🎯`);
     setReassignModalLead(null);
-    setNewAssignee("");
+    setReassignmentRemark("");
+    setReassignmentFiles([]);
   };
 
   return (
     <div className="space-y-5 font-sans pb-12 w-full min-h-screen bg-[#F8FAFC]">
       
       {/* 1. SUB-HEADER BAR */}
-      <PageHeader
-        title="Assigned Leads Directory"
-        badge="Pipeline"
-        badgeColor="bg-blue-100 text-blue-800 border-blue-300"
-        description="Manage self and team assigned leads, filter by source, status, or re-assign reps."
-        showBackButton={true}
+      <div className="sticky top-0 z-30 bg-[#F8FAFC] pt-1 pb-2">
+        <PageHeader
+          title="Assigned Leads Directory"
+          badge="Pipeline"
+          badgeColor="bg-blue-100 text-blue-800 border-blue-300"
+          description="Manage self and team assigned leads, filter by source, status, or re-assign reps."
+          showBackButton={true}
         rightActions={
           <div className="flex items-center gap-2">
             <button
@@ -714,6 +784,7 @@ const AsignLeads = () => {
           </div>
         }
       />
+      </div>
 
       {/* 2. SCOPE TABS WITH EXECUTIVE DROPDOWN */}
       <ScopeTabs
@@ -881,88 +952,158 @@ const AsignLeads = () => {
         onPageChange={(page) => setCurrentPage(page)}
       />
 
-      {/* 5. RE-ASSIGN LEAD MODAL (FOR TEAM LEADS) */}
+      {/* 5. RE-ASSIGN LEAD MODAL (MATCHING EXACT ORANGE BANNER DESIGN) */}
       {reassignModalLead && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl overflow-hidden border border-slate-100 p-6 space-y-5 animate-in zoom-in-95 duration-200">
-            
-            {/* Modal Title */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold">
-                  <FaUserPlus className="w-4 h-4" />
+          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200">
+            {/* Header Banner */}
+            <div className="bg-[#ff5722] text-white px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
+                  <FaUserPlus className="w-5 h-5 text-white" />
                 </div>
-                <h3 className="text-lg font-extrabold text-slate-900">Re-assign Lead</h3>
+                <h3 className="text-xl font-extrabold tracking-wide">Re-assign Lead</h3>
               </div>
               <button
                 type="button"
                 onClick={() => {
                   setReassignModalLead(null);
-                  setNewAssignee("");
+                  setReassignmentRemark("");
+                  setReassignmentFiles([]);
                 }}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 text-sm font-bold transition-colors cursor-pointer"
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white text-base transition-colors cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            {/* Client Info Summary Card */}
-            <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-between">
+            {/* Modal Form Body */}
+            <div className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
+              
+              {/* ASSIGN TO RADIO SELECTION */}
               <div>
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
-                  Client Name
-                </span>
-                <span className="text-sm font-extrabold text-slate-900">
-                  {reassignModalLead.clientName || reassignModalLead.concernPersonName}
-                </span>
-              </div>
-              <div className="text-right">
-                <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
-                  Assigned To
-                </span>
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-100 text-blue-800 border border-blue-200">
-                  {reassignModalLead.assignTo || reassignModalLead.assignedTo || "Unassigned"}
-                </span>
-              </div>
-            </div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                  ASSIGN TO
+                </label>
+                <div className="flex items-center gap-6">
+                  <label className="flex items-center gap-2 text-sm font-bold text-slate-800 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="reassignType"
+                      value="self"
+                      checked={reassignType === "self"}
+                      onChange={() => {
+                        setReassignType("self");
+                        setSelectedExecutive("Sales TL");
+                        setExecutiveBranch("Head Office Main");
+                      }}
+                      className="w-4 h-4 text-[#ff5722] focus:ring-[#ff5722] accent-[#ff5722] cursor-pointer"
+                    />
+                    <span>Self</span>
+                  </label>
 
-            {/* Select Team Member Dropdown */}
-            <div>
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                Assign / Re-assign To <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={newAssignee}
-                onChange={(e) => setNewAssignee(e.target.value)}
-                className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-bold text-slate-800 bg-white focus:outline-none focus:border-emerald-500 shadow-2xs cursor-pointer"
-              >
-                <option value="">-- Select Team Member --</option>
-                {teamMembers.map((member) => (
-                  <option key={member} value={member}>
-                    {member}
-                  </option>
-                ))}
-              </select>
+                  <label className="flex items-center gap-2 text-sm font-bold text-slate-800 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="reassignType"
+                      value="executive"
+                      checked={reassignType === "executive"}
+                      onChange={() => {
+                        setReassignType("executive");
+                        const firstExec = teamMembers.find(p => p !== "ALL" && !p.includes("TL") && !p.includes("Self")) || "Rahul Sharma";
+                        setSelectedExecutive(firstExec);
+                        setExecutiveBranch(executiveBranchMap[firstExec] || "Noida Branch");
+                      }}
+                      className="w-4 h-4 text-[#ff5722] focus:ring-[#ff5722] accent-[#ff5722] cursor-pointer"
+                    />
+                    <span>Executive</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* EXECUTIVE SELECTION & BRANCH AUTO-FILL */}
+              {reassignType === "executive" && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
+                      SELECT SALES EXECUTIVE
+                    </label>
+                    <select
+                      value={selectedExecutive}
+                      onChange={(e) => handleExecutiveChange(e.target.value)}
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-orange-300 text-xs sm:text-sm font-bold text-slate-800 bg-white focus:outline-none focus:border-[#ff5722] shadow-2xs cursor-pointer"
+                    >
+                      {teamMembers.filter(p => p !== "ALL" && !p.includes("TL") && !p.includes("Self")).map((p) => (
+                        <option key={p} value={p}>{p}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
+                      BRANCH (AUTO-FILLED)
+                    </label>
+                    <input
+                      type="text"
+                      readOnly
+                      value={executiveBranch}
+                      placeholder="Auto-fills on selection"
+                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold text-slate-600 bg-slate-50 italic focus:outline-none cursor-not-allowed shadow-2xs"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* LEAD PRIORITY */}
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
+                  LEAD PRIORITY
+                </label>
+                <select
+                  value={leadPriority}
+                  onChange={(e) => setLeadPriority(e.target.value)}
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-orange-300 text-xs sm:text-sm font-bold text-slate-800 bg-white focus:outline-none focus:border-[#ff5722] shadow-2xs cursor-pointer"
+                >
+                  <option value="High">High</option>
+                  <option value="Medium">Medium</option>
+                  <option value="Low">Low</option>
+                </select>
+              </div>
+
+              {/* RE-ASSIGNMENT REMARK (COMMENT WITH MEDIA) */}
+              <div>
+                <CommentWithMedia
+                  title="ASSIGNMENT REMARK"
+                  placeholder="Write assignment remark here..."
+                  value={reassignmentRemark}
+                  onChange={(val) => setReassignmentRemark(val)}
+                  files={reassignmentFiles}
+                  onFilesChange={(files) => setReassignmentFiles(files)}
+                  allowMedia={true}
+                />
+              </div>
+
             </div>
 
             {/* Modal Footer Actions */}
-            <div className="pt-2 flex items-center justify-end gap-3">
+            <div className="bg-slate-50/70 px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3">
               <button
                 type="button"
                 onClick={() => {
                   setReassignModalLead(null);
-                  setNewAssignee("");
+                  setReassignmentRemark("");
+                  setReassignmentFiles([]);
                 }}
-                className="px-5 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold transition-colors cursor-pointer"
+                className="px-5 py-2.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs sm:text-sm font-bold transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
                 onClick={handleConfirmReassign}
-                className="px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-extrabold shadow-md shadow-emerald-600/20 transition-all cursor-pointer"
+                className="px-6 py-2.5 rounded-xl bg-[#ff5722] hover:bg-[#e64a19] text-white text-xs sm:text-sm font-extrabold shadow-md shadow-orange-500/20 transition-all cursor-pointer"
               >
-                Assign / Re-assign Lead
+                Re-assign Lead
               </button>
             </div>
 

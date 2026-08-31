@@ -1,6 +1,6 @@
 // Predefined dropdown lists for Add Lead Form
 export const salesPersonsList = [
-  "Sales TL (Current User)",
+  "Sales TL",
   "Rahul Sharma",
   "Pooja Verma",
   "Vikram Malhotra",

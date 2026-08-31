@@ -40,6 +40,36 @@ export const notifyLeadChange = (updatedLead) => {
   }
 };
 
+const sanitizeLeadForStorage = (item, key) => {
+  if (!item) return item;
+
+  let cleaned = { ...item };
+
+  // Remove "(Current User)" text from any field
+  ["assignTo", "salesPerson", "assignedTo", "leadBy"].forEach((f) => {
+    if (typeof cleaned[f] === "string") {
+      cleaned[f] = cleaned[f].replace(" (Current User)", "").trim();
+    }
+  });
+
+  // For total leads list (dss_leads), if lead was NOT explicitly assigned, mark unassigned!
+  if (key === "dss_leads") {
+    const explicitAssignees = ["Rahul Sharma", "Pooja Verma", "Vikram Malhotra", "Ankit Patel", "Sanjay Gupta"];
+    const isExplicit =
+      cleaned.isAssigned === true &&
+      (cleaned.assignedDate || cleaned.assignedType || explicitAssignees.includes(cleaned.assignTo));
+
+    if (!isExplicit) {
+      cleaned.isAssigned = false;
+      cleaned.assignTo = "";
+      cleaned.salesPerson = "";
+      cleaned.assignedTo = "";
+    }
+  }
+
+  return cleaned;
+};
+
 /**
  * Safely gets stored leads for a given key, seeding with initial dataset if missing.
  */
@@ -49,13 +79,17 @@ export const getStoredLeads = (key) => {
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed;
+        const sanitized = parsed.map((item) => sanitizeLeadForStorage(item, key));
+        try {
+          localStorage.setItem(key, JSON.stringify(sanitized));
+        } catch (e) {}
+        return sanitized;
       }
     }
   } catch (e) {
     console.error(`Error reading ${key} from localStorage:`, e);
   }
-  const defaultData = INITIAL_DATA_MAP[key] || [];
+  const defaultData = (INITIAL_DATA_MAP[key] || []).map((item) => sanitizeLeadForStorage(item, key));
   try {
     localStorage.setItem(key, JSON.stringify(defaultData));
   } catch (e) {}
@@ -113,7 +147,8 @@ export const updateLeadInStorage = (updatedLead) => {
         list.unshift(updatedLead);
       }
 
-      localStorage.setItem(key, JSON.stringify(list));
+      const sanitizedList = list.map((item) => sanitizeLeadForStorage(item, key));
+      localStorage.setItem(key, JSON.stringify(sanitizedList));
     } catch (err) {
       console.error(`Error updating lead in localStorage key ${key}:`, err);
     }

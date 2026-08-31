@@ -103,7 +103,7 @@ const Addlead = () => {
     leadLabel: "",
     whatsappNumber: "",
     googleLocation: "",
-    salesPerson: "Sales TL (Current User)",
+    salesPerson: "",
     requirement: ""
   };
 
@@ -546,9 +546,10 @@ const Addlead = () => {
         pincode: formData.pincode,
         city: formData.city,
         state: formData.state,
-        leadBy: formData.salesPerson || "Sales TL (Current User)",
-        salesPerson: formData.salesPerson || "Sales TL (Current User)",
-        assignTo: formData.salesPerson || "Sales TL (Current User)",
+        leadBy: formData.salesPerson || "",
+        salesPerson: formData.salesPerson || "",
+        assignTo: formData.salesPerson || "",
+        isAssigned: !!formData.salesPerson,
         address: formData.address,
         siteAddress: formData.address,
         clientDesignation: formData.clientDesignation || "",
@@ -670,10 +671,12 @@ const Addlead = () => {
     <div className="max-w-7xl mx-auto space-y-4 font-sans pb-12">
       
       {/* TOP HEADER BANNER CARD */}
-      <PageHeader
-        title="!! Capture New Lead !!"
-        showBackButton={true}
-      />
+      <div className="sticky top-0 z-30 bg-[#F8FAFC] pt-1 pb-2">
+        <PageHeader
+          title="!! Capture New Lead !!"
+          showBackButton={true}
+        />
+      </div>
 
       {/* MAIN FORM CARD */}
       <form onSubmit={handleSubmit} autoComplete="off" className="bg-white rounded-2xl shadow-2xs px-2.5 sm:px-4 py-5 space-y-3.5">
