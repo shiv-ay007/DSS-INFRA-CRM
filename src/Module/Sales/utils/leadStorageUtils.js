@@ -54,10 +54,10 @@ const sanitizeLeadForStorage = (item, key) => {
 
   // For total leads list (dss_leads), if lead was NOT explicitly assigned, mark unassigned!
   if (key === "dss_leads") {
-    const explicitAssignees = ["Rahul Sharma", "Pooja Verma", "Vikram Malhotra", "Ankit Patel", "Sanjay Gupta"];
+    const explicitAssignees = ["Sales TL", "Self", "Rahul Sharma", "Pooja Verma", "Vikram Malhotra", "Ankit Patel", "Sanjay Gupta", "Neha Verma"];
     const isExplicit =
       cleaned.isAssigned === true &&
-      (cleaned.assignedDate || cleaned.assignedType || explicitAssignees.includes(cleaned.assignTo));
+      (cleaned.assignedDate || cleaned.assignedType || explicitAssignees.includes(cleaned.assignTo) || explicitAssignees.includes(cleaned.salesPerson));
 
     if (!isExplicit) {
       cleaned.isAssigned = false;
@@ -79,7 +79,28 @@ export const getStoredLeads = (key) => {
     if (saved) {
       const parsed = JSON.parse(saved);
       if (Array.isArray(parsed) && parsed.length > 0) {
-        const sanitized = parsed.map((item) => sanitizeLeadForStorage(item, key));
+        let sanitized = parsed.map((item) => sanitizeLeadForStorage(item, key));
+        // Ensure Sales Management Sheet & Lead Management Sheet ONLY contain INTERESTED / initial seed leads
+        if (key === "dss_sales_management_sheet_v1") {
+          sanitized = sanitized.filter(
+            (item) => item.status === "INTERESTED" || item.isInterested === true || String(item.clientId || "").startsWith("DSS260")
+          );
+        }
+        if (key === "dss_lead_management_sheet_v1") {
+          sanitized = sanitized.filter(
+            (item) => item.status === "INTERESTED" || item.isInterested === true || String(item.id || "").startsWith("LM-00")
+          );
+        }
+        if (key === "dss_followup_leads" || key === "dss_scheduled_leads_sheet") {
+          sanitized = sanitized.filter((item) => {
+            const hasHistory = Array.isArray(item.followupHistory) && item.followupHistory.length > 0;
+            const isExplicitlyScheduled =
+              item.isFollowupScheduled === true ||
+              (item.nextFollowupDateRaw && item.nextFollowupDate && item.nextFollowupDate !== "--" && item.nextFollowupDate !== "Completed");
+            const isInitialSeed = String(item.id || "").startsWith("LD-SCH-0");
+            return hasHistory || isExplicitlyScheduled || isInitialSeed;
+          });
+        }
         try {
           localStorage.setItem(key, JSON.stringify(sanitized));
         } catch (e) {}
@@ -106,6 +127,22 @@ export const updateLeadInStorage = (updatedLead) => {
   const targetId = updatedLead.id ? String(updatedLead.id) : "";
   const targetPhone = cleanDigits(updatedLead.phoneNumber || updatedLead.contact || updatedLead.whatsappNumber);
   const targetName = cleanStr(updatedLead.clientName || updatedLead.concernPersonName);
+
+  const isMarkedInterested =
+    updatedLead.isInterested === true ||
+    updatedLead.status === "INTERESTED" ||
+    updatedLead.clientStatus === "INTERESTED";
+
+  const isMarkedLost =
+    updatedLead.status === "NOT INTERESTED" ||
+    updatedLead.isInterested === false ||
+    updatedLead.clientStatus === "NOT INTERESTED" ||
+    !!updatedLead.lostReason;
+
+  const hasFollowupScheduled =
+    updatedLead.isFollowupScheduled === true ||
+    (Array.isArray(updatedLead.followupHistory) && updatedLead.followupHistory.length > 0) ||
+    (updatedLead.nextFollowupDateRaw && updatedLead.nextFollowupDate && updatedLead.nextFollowupDate !== "--" && updatedLead.nextFollowupDate !== "Completed");
 
   STORAGE_KEYS.forEach((key) => {
     try {
@@ -135,16 +172,58 @@ export const updateLeadInStorage = (updatedLead) => {
         });
       }
 
-      if (updatedIndex !== -1) {
-        // Merge existing item with updated lead properties
-        list[updatedIndex] = {
-          ...list[updatedIndex],
-          ...updatedLead,
-          id: list[updatedIndex].id || updatedLead.id
-        };
+      if (key === "dss_sales_management_sheet_v1" || key === "dss_lead_management_sheet_v1") {
+        if (isMarkedLost) {
+          if (updatedIndex !== -1) {
+            list.splice(updatedIndex, 1);
+          }
+        } else if (isMarkedInterested) {
+          if (updatedIndex !== -1) {
+            list[updatedIndex] = { ...list[updatedIndex], ...updatedLead };
+          } else {
+            list.unshift(updatedLead);
+          }
+        } else if (updatedIndex !== -1) {
+          list[updatedIndex] = { ...list[updatedIndex], ...updatedLead };
+        }
+      } else if (key === "dss_followup_leads" || key === "dss_scheduled_leads_sheet") {
+        if (isMarkedLost) {
+          if (updatedIndex !== -1) {
+            list.splice(updatedIndex, 1);
+          }
+        } else if (hasFollowupScheduled) {
+          if (updatedIndex !== -1) {
+            list[updatedIndex] = { ...list[updatedIndex], ...updatedLead };
+          } else {
+            list.unshift(updatedLead);
+          }
+        } else if (updatedIndex !== -1) {
+          list.splice(updatedIndex, 1);
+        }
+      } else if (key === "dss_lost_leads") {
+        if (isMarkedInterested) {
+          if (updatedIndex !== -1) {
+            list.splice(updatedIndex, 1);
+          }
+        } else if (isMarkedLost) {
+          if (updatedIndex !== -1) {
+            list[updatedIndex] = { ...list[updatedIndex], ...updatedLead };
+          } else {
+            list.unshift(updatedLead);
+          }
+        } else if (updatedIndex !== -1) {
+          list[updatedIndex] = { ...list[updatedIndex], ...updatedLead };
+        }
       } else {
-        // If not found in this dataset, unshift so it appears in the list
-        list.unshift(updatedLead);
+        if (updatedIndex !== -1) {
+          list[updatedIndex] = {
+            ...list[updatedIndex],
+            ...updatedLead,
+            id: list[updatedIndex].id || updatedLead.id
+          };
+        } else {
+          list.unshift(updatedLead);
+        }
       }
 
       const sanitizedList = list.map((item) => sanitizeLeadForStorage(item, key));

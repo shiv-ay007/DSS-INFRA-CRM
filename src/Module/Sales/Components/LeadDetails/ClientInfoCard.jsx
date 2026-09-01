@@ -39,15 +39,15 @@ const ClientInfoCard = ({ lead }) => {
           <strong className="text-slate-900 font-extrabold text-sm sm:text-base block">{clientName}</strong>
         </div>
 
-        <div className="p-4 rounded-xl bg-slate-50/80 border border-slate-200/70 hover:border-slate-300 transition-all space-y-1 flex flex-col justify-center">
+        {/* <div className="p-4 rounded-xl bg-slate-50/80 border border-slate-200/70 hover:border-slate-300 transition-all space-y-1 flex flex-col justify-center">
           <span className="text-slate-500 text-xs font-bold uppercase tracking-wider block">Designation / Role</span>
           <strong className="text-slate-900 font-extrabold text-sm block">{designation}</strong>
-        </div>
+        </div> */}
 
-        <div className="p-4 rounded-xl bg-slate-50/80 border border-slate-200/70 hover:border-slate-300 transition-all space-y-1 flex flex-col justify-center">
+        {/* <div className="p-4 rounded-xl bg-slate-50/80 border border-slate-200/70 hover:border-slate-300 transition-all space-y-1 flex flex-col justify-center">
           <span className="text-slate-500 text-xs font-bold uppercase tracking-wider block">Company / Organization</span>
           <strong className="text-slate-900 font-extrabold text-sm block">{company}</strong>
-        </div>
+        </div> */}
 
         <div className="p-4 rounded-xl bg-blue-50/40 border border-blue-100 hover:border-blue-200 transition-all space-y-1 flex flex-col justify-center">
           <span className="text-blue-700 text-xs font-bold uppercase tracking-wider block">Primary Phone Number</span>

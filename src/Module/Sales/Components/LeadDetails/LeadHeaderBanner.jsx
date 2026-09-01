@@ -9,11 +9,14 @@ const LeadHeaderBanner = ({ lead, onOpenFollowupModal, onOpenEditModal }) => {
   const phone = lead?.phoneNumber || lead?.contact || lead?.whatsappNumber || "";
   const cleanPhone = phone ? phone.replace(/\D/g, "") : "";
 
+  const assignee = lead?.assignTo || lead?.assignedTo || lead?.salesPerson || "";
+  const isAssigned = lead?.isAssigned === true || (!!assignee && assignee !== "Unassigned" && assignee !== "--" && assignee !== "");
+
   return (
     <div className="w-full">
       <PageHeader
         title={`Lead Details: ${lead?.clientName || lead?.concernPersonName || "Customer Detail"}`}
-        badge={lead?.id || "LD-DETAILS"}
+        badge={lead?.leadId || lead?.id || "LD-DETAILS"}
         badgeColor="bg-blue-100 text-blue-800 border-blue-300 font-mono font-extrabold"
         description="Comprehensive view of client inquiry, contact info, requirement details, and follow-up timeline."
         showBackButton={true}
@@ -28,7 +31,7 @@ const LeadHeaderBanner = ({ lead, onOpenFollowupModal, onOpenEditModal }) => {
               <span>Edit Lead</span>
             </button>
 
-            {cleanPhone && (
+            {isAssigned && cleanPhone && (
               <a
                 href={`tel:${cleanPhone}`}
                 className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs sm:text-sm font-extrabold shadow-xs hover:shadow-md transition-all cursor-pointer"
@@ -38,7 +41,7 @@ const LeadHeaderBanner = ({ lead, onOpenFollowupModal, onOpenEditModal }) => {
               </a>
             )}
 
-            {cleanPhone && (
+            {isAssigned && cleanPhone && (
               <a
                 href={`https://wa.me/91${cleanPhone}`}
                 target="_blank"
@@ -50,14 +53,16 @@ const LeadHeaderBanner = ({ lead, onOpenFollowupModal, onOpenEditModal }) => {
               </a>
             )}
 
-            <button
-              type="button"
-              onClick={onOpenFollowupModal}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white text-xs sm:text-sm font-extrabold shadow-xs hover:shadow-md transition-all cursor-pointer"
-            >
-              <FaPlus className="w-3.5 h-3.5" />
-              <span>Add Remark</span>
-            </button>
+            {isAssigned && (
+              <button
+                type="button"
+                onClick={onOpenFollowupModal}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white text-xs sm:text-sm font-extrabold shadow-xs hover:shadow-md transition-all cursor-pointer"
+              >
+                <FaPlus className="w-3.5 h-3.5" />
+                <span>Add Remark</span>
+              </button>
+            )}
           </div>
         }
       />

@@ -173,16 +173,18 @@ const SalseTotalLeads = () => {
               ""
             ).replace(" (Current User)", "").replace("(Current User)", "").trim();
 
-            const explicitAssignees = ["Rahul Sharma", "Pooja Verma", "Vikram Malhotra", "Ankit Patel", "Sanjay Gupta"];
+            const explicitExecutiveAssignees = ["Rahul Sharma", "Pooja Verma", "Vikram Malhotra", "Ankit Patel", "Sanjay Gupta", "Neha Verma"];
             const isExplicitBackendAssign = 
-              backendLead.isAssigned === true || 
-              !!backendLead.assignedType || 
-              explicitAssignees.includes(rawPerson);
+              backendLead.isAssigned === true && 
+              (!!backendLead.assignedType || explicitExecutiveAssignees.includes(rawPerson));
 
             const finalPerson = isExplicitBackendAssign ? rawPerson : "";
+            const finalIsAssigned = isExplicitBackendAssign;
 
             return {
-              id: backendLead._id || `LM-${Math.floor(100000 + Math.random() * 900000)}`,
+              id: backendLead.leadId || backendLead._id,
+              leadId: backendLead.leadId || backendLead._id,
+              _id: backendLead._id,
               clientName: backendLead.clientName || "Client",
               concernPersonName: backendLead.clientName || "Client",
               phoneNumber: backendLead.phoneNumber || backendLead.phone || "--",
@@ -207,7 +209,7 @@ const SalseTotalLeads = () => {
               leadBy: finalPerson,
               salesPerson: finalPerson,
               assignTo: finalPerson,
-              isAssigned: isExplicitBackendAssign,
+              isAssigned: finalIsAssigned,
               address: backendLead.address || backendLead.notes || "--",
               projectDetail: backendLead.projectDetail || backendLead.notes || "",
               remark: backendLead.remark || backendLead.notes || "",
@@ -224,9 +226,40 @@ const SalseTotalLeads = () => {
           if (apiLeads.length > 0) {
             setLeads((prevLeads) => {
               const cleanPrev = prevLeads.filter((l) => !l.clientName?.toLowerCase().includes("vikram"));
-              const apiIds = new Set(apiLeads.map((l) => l.id));
-              const localOnlyLeads = cleanPrev.filter((l) => !apiIds.has(l.id));
-              const combined = [...apiLeads, ...localOnlyLeads];
+              const localLeadMap = new Map(cleanPrev.map((l) => [String(l.id), l]));
+
+              const mergedApiLeads = apiLeads.map((apiLead) => {
+                const existingLocal = localLeadMap.get(String(apiLead.id));
+                if (existingLocal) {
+                  if (existingLocal.isAssigned === true) {
+                    return {
+                      ...apiLead,
+                      isAssigned: true,
+                      assignTo: existingLocal.assignTo || existingLocal.salesPerson,
+                      salesPerson: existingLocal.assignTo || existingLocal.salesPerson,
+                      assignedTo: existingLocal.assignTo || existingLocal.salesPerson,
+                      assignedType: existingLocal.assignedType,
+                      assignedBranch: existingLocal.assignedBranch,
+                      assignedDate: existingLocal.assignedDate,
+                      assignedTime: existingLocal.assignedTime,
+                      assignmentRemark: existingLocal.assignmentRemark
+                    };
+                  } else if (existingLocal.isAssigned === false) {
+                    return {
+                      ...apiLead,
+                      isAssigned: false,
+                      assignTo: "",
+                      salesPerson: "",
+                      assignedTo: ""
+                    };
+                  }
+                }
+                return apiLead;
+              });
+
+              const apiIds = new Set(mergedApiLeads.map((l) => String(l.id)));
+              const localOnlyLeads = cleanPrev.filter((l) => !apiIds.has(String(l.id)));
+              const combined = [...mergedApiLeads, ...localOnlyLeads];
               try { localStorage.setItem("dss_leads", JSON.stringify(combined)); } catch (e) {}
               return combined;
             });
@@ -471,6 +504,9 @@ const SalseTotalLeads = () => {
 
     // 1. Centralized update in all storage keys & dispatch update event
     updateLeadInStorage(updatedLeadData);
+    setLeads((prevLeads) =>
+      prevLeads.map((l) => (String(l.id) === String(updatedLeadData.id) ? updatedLeadData : l))
+    );
 
     // 2. Save / prepend to dss_assigned_leads
     try {
@@ -530,13 +566,15 @@ const SalseTotalLeads = () => {
       label: "ACTIONS",
       align: "center",
       render: (val, row) => {
+        const isAssigned = row.isAssigned === true || (!!(row.assignTo || row.assignedTo || row.salesPerson) && (row.assignTo || row.assignedTo || row.salesPerson) !== "Unassigned");
+
         return (
           <div className="flex items-center justify-center gap-1.5">
             {/* View Lead Details Eye Button */}
             <button
               type="button"
               onClick={() => navigate(`/sales/leads/details/${row.id}`, { state: { lead: row } })}
-              className="w-7 h-7 rounded-lg border border-orange-400 text-orange-500 hover:bg-orange-50 hover:border-orange-500 hover:scale-105 active:scale-95 flex items-center justify-center transition-all cursor-pointer shadow-2xs"
+              className="w-7 h-7 rounded-lg border border-orange-200 bg-orange-50/70 text-orange-600 hover:bg-orange-100 hover:border-orange-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
               title="View Lead Details"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -546,7 +584,7 @@ const SalseTotalLeads = () => {
             </button>
 
             {/* Assign Lead Icon Button (ONLY SHOWN FOR UNASSIGNED LEADS ON 'ALL' TAB) */}
-            {filterScope?.toUpperCase() === "ALL" && !(row.isAssigned === true && !!(row.assignTo || row.assignedTo || row.salesPerson)) && (
+            {filterScope?.toUpperCase() === "ALL" && !isAssigned && (
               <button
                 type="button"
                 onClick={() => {
@@ -555,7 +593,7 @@ const SalseTotalLeads = () => {
                   setExecutiveBranch("Noida Branch");
                   setAssignModalLead(row);
                 }}
-                className="w-7 h-7 rounded-lg border border-blue-500 text-blue-600 hover:bg-blue-50 hover:border-blue-600 hover:scale-105 active:scale-95 flex items-center justify-center transition-all cursor-pointer shadow-2xs"
+                className="w-7 h-7 rounded-lg border border-blue-200 bg-blue-50/70 text-blue-600 hover:bg-blue-100 hover:border-blue-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
                 title="Assign Lead"
               >
                 <FaUserPlus className="w-3.5 h-3.5" />
@@ -669,6 +707,26 @@ const SalseTotalLeads = () => {
         );
       }
     },
+    assignedTo: {
+      label: "ASSIGNED TO",
+      align: "center",
+      render: (val, row) => {
+        // Show assignee name ONLY if lead has been explicitly assigned
+        const isAssigned = row.isAssigned === true;
+        const assignee = row.assignTo || row.assignedTo || row.salesPerson;
+
+        if (!isAssigned || !assignee || assignee === "Unassigned" || assignee === "") {
+          return <span className="text-slate-400 font-medium text-xs">--</span>;
+        }
+
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+            {assignee}
+          </span>
+        );
+      }
+    },
     leadMode: {
       label: "LEAD MODE",
       align: "center",
@@ -765,26 +823,6 @@ const SalseTotalLeads = () => {
         return (
           <span className="text-xs font-mono font-bold text-slate-900">
             ₹{amt.toLocaleString('en-IN')}
-          </span>
-        );
-      }
-    },
-    assignedTo: {
-      label: "ASSIGNED TO",
-      align: "center",
-      render: (val, row) => {
-        // Show assignee name ONLY if lead has been explicitly assigned
-        const isAssigned = row.isAssigned === true;
-        const assignee = row.assignTo || row.assignedTo || row.salesPerson;
-
-        if (!isAssigned || !assignee || assignee === "Unassigned" || assignee === "") {
-          return <span className="text-slate-400 font-medium text-xs">--</span>;
-        }
-
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-            {assignee}
           </span>
         );
       }

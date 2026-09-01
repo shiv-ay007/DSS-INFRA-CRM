@@ -310,7 +310,7 @@ const AsignLeads = () => {
             <button
               type="button"
               onClick={() => navigate(`/sales/leads/details/${row.id}`, { state: { lead: row } })}
-              className="w-6.5 h-6.5 rounded-md border border-orange-400 text-orange-500 hover:bg-orange-50 hover:border-orange-500 hover:scale-105 active:scale-95 flex items-center justify-center transition-all cursor-pointer shadow-2xs"
+              className="w-6.5 h-6.5 rounded-lg border border-orange-200 bg-orange-50/70 text-orange-600 hover:bg-orange-100 hover:border-orange-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
               title="View Lead Details"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -319,7 +319,7 @@ const AsignLeads = () => {
               </svg>
             </button>
 
-            {/* Re-assign Lead Icon Button (Orange Outline - Exact Design from Image 1) */}
+            {/* Re-assign Lead Icon Button */}
             <button
               type="button"
               onClick={() => {
@@ -332,7 +332,7 @@ const AsignLeads = () => {
                 }
                 setReassignModalLead(row);
               }}
-              className="w-6.5 h-6.5 rounded-md border border-[#ff5722] text-[#ff5722] hover:bg-orange-50 hover:border-[#ff5722] hover:scale-105 active:scale-95 flex items-center justify-center transition-all cursor-pointer shadow-2xs"
+              className="w-6.5 h-6.5 rounded-lg border border-orange-200 bg-orange-50/70 text-orange-600 hover:bg-orange-100 hover:border-orange-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
               title="Re-assign Lead"
             >
               <HiOutlineUsers className="w-3.5 h-3.5" />
@@ -350,10 +350,10 @@ const AsignLeads = () => {
                   setStatusRemark("");
                   setStatusRemarkAttachments([]);
                 }}
-                className="w-6.5 h-6.5 rounded-md border border-emerald-500 text-emerald-600 hover:bg-emerald-50 hover:border-emerald-600 hover:scale-105 active:scale-95 flex items-center justify-center transition-all cursor-pointer shadow-2xs"
+                className="w-6.5 h-6.5 rounded-lg border border-emerald-200 bg-emerald-50/70 text-emerald-600 hover:bg-emerald-100 hover:border-emerald-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
                 title="Client Status (Interested / Not Interested)"
               >
-                <FaRegCheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                <FaRegCheckCircle className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
@@ -464,6 +464,25 @@ const AsignLeads = () => {
         );
       }
     },
+    assignedTo: {
+      label: "ASSIGNED TO",
+      align: "center",
+      render: (val, row) => {
+        const assignee = row.assignTo || row.assignedTo || row.salesPerson;
+        const isAssigned = row.isAssigned || (assignee && assignee !== "Unassigned" && assignee !== "");
+
+        if (!isAssigned || !assignee || assignee === "Unassigned") {
+          return <span className="text-slate-400 font-medium text-xs">--</span>;
+        }
+
+        return (
+          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+            {assignee}
+          </span>
+        );
+      }
+    },
     leadMode: {
       label: "LEAD MODE",
       align: "center",
@@ -560,25 +579,6 @@ const AsignLeads = () => {
         return (
           <span className="text-xs font-mono font-bold text-slate-900">
             ₹{amt.toLocaleString('en-IN')}
-          </span>
-        );
-      }
-    },
-    assignedTo: {
-      label: "ASSIGNED TO",
-      align: "center",
-      render: (val, row) => {
-        const assignee = row.assignTo || row.assignedTo || row.salesPerson;
-        const isAssigned = row.isAssigned || (assignee && assignee !== "Unassigned" && assignee !== "");
-
-        if (!isAssigned || !assignee || assignee === "Unassigned") {
-          return <span className="text-slate-400 font-medium text-xs">--</span>;
-        }
-
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-            {assignee}
           </span>
         );
       }

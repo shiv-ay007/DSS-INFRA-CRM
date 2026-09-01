@@ -1,9 +1,10 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
 import { createLeadApi } from "../../../../services/api";
+import { getStoredLeads } from "../../utils/leadStorageUtils";
 import {
   salesPersonsList,
   leadSourcesList,
@@ -118,6 +119,95 @@ const Addlead = () => {
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [audioChunks, setAudioChunks] = useState([]);
   
+  // Repeat Client Search State
+  const [clientSearchTerm, setClientSearchTerm] = useState("");
+  const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
+  const clientDropdownRef = useRef(null);
+
+  // Fetch unique existing clients for Repeat Lead selection
+  const existingClients = useMemo(() => {
+    try {
+      const leadsFromTotal = getStoredLeads("dss_leads") || [];
+      const leadsFromMgmt = getStoredLeads("dss_lead_management_sheet_v1") || [];
+      const combined = [...leadsFromTotal, ...leadsFromMgmt];
+
+      const clientMap = new Map();
+      combined.forEach((l) => {
+        const name = (l.clientName || l.concernPersonName || "").trim();
+        const phone = (l.phoneNumber || l.contact || l.phone || "").replace(/\D/g, "");
+        if (name && name !== "Client" && name !== "--") {
+          const key = phone && phone.length >= 7 ? phone : name.toLowerCase();
+          if (!clientMap.has(key)) {
+            clientMap.set(key, {
+              id: l.id,
+              clientName: name,
+              phoneNumber: l.phoneNumber || l.contact || l.phone || "",
+              alternateNumber: l.alternateNumber || l.alternateNo || "",
+              emailAddress: l.emailAddress || l.email || "",
+              address: l.address || l.siteAddress || "",
+              city: l.city || "",
+              pincode: l.pincode || "",
+              state: l.state || ""
+            });
+          }
+        }
+      });
+      return Array.from(clientMap.values());
+    } catch (e) {
+      return [];
+    }
+  }, []);
+
+  // Filter clients based on search query
+  const filteredClients = useMemo(() => {
+    if (!clientSearchTerm.trim()) return existingClients;
+    const term = clientSearchTerm.toLowerCase();
+    return existingClients.filter(
+      (c) =>
+        c.clientName.toLowerCase().includes(term) ||
+        c.phoneNumber.includes(term) ||
+        (c.city && c.city.toLowerCase().includes(term))
+    );
+  }, [existingClients, clientSearchTerm]);
+
+  // Click outside to close client dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (clientDropdownRef.current && !clientDropdownRef.current.contains(event.target)) {
+        setIsClientDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Handle selecting an existing repeat client
+  const handleSelectRepeatClient = (client) => {
+    setFormData((prev) => ({
+      ...prev,
+      clientName: client.clientName,
+      phoneNumber: client.phoneNumber || prev.phoneNumber,
+      alternateNumber: client.alternateNumber || prev.alternateNumber,
+      emailAddress: client.emailAddress || prev.emailAddress,
+      address: client.address || prev.address,
+      city: client.city || prev.city,
+      pincode: client.pincode || prev.pincode,
+      state: client.state || prev.state
+    }));
+
+    setErrors((prev) => ({
+      ...prev,
+      clientName: "",
+      phoneNumber: "",
+      address: "",
+      pincode: ""
+    }));
+
+    setClientSearchTerm(client.clientName);
+    setIsClientDropdownOpen(false);
+    toast.success(`Client details auto-filled for "${client.clientName}"! ⚡`);
+  };
+
   // Helper to add custom work type tag
   const handleAddCustomWorkType = () => {
     const val = customWorkType.trim();
@@ -520,8 +610,19 @@ const Addlead = () => {
         finalWorkType = ["Other"];
       }
 
+      const generate4DigitAlphaId = () => {
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        let result = "";
+        for (let i = 0; i < 4; i++) {
+          result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return result;
+      };
+
+      const generatedId = generate4DigitAlphaId();
       const newLead = {
-        id: `LM-${Math.floor(100000 + Math.random() * 900000)}`,
+        id: generatedId,
+        leadId: generatedId,
         clientName: formData.clientName,
         concernPersonName: formData.clientName,
         phoneNumber: formData.phoneNumber,
@@ -599,9 +700,11 @@ const Addlead = () => {
       try {
         // Save lead to backend MongoDB Atlas Database with all form fields & attachments
         const apiRes = await createLeadApi(newLead);
-        if (apiRes && apiRes.success && apiRes.data && apiRes.data._id) {
-          newLead.id = apiRes.data._id;
-          newLead._id = apiRes.data._id;
+        if (apiRes && apiRes.success && apiRes.data) {
+          const bLead = apiRes.data;
+          newLead.id = bLead.leadId || bLead._id;
+          newLead.leadId = bLead.leadId || bLead._id;
+          newLead._id = bLead._id;
         }
 
         // 1. Save to dss_leads (Used by Total Leads Directory)
@@ -839,23 +942,89 @@ const Addlead = () => {
             {errors.leadStatus && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.leadStatus}</p>}
           </div>
 
-          <div id="field-clientName">
-            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
-              Client Name <span className="text-red-500">*</span>
+          <div id="field-clientName" className="relative" ref={clientDropdownRef}>
+            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5 flex items-center justify-between">
+              <span>
+                Client Name <span className="text-red-500">*</span>
+              </span>
+              {formData.leadType === "REPEAT" && (
+                <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-200">
+                  🔍 Repeat Client Search
+                </span>
+              )}
             </label>
-            <input
-              type="text"
-              name="clientName"
-              placeholder="Enter Client Name"
-              value={formData.clientName}
-              onChange={(e) => {
-                const val = e.target.value.replace(/[0-9]/g, "");
-                handleChange({ target: { name: "clientName", value: val } });
-              }}
-              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-1 transition-all placeholder:text-slate-400 ${
-                errors.clientName ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
-              }`}
-            />
+
+            {formData.leadType === "REPEAT" ? (
+              <div className="relative">
+                <input
+                  type="text"
+                  name="clientName"
+                  placeholder="Type to search existing clients..."
+                  value={isClientDropdownOpen ? clientSearchTerm : formData.clientName}
+                  onFocus={() => {
+                    setClientSearchTerm(formData.clientName);
+                    setIsClientDropdownOpen(true);
+                  }}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setClientSearchTerm(val);
+                    handleChange({ target: { name: "clientName", value: val } });
+                    setIsClientDropdownOpen(true);
+                  }}
+                  className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-1 transition-all placeholder:text-slate-400 ${
+                    errors.clientName ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-blue-400 focus:border-blue-600 ring-blue-100"
+                  }`}
+                />
+
+                {isClientDropdownOpen && (
+                  <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto divide-y divide-slate-100">
+                    {filteredClients.length > 0 ? (
+                      filteredClients.map((client, idx) => (
+                        <div
+                          key={idx}
+                          onClick={() => handleSelectRepeatClient(client)}
+                          className="p-2.5 hover:bg-blue-50/80 transition-colors cursor-pointer flex flex-col justify-center"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-slate-900 text-xs sm:text-sm">
+                              {client.clientName}
+                            </span>
+                            {client.phoneNumber && (
+                              <span className="font-mono text-xs font-bold text-blue-600">
+                                📞 {client.phoneNumber}
+                              </span>
+                            )}
+                          </div>
+                          {(client.city || client.address) && (
+                            <span className="text-[11px] text-slate-500 truncate mt-0.5">
+                              {[client.city, client.address].filter(Boolean).join(" • ")}
+                            </span>
+                          )}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-3 text-center text-xs text-slate-500 font-medium">
+                        No matching clients found in Lead Management. You can type a custom client name.
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <input
+                type="text"
+                name="clientName"
+                placeholder="Enter Client Name"
+                value={formData.clientName}
+                onChange={(e) => {
+                  const val = e.target.value.replace(/[0-9]/g, "");
+                  handleChange({ target: { name: "clientName", value: val } });
+                }}
+                className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-1 transition-all placeholder:text-slate-400 ${
+                  errors.clientName ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
+                }`}
+              />
+            )}
             {errors.clientName && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.clientName}</p>}
           </div>
 
