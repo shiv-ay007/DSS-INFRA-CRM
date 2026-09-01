@@ -99,7 +99,7 @@ const Lostlead = () => {
           <button
             type="button"
             onClick={() => setSelectedLead(row)}
-            className="w-7 h-7 rounded-lg border border-orange-400 text-orange-500 hover:bg-orange-500 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
+            className="w-7 h-7 rounded-lg border border-orange-400 text-orange-500 hover:bg-orange-50 hover:border-orange-500 hover:scale-105 active:scale-95 flex items-center justify-center transition-all cursor-pointer shadow-2xs"
             title="View Lost Lead Details"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -112,7 +112,7 @@ const Lostlead = () => {
           <button
             type="button"
             onClick={() => setReviveModalLead(row)}
-            className="w-7 h-7 rounded-lg border border-emerald-400 text-emerald-600 hover:bg-emerald-600 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
+            className="w-7 h-7 rounded-lg border border-emerald-400 text-emerald-600 hover:bg-emerald-50 hover:border-emerald-600 hover:scale-105 active:scale-95 flex items-center justify-center transition-all cursor-pointer shadow-2xs"
             title="Revive / Reopen Lead"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">

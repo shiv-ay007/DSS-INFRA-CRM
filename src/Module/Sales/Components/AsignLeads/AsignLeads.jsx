@@ -8,6 +8,7 @@ import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
 import { initialAssignedLeads, teamMembers } from "../../data/assignedLeadsData";
 import { availableWorkTypes, workCategoryList, leadTypesList } from "../../data/addLeadData";
 import { FaUserPlus, FaSearch, FaFilter, FaUserCheck, FaUser, FaRegCheckCircle } from "react-icons/fa";
+import { HiOutlineUsers } from "react-icons/hi";
 
 import { subscribeToLeadUpdates, getStoredLeads, updateLeadInStorage } from "../../utils/leadStorageUtils";
 import { updateLeadApi, getAllLeadsApi } from "../../../../services/api";
@@ -309,7 +310,7 @@ const AsignLeads = () => {
             <button
               type="button"
               onClick={() => navigate(`/sales/leads/details/${row.id}`, { state: { lead: row } })}
-              className="w-6.5 h-6.5 rounded-md border border-orange-400 text-orange-500 hover:bg-orange-500 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
+              className="w-6.5 h-6.5 rounded-md border border-orange-400 text-orange-500 hover:bg-orange-50 hover:border-orange-500 hover:scale-105 active:scale-95 flex items-center justify-center transition-all cursor-pointer shadow-2xs"
               title="View Lead Details"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -318,7 +319,7 @@ const AsignLeads = () => {
               </svg>
             </button>
 
-            {/* Re-assign Lead Icon Button (Right next to View Details) */}
+            {/* Re-assign Lead Icon Button (Orange Outline - Exact Design from Image 1) */}
             <button
               type="button"
               onClick={() => {
@@ -331,10 +332,10 @@ const AsignLeads = () => {
                 }
                 setReassignModalLead(row);
               }}
-              className="w-6.5 h-6.5 rounded-md border border-blue-500 text-blue-600 hover:bg-blue-600 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
+              className="w-6.5 h-6.5 rounded-md border border-[#ff5722] text-[#ff5722] hover:bg-orange-50 hover:border-[#ff5722] hover:scale-105 active:scale-95 flex items-center justify-center transition-all cursor-pointer shadow-2xs"
               title="Re-assign Lead"
             >
-              <FaUserPlus className="w-3.5 h-3.5" />
+              <HiOutlineUsers className="w-3.5 h-3.5" />
             </button>
 
             {/* ONLY ON SELF TAB: 1 Single Green Check-Circle Icon Button for Client Status Modal */}
@@ -349,10 +350,10 @@ const AsignLeads = () => {
                   setStatusRemark("");
                   setStatusRemarkAttachments([]);
                 }}
-                className="w-6.5 h-6.5 rounded-md border border-emerald-500 text-emerald-600 hover:bg-emerald-600 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
+                className="w-6.5 h-6.5 rounded-md border border-emerald-500 text-emerald-600 hover:bg-emerald-50 hover:border-emerald-600 hover:scale-105 active:scale-95 flex items-center justify-center transition-all cursor-pointer shadow-2xs"
                 title="Client Status (Interested / Not Interested)"
               >
-                <FaRegCheckCircle className="w-3.5 h-3.5 text-emerald-600 hover:text-white" />
+                <FaRegCheckCircle className="w-3.5 h-3.5 text-emerald-600" />
               </button>
             )}
           </div>

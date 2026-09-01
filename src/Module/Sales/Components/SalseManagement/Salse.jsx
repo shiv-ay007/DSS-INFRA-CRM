@@ -53,7 +53,7 @@ const Salse = () => {
           <button
             type="button"
             onClick={() => navigate(`/sales/leads/details/${row.id}`, { state: { lead: row } })}
-            className="w-7 h-7 rounded-lg border border-orange-400 text-orange-500 hover:bg-orange-500 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs mx-auto"
+            className="w-7 h-7 rounded-lg border border-orange-400 text-orange-500 hover:bg-orange-50 hover:border-orange-500 hover:scale-105 active:scale-95 flex items-center justify-center transition-all cursor-pointer shadow-2xs mx-auto"
             title="View Lead Details"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">

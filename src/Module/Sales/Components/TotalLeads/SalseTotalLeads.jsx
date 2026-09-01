@@ -9,6 +9,7 @@ import { initialTotalLeads } from "../../data/totalLeadsData";
 import { initialAssignedLeads } from "../../data/assignedLeadsData";
 import { availableWorkTypes, workCategoryList, indianStatesList } from "../../data/addLeadData";
 import { FaUserPlus, FaUsers, FaUserCheck, FaImage, FaVideo, FaMicrophone, FaFileAlt, FaPaperclip, FaTimes, FaDownload, FaPlay, FaPause } from "react-icons/fa";
+import { HiOutlineUsers } from "react-icons/hi";
 
 import { subscribeToLeadUpdates, updateLeadInStorage, getStoredLeads } from "../../utils/leadStorageUtils";
 import { getAllLeadsApi, updateLeadApi } from "../../../../services/api";
@@ -535,7 +536,7 @@ const SalseTotalLeads = () => {
             <button
               type="button"
               onClick={() => navigate(`/sales/leads/details/${row.id}`, { state: { lead: row } })}
-              className="w-7 h-7 rounded-lg border border-orange-400 text-orange-500 hover:bg-orange-500 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
+              className="w-7 h-7 rounded-lg border border-orange-400 text-orange-500 hover:bg-orange-50 hover:border-orange-500 hover:scale-105 active:scale-95 flex items-center justify-center transition-all cursor-pointer shadow-2xs"
               title="View Lead Details"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
@@ -544,21 +545,17 @@ const SalseTotalLeads = () => {
               </svg>
             </button>
 
-            {/* Assign Lead Icon Button (ONLY SHOWN ON 'ALL' TAB) */}
-            {filterScope?.toUpperCase() === "ALL" && (
+            {/* Assign Lead Icon Button (ONLY SHOWN FOR UNASSIGNED LEADS ON 'ALL' TAB) */}
+            {filterScope?.toUpperCase() === "ALL" && !(row.isAssigned === true && !!(row.assignTo || row.assignedTo || row.salesPerson)) && (
               <button
                 type="button"
                 onClick={() => {
-                  const assignee = row.assignTo || row.salesPerson || "Rahul Sharma";
-                  const isSelf = assignee.includes("Current") || assignee.includes("TL") || assignee.includes("Self");
-                  setAssignType(isSelf ? "self" : "executive");
-                  if (!isSelf) {
-                    setSelectedExecutive(assignee);
-                    setExecutiveBranch(executiveBranchMap[assignee] || "Noida Branch");
-                  }
+                  setAssignType("executive");
+                  setSelectedExecutive("Rahul Sharma");
+                  setExecutiveBranch("Noida Branch");
                   setAssignModalLead(row);
                 }}
-                className="w-7 h-7 rounded-lg border border-blue-500 text-blue-600 hover:bg-blue-600 hover:text-white flex items-center justify-center transition-colors cursor-pointer shadow-2xs"
+                className="w-7 h-7 rounded-lg border border-blue-500 text-blue-600 hover:bg-blue-50 hover:border-blue-600 hover:scale-105 active:scale-95 flex items-center justify-center transition-all cursor-pointer shadow-2xs"
                 title="Assign Lead"
               >
                 <FaUserPlus className="w-3.5 h-3.5" />
@@ -1465,17 +1462,21 @@ const SalseTotalLeads = () => {
         </div>
       )}
 
-      {/* ================= ASSIGN LEAD MODAL ================= */}
-      {assignModalLead && (
+      {/* ================= ASSIGN / RE-ASSIGN LEAD MODAL ================= */}
+      {assignModalLead && (() => {
+        const isAlreadyAssigned = assignModalLead.isAssigned === true && !!(assignModalLead.assignTo || assignModalLead.assignedTo || assignModalLead.salesPerson);
+        const modalTitleText = isAlreadyAssigned ? "Re-assign Lead" : "Assign Lead";
+
+        return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
           <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200">
             {/* Header Banner */}
             <div className="bg-[#ff5722] text-white px-6 py-4 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
-                  <FaUserPlus className="w-5 h-5 text-white" />
+                  {isAlreadyAssigned ? <HiOutlineUsers className="w-5 h-5 text-white" /> : <FaUserPlus className="w-5 h-5 text-white" />}
                 </div>
-                <h3 className="text-xl font-extrabold tracking-wide">Assign Lead</h3>
+                <h3 className="text-xl font-extrabold tracking-wide">{modalTitleText}</h3>
               </div>
               <button
                 type="button"
@@ -1616,13 +1617,14 @@ const SalseTotalLeads = () => {
                 onClick={handleAssignLeadSubmit}
                 className="px-6 py-2.5 rounded-xl bg-[#ff5722] hover:bg-[#e64a19] text-white text-xs sm:text-sm font-extrabold shadow-md shadow-orange-500/20 transition-all cursor-pointer"
               >
-                Assign Lead
+                {modalTitleText}
               </button>
             </div>
 
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* ================= 6. SCHEDULE FOLLOW-UP MODAL ================= */}
       {followupModal && (
