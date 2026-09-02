@@ -44,11 +44,9 @@ const Follow = () => {
   const isValidScheduledFollowup = (l) => {
     if (!l) return false;
     const hasHistory = Array.isArray(l.followupHistory) && l.followupHistory.length > 0;
-    const isExplicitScheduled =
-      l.isFollowupScheduled === true ||
-      l.followupScheduled === true ||
-      (l.nextFollowupDate && l.nextFollowupDate !== "--" && l.nextFollowupDate !== "");
-    return hasHistory || isExplicitScheduled;
+    const hasDate = !!(l.nextFollowupDate && l.nextFollowupDate !== "--" && l.nextFollowupDate !== "" && l.nextFollowupDate !== "Completed");
+    const isExplicitScheduled = l.isFollowupScheduled === true || l.followupScheduled === true || !!l.nextFollowupDateRaw;
+    return hasHistory || (hasDate && isExplicitScheduled);
   };
 
   const loadLeadsData = React.useCallback(() => {
@@ -434,15 +432,17 @@ const Follow = () => {
       label: "NEXT FOLLOW-UP",
       align: "center",
       render: (val, row) => {
-        const rawDate = row.nextFollowupDate || row.nextFollowup || "";
-        const isScheduled =
-          row.isFollowupScheduled === true ||
-          row.followupScheduled === true ||
-          (Array.isArray(row.followupHistory) && row.followupHistory.length > 0) ||
-          (row.nextFollowupDateRaw && row.nextFollowupDate && row.nextFollowupDate !== "--" && row.nextFollowupDate !== "Completed") ||
-          (rawDate && rawDate !== "--" && rawDate !== "Completed" && rawDate !== "");
+        const historyCount = (row.followupHistory && Array.isArray(row.followupHistory))
+          ? row.followupHistory.length
+          : (Number(row.followupRemarksCount) || 0);
 
-        if (!isScheduled || !rawDate || rawDate === "--") {
+        // If 0 follow-ups have been done/logged, strictly do NOT display next followup date
+        if (historyCount === 0) {
+          return <span className="text-slate-400 font-medium text-xs">--</span>;
+        }
+
+        const rawDate = row.nextFollowupDate || row.nextFollowup || "";
+        if (!rawDate || rawDate === "--" || rawDate === "Completed") {
           return <span className="text-slate-400 font-medium text-xs">--</span>;
         }
 
@@ -475,9 +475,6 @@ const Follow = () => {
             <span className="font-extrabold text-xs text-rose-600 whitespace-nowrap">{formattedNextDate}</span>
             {nextTime && (
               <span className="font-mono text-[10px] font-bold text-slate-600 whitespace-nowrap">{nextTime}</span>
-            )}
-            {channel && (
-              <span className="text-[10px] font-extrabold text-blue-600 whitespace-nowrap">{channel}</span>
             )}
           </div>
         );
