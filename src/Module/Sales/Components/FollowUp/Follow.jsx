@@ -112,6 +112,20 @@ const Follow = () => {
             const formattedDate = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
             const assignee = backendLead.salesPerson || (typeof backendLead.assignedTo === 'object' ? backendLead.assignedTo?.name : backendLead.assignedTo) || "Sales TL";
 
+            let formattedNextDate = "";
+            if (backendLead.nextFollowupDate) {
+              try {
+                const d = new Date(backendLead.nextFollowupDate);
+                if (!isNaN(d.getTime())) {
+                  formattedNextDate = d.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+                } else {
+                  formattedNextDate = String(backendLead.nextFollowupDate);
+                }
+              } catch (e) {
+                formattedNextDate = String(backendLead.nextFollowupDate);
+              }
+            }
+
             return {
               id: backendLead.leadId || backendLead._id,
               leadId: backendLead.leadId || backendLead._id,
@@ -129,7 +143,7 @@ const Follow = () => {
               expectedBusiness: String(backendLead.expectedBusiness || backendLead.budget || 0),
               salesPerson: assignee,
               createdDate: formattedDate,
-              nextFollowupDate: backendLead.nextFollowupDate || "",
+              nextFollowupDate: formattedNextDate,
               followupTime: backendLead.followupTime || "",
               followupRemark: backendLead.followupRemark || backendLead.remark || ""
             };
@@ -420,22 +434,45 @@ const Follow = () => {
       label: "NEXT FOLLOW-UP",
       align: "center",
       render: (val, row) => {
+        const rawDate = row.nextFollowupDate || row.nextFollowup || "";
         const isScheduled =
           row.isFollowupScheduled === true ||
+          row.followupScheduled === true ||
           (Array.isArray(row.followupHistory) && row.followupHistory.length > 0) ||
-          (row.nextFollowupDateRaw && row.nextFollowupDate && row.nextFollowupDate !== "--" && row.nextFollowupDate !== "Completed");
+          (row.nextFollowupDateRaw && row.nextFollowupDate && row.nextFollowupDate !== "--" && row.nextFollowupDate !== "Completed") ||
+          (rawDate && rawDate !== "--" && rawDate !== "Completed" && rawDate !== "");
 
-        if (!isScheduled) {
+        if (!isScheduled || !rawDate || rawDate === "--") {
           return <span className="text-slate-400 font-medium text-xs">--</span>;
         }
 
-        const nextDate = row.nextFollowupDate || row.nextFollowup || "--";
-        const nextTime = row.nextFollowupTime || "";
+        let formattedNextDate = "--";
+        let nextTime = row.nextFollowupTime || row.followupTime || "";
+
+        const str = String(rawDate);
+        if (str.includes("T") || str.includes("-") || str.includes("/")) {
+          try {
+            const d = new Date(str);
+            if (!isNaN(d.getTime())) {
+              formattedNextDate = d.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+              if (!nextTime) {
+                nextTime = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+              }
+            } else {
+              formattedNextDate = str;
+            }
+          } catch (e) {
+            formattedNextDate = str;
+          }
+        } else {
+          formattedNextDate = str;
+        }
+
         const channel = row.channelType || row.channel || "";
 
         return (
           <div className="inline-flex flex-col items-center px-2.5 py-1 rounded-lg bg-rose-50 text-rose-900 border border-rose-200/90 shadow-2xs">
-            <span className="font-extrabold text-xs text-rose-600 whitespace-nowrap">{nextDate}</span>
+            <span className="font-extrabold text-xs text-rose-600 whitespace-nowrap">{formattedNextDate}</span>
             {nextTime && (
               <span className="font-mono text-[10px] font-bold text-slate-600 whitespace-nowrap">{nextTime}</span>
             )}
@@ -473,8 +510,33 @@ const Follow = () => {
       label: "CREATED DATE",
       align: "center",
       render: (val, row) => {
-        const dateStr = row.createdDate || row.date || "2026-08-18";
-        const timeStr = row.createdTime || "11:00 am";
+        const rawDate = row.createdDate || row.createdAt || row.date || Date.now();
+        let dateStr = "--";
+        let timeStr = row.createdTime || "";
+
+        if (rawDate && rawDate !== "--") {
+          const str = String(rawDate);
+          if (str.includes("T") || str.includes("-") || str.includes("/")) {
+            try {
+              const d = new Date(str);
+              if (!isNaN(d.getTime())) {
+                dateStr = d.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+                if (!timeStr) {
+                  timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+                }
+              } else {
+                dateStr = str;
+              }
+            } catch (e) {
+              dateStr = str;
+            }
+          } else {
+            dateStr = str;
+          }
+        }
+
+        if (!timeStr) timeStr = "11:00 am";
+
         return (
           <div className="inline-flex flex-col items-center px-2.5 py-1 rounded-lg bg-blue-50 text-blue-900 border border-blue-200/90 shadow-2xs">
             <span className="font-extrabold text-xs whitespace-nowrap">{dateStr}</span>
