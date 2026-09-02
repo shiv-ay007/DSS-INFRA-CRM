@@ -316,10 +316,15 @@ const Lead = () => {
       label: "NEXT FOLLOW-UP",
       align: "center",
       render: (val, row) => {
+        const count = (row.followupHistory && Array.isArray(row.followupHistory) && row.followupHistory.length > 0)
+          ? row.followupHistory.length
+          : (Number(row.followupRemarksCount) || 0);
+
         const isScheduled =
-          row.isFollowupScheduled === true ||
+          count > 0 &&
+          (row.isFollowupScheduled === true ||
           (Array.isArray(row.followupHistory) && row.followupHistory.length > 0) ||
-          (row.nextFollowupDateRaw && row.nextFollowupDate && row.nextFollowupDate !== "--" && row.nextFollowupDate !== "Completed");
+          (row.nextFollowupDateRaw && row.nextFollowupDate && row.nextFollowupDate !== "--" && row.nextFollowupDate !== "Completed"));
 
         if (!isScheduled) {
           return <span className="text-slate-400 font-medium text-xs">--</span>;
