@@ -1,7 +1,7 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import PageHeader from "../../../../Common/Components/PageHeader";
-import { FaEdit, FaPhoneAlt, FaWhatsapp, FaPlus } from "react-icons/fa";
+import { FaEdit, FaPhoneAlt, FaWhatsapp } from "react-icons/fa";
 
 const LeadHeaderBanner = ({ lead, onOpenFollowupModal, onOpenEditModal }) => {
   const navigate = useNavigate();
@@ -51,17 +51,6 @@ const LeadHeaderBanner = ({ lead, onOpenFollowupModal, onOpenEditModal }) => {
                 <FaWhatsapp className="w-4 h-4" />
                 <span>WhatsApp</span>
               </a>
-            )}
-
-            {isAssigned && (
-              <button
-                type="button"
-                onClick={onOpenFollowupModal}
-                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 active:scale-95 text-white text-xs sm:text-sm font-extrabold shadow-xs hover:shadow-md transition-all cursor-pointer"
-              >
-                <FaPlus className="w-3.5 h-3.5" />
-                <span>Add Remark</span>
-              </button>
             )}
           </div>
         }
