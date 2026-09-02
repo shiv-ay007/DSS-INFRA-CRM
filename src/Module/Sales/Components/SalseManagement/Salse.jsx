@@ -1,9 +1,10 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import Table from "../../../../Common/Components/Table";
 import ScopeTabs from "../../../../Common/Components/ScopeTabs";
-import { subscribeToLeadUpdates, getStoredLeads } from "../../utils/leadStorageUtils";
+import { subscribeToLeadUpdates } from "../../utils/leadStorageUtils";
+import { getAllLeadsApi } from "../../../../services/api";
 import { workCategoryList } from "../../data/addLeadData";
 import { FaFilter, FaSearch } from "react-icons/fa";
 
@@ -19,17 +20,29 @@ const teamMembers = [
 const Salse = () => {
   const navigate = useNavigate();
 
-  const [salesData, setSalesData] = useState(() => {
-    return getStoredLeads("dss_sales_management_sheet_v1");
-  });
+  const [salesData, setSalesData] = useState([]);
+
+  const fetchSalesLeads = useCallback(async () => {
+    try {
+      const res = await getAllLeadsApi();
+      if (res && res.success && res.data && res.data.leads) {
+        const interestedLeads = res.data.leads.filter(
+          (item) => item.status === "INTERESTED" || item.leadStatus === "INTERESTED" || item.isInterested === true
+        );
+        setSalesData(interestedLeads);
+      }
+    } catch (err) {
+      console.error("Error fetching sales management sheet leads:", err);
+    }
+  }, []);
 
   useEffect(() => {
-    const handleRefresh = () => {
-      setSalesData(getStoredLeads("dss_sales_management_sheet_v1"));
-    };
-    const unsubscribe = subscribeToLeadUpdates(handleRefresh);
+    fetchSalesLeads();
+    const unsubscribe = subscribeToLeadUpdates(() => {
+      fetchSalesLeads();
+    });
     return () => unsubscribe();
-  }, []);
+  }, [fetchSalesLeads]);
 
   // Filter States
   const [filterScope, setFilterScope] = useState("ALL");

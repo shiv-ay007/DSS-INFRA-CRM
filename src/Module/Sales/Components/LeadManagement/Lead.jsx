@@ -7,8 +7,8 @@ import ScopeTabs from "../../../../Common/Components/ScopeTabs";
 import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
 import { initialLeadsData } from "../../data/leadManagementData";
 import { FaUserPlus, FaUsers, FaUser } from "react-icons/fa";
-import { subscribeToLeadUpdates, getStoredLeads, updateLeadInStorage } from "../../utils/leadStorageUtils";
-import { markLeadAsLossApi, createLossLeadApi } from "../../../../services/api";
+import { subscribeToLeadUpdates, updateLeadInStorage } from "../../utils/leadStorageUtils";
+import { markLeadAsLossApi, createLossLeadApi, getAllLeadsApi, updateLeadApi, getAllFollowupsApi, addFollowupApi } from "../../../../services/api";
 import LeadKpiSlider from "./LeadKpiSlider";
 import SalesTransferModal from "./SalesTransferModal";
 
@@ -49,66 +49,145 @@ const timeOptions = [
 const Lead = () => {
   const navigate = useNavigate();
 
-  // Leads state with localStorage cache & automatic seeding
-  const [leads, setLeads] = useState(() => {
-    return getStoredLeads("dss_lead_management_sheet_v1");
-  });
+  // Leads state fetched directly from backend API
+  const [leads, setLeads] = useState([]);
+  const scheduledFollowupCacheRef = useRef(new Map());
+
+  const fetchBackendLeads = async () => {
+    try {
+      const [resLeads, resFollowups] = await Promise.allSettled([
+        getAllLeadsApi(),
+        getAllFollowupsApi()
+      ]);
+
+      const leadsList = (resLeads.status === "fulfilled" && resLeads.value?.success && resLeads.value?.data?.leads)
+        ? resLeads.value.data.leads
+        : [];
+
+      const followupsList = (resFollowups.status === "fulfilled" && resFollowups.value?.success && resFollowups.value?.data?.followups)
+        ? resFollowups.value.data.followups
+        : [];
+
+      const followupMap = new Map();
+      followupsList.forEach((f) => {
+        const leadObj = f.lead || {};
+        const idKey = String(leadObj._id || leadObj.leadId || f.leadId || f._id);
+        if (!followupMap.has(idKey)) followupMap.set(idKey, []);
+        followupMap.get(idKey).push(f);
+      });
+
+      if (leadsList.length > 0) {
+        const activeBackendLeads = leadsList
+          .filter((l) => !l.isLoss && l.leadStatus !== "CLOSED_LOST" && l.status !== "CLOSED_LOST")
+          .map((backendLead) => {
+            const idKey = String(backendLead._id || backendLead.leadId || backendLead.id);
+            const extraFollowups = followupMap.get(idKey) || [];
+
+            const dateObj = new Date(backendLead.createdAt || Date.now());
+            const formattedDate = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+            const assignee = backendLead.salesPerson || (typeof backendLead.assignedTo === 'object' ? backendLead.assignedTo?.name : backendLead.assignedTo) || "Sales TL";
+            const formattedTime = backendLead.createdTime || dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+
+            const historyCount = Array.isArray(backendLead.followupHistory) ? backendLead.followupHistory.length : 0;
+            const remarksCount = Number(backendLead.followupRemarksCount) || Number(backendLead.followupCount) || 0;
+            const count = Math.max(historyCount, remarksCount, extraFollowups.length, (backendLead.isFollowupScheduled && backendLead.nextFollowupDate) ? 1 : 0);
+
+            const rawNextDate = backendLead.nextFollowupDate || (extraFollowups.length > 0 ? extraFollowups[0].scheduledDate : null);
+            let formattedNextDate = "";
+            if (count > 0 && rawNextDate && rawNextDate !== "--" && rawNextDate !== "Completed" && rawNextDate !== "Invalid Date") {
+              try {
+                const d = new Date(rawNextDate);
+                if (!isNaN(d.getTime())) {
+                  formattedNextDate = d.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+                } else {
+                  formattedNextDate = String(rawNextDate);
+                }
+              } catch (e) {
+                formattedNextDate = String(rawNextDate);
+              }
+            }
+
+            const nextTime = backendLead.nextFollowupTime || backendLead.followupTime || (extraFollowups.length > 0 ? extraFollowups[0].scheduledTime : "") || "10:00 am";
+
+            return {
+              ...backendLead,
+              id: backendLead.leadId || backendLead._id,
+              leadId: backendLead.leadId || backendLead._id,
+              _id: backendLead._id,
+              clientName: backendLead.clientName || "Client",
+              concernPersonName: backendLead.clientName || "Client",
+              phoneNumber: backendLead.phoneNumber || backendLead.phone || "--",
+              contact: backendLead.phoneNumber || backendLead.phone || "--",
+              alternateNumber: backendLead.alternateNumber || "--",
+              emailAddress: backendLead.emailAddress || backendLead.email || "--",
+              email: backendLead.emailAddress || backendLead.email || "--",
+              status: backendLead.leadStatus || backendLead.status || "Warm",
+              leadStatus: backendLead.leadStatus || backendLead.status || "Warm",
+              leadMode: backendLead.leadMode || backendLead.leadSource || "Business networking",
+              workCategory: backendLead.workCategory || "Design",
+              workType: Array.isArray(backendLead.workType) ? backendLead.workType : (backendLead.workType ? [backendLead.workType] : ["Concept Drawing"]),
+              expectedBusiness: String(backendLead.expectedBusiness || backendLead.budget || 0),
+              salesPerson: assignee,
+              assignTo: assignee,
+              assignedTo: assignee,
+              date: backendLead.date || formattedDate,
+              createdDate: formattedDate,
+              createdTime: formattedTime,
+              address: backendLead.address || "--",
+              pincode: backendLead.pincode || "--",
+              city: backendLead.city || "--",
+              state: backendLead.state || "--",
+              projectDetail: backendLead.projectDetail || backendLead.notes || "",
+              remark: backendLead.remark || backendLead.requirement || backendLead.notes || "",
+              requirement: backendLead.requirement || backendLead.remark || backendLead.notes || "",
+              followupHistory: Array.isArray(backendLead.followupHistory) ? backendLead.followupHistory : [],
+              followupCount: count,
+              followupRemarksCount: count,
+              nextFollowupDate: count > 0 ? (formattedNextDate || "") : "",
+              nextFollowupDateRaw: count > 0 ? (backendLead.nextFollowupDateRaw || rawNextDate || "") : "",
+              nextFollowupTime: count > 0 ? nextTime : "",
+              followupTime: count > 0 ? nextTime : "",
+              isFollowupScheduled: count > 0,
+              isFollowup: count > 0
+            };
+          });
+
+        const getLeadTime = (lead) => {
+          if (lead.createdAt) {
+            const t = new Date(lead.createdAt).getTime();
+            if (!isNaN(t)) return t;
+          }
+          if (lead.updatedAt) {
+            const t = new Date(lead.updatedAt).getTime();
+            if (!isNaN(t)) return t;
+          }
+          if (lead._id && String(lead._id).length === 24) {
+            const t = parseInt(String(lead._id).substring(0, 8), 16) * 1000;
+            if (!isNaN(t)) return t;
+          }
+          if (lead.createdDate) {
+            const t = new Date(lead.createdDate).getTime();
+            if (!isNaN(t)) return t;
+          }
+          if (lead.date) {
+            const t = new Date(lead.date).getTime();
+            if (!isNaN(t)) return t;
+          }
+          return 0;
+        };
+
+        setLeads(activeBackendLeads.sort((a, b) => getLeadTime(b) - getLeadTime(a)));
+      }
+    } catch (err) {
+      console.error("Error fetching leads for Lead Management Sheet:", err);
+    }
+  };
 
   useEffect(() => {
     const handleRefresh = () => {
-      setLeads(getStoredLeads("dss_lead_management_sheet_v1"));
+      fetchBackendLeads();
     };
     const unsubscribe = subscribeToLeadUpdates(handleRefresh);
-
-    const fetchBackendLeads = async () => {
-      try {
-        const res = await getAllLeadsApi();
-        if (res && res.success && res.data && res.data.leads) {
-          const activeBackendLeads = res.data.leads
-            .filter((l) => !l.isLoss && l.leadStatus !== "CLOSED_LOST" && l.status !== "CLOSED_LOST")
-            .map((backendLead) => {
-              const dateObj = new Date(backendLead.createdAt || Date.now());
-              const formattedDate = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
-              const assignee = backendLead.salesPerson || (typeof backendLead.assignedTo === 'object' ? backendLead.assignedTo?.name : backendLead.assignedTo) || "Sales TL";
-
-              return {
-                id: backendLead.leadId || backendLead._id,
-                leadId: backendLead.leadId || backendLead._id,
-                _id: backendLead._id,
-                clientName: backendLead.clientName || "Client",
-                concernPersonName: backendLead.clientName || "Client",
-                phoneNumber: backendLead.phoneNumber || backendLead.phone || "--",
-                alternateNumber: backendLead.alternateNumber || "--",
-                emailAddress: backendLead.emailAddress || backendLead.email || "--",
-                status: backendLead.leadStatus || backendLead.status || "Warm",
-                leadStatus: backendLead.leadStatus || backendLead.status || "Warm",
-                leadMode: backendLead.leadMode || backendLead.leadSource || "Business networking",
-                workCategory: backendLead.workCategory || "Design",
-                workType: Array.isArray(backendLead.workType) ? backendLead.workType : (backendLead.workType ? [backendLead.workType] : ["Concept Drawing"]),
-                expectedBusiness: String(backendLead.expectedBusiness || backendLead.budget || 0),
-                salesPerson: assignee,
-                date: formattedDate,
-                createdDate: formattedDate,
-                address: backendLead.address || "--",
-                projectDetail: backendLead.projectDetail || backendLead.remark || ""
-              };
-            });
-
-          setLeads((prev) => {
-            const map = new Map(prev.map((l) => [String(l.id || l.leadId), l]));
-            activeBackendLeads.forEach((bl) => map.set(String(bl.id), { ...map.get(String(bl.id)), ...bl }));
-            const merged = Array.from(map.values());
-            try {
-              localStorage.setItem("dss_lead_management_sheet_v1", JSON.stringify(merged));
-            } catch (e) {}
-            return merged;
-          });
-        }
-      } catch (err) {
-        console.error("Error fetching leads for Lead Management Sheet:", err);
-      }
-    };
-
     fetchBackendLeads();
 
     return () => unsubscribe();
@@ -116,29 +195,6 @@ const Lead = () => {
 
   const saveLeads = (newLeads) => {
     setLeads(newLeads);
-    try {
-      localStorage.setItem("dss_lead_management_sheet_v1", JSON.stringify(newLeads));
-
-      // Sync scheduled leads to dss_scheduled_leads_sheet for Followup page
-      const savedScheduled = localStorage.getItem("dss_scheduled_leads_sheet");
-      const currentScheduled = savedScheduled ? JSON.parse(savedScheduled) : [];
-      
-      const scheduledMap = new Map();
-      if (Array.isArray(currentScheduled)) {
-        currentScheduled.forEach((item) => scheduledMap.set(item.id, item));
-      }
-
-      newLeads.forEach((l) => {
-        if (l.nextFollowupDate || (l.followupHistory && l.followupHistory.length > 0)) {
-          scheduledMap.set(l.id, l);
-        }
-      });
-
-      const updatedScheduledList = Array.from(scheduledMap.values());
-      localStorage.setItem("dss_scheduled_leads_sheet", JSON.stringify(updatedScheduledList));
-    } catch (e) {
-      console.error(e);
-    }
   };
 
   // Filters & Collapsible Filter State
@@ -293,9 +349,9 @@ const Lead = () => {
       label: "FOLLOW-UP REMARK",
       align: "center",
       render: (val, row) => {
-        const count = (row.followupHistory && Array.isArray(row.followupHistory) && row.followupHistory.length > 0)
-          ? row.followupHistory.length
-          : (Number(row.followupRemarksCount) || 0);
+        const historyCount = Array.isArray(row.followupHistory) ? row.followupHistory.length : 0;
+        const remarksCount = Number(row.followupRemarksCount) || Number(row.followupCount) || 0;
+        const count = Math.max(historyCount, remarksCount, row.isFollowupScheduled === true ? 1 : 0);
 
         return (
           <button
@@ -316,32 +372,32 @@ const Lead = () => {
       label: "NEXT FOLLOW-UP",
       align: "center",
       render: (val, row) => {
-        const count = (row.followupHistory && Array.isArray(row.followupHistory) && row.followupHistory.length > 0)
-          ? row.followupHistory.length
-          : (Number(row.followupRemarksCount) || 0);
+        const historyCount = Array.isArray(row.followupHistory) ? row.followupHistory.length : 0;
+        const remarksCount = Number(row.followupRemarksCount) || Number(row.followupCount) || 0;
+        const count = Math.max(historyCount, remarksCount, row.isFollowupScheduled === true ? 1 : 0);
+        const rawNextDate = row.nextFollowupDate || row.nextFollowup;
+        const hasValidDate = !!(rawNextDate && rawNextDate !== "--" && rawNextDate !== "Completed" && rawNextDate !== "Invalid Date");
 
-        const isScheduled =
-          count > 0 &&
-          (row.isFollowupScheduled === true ||
-          (Array.isArray(row.followupHistory) && row.followupHistory.length > 0) ||
-          (row.nextFollowupDateRaw && row.nextFollowupDate && row.nextFollowupDate !== "--" && row.nextFollowupDate !== "Completed"));
-
-        if (!isScheduled) {
+        if (count === 0 || !hasValidDate) {
           return <span className="text-slate-400 font-medium text-xs">--</span>;
         }
 
-        const nextDate = row.nextFollowupDate || row.nextFollowup;
-        const nextTime = row.nextFollowupTime || "";
-        const channel = row.channelType || row.channel || "";
+        let displayDate = rawNextDate;
+        if (rawNextDate && (rawNextDate.includes("T") || rawNextDate.includes("-") || rawNextDate.includes("/"))) {
+          try {
+            const d = new Date(rawNextDate);
+            if (!isNaN(d.getTime())) {
+              displayDate = d.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+            }
+          } catch (e) {}
+        }
+        const nextTime = row.nextFollowupTime || row.followupTime || "10:00 am";
 
         return (
           <div className="inline-flex flex-col items-center px-2.5 py-1 rounded-lg bg-rose-50 text-rose-900 border border-rose-200/90 shadow-2xs">
-            <span className="font-extrabold text-xs text-rose-600 whitespace-nowrap">{nextDate}</span>
+            <span className="font-extrabold text-xs text-rose-600 whitespace-nowrap">{displayDate}</span>
             {nextTime && (
               <span className="font-mono text-[10px] font-bold text-slate-600 whitespace-nowrap">{nextTime}</span>
-            )}
-            {channel && (
-              <span className="text-[10px] font-extrabold text-blue-600 whitespace-nowrap">{channel}</span>
             )}
           </div>
         );
@@ -602,11 +658,6 @@ const Lead = () => {
       };
 
       try {
-        const savedLost = localStorage.getItem("dss_lost_leads");
-        const currentLost = savedLost ? JSON.parse(savedLost) : [];
-        const filteredLost = currentLost.filter(l => l.id !== statusModalLead.id);
-        localStorage.setItem("dss_lost_leads", JSON.stringify([lostLeadData, ...filteredLost]));
-
         // Sync with MongoDB backend LossLead collection
         const targetId = statusModalLead._id || statusModalLead.id || statusModalLead.leadId;
         const lossPayload = {
@@ -886,6 +937,31 @@ const Lead = () => {
         if (!matches) return false;
       }
       return true;
+    }).sort((a, b) => {
+      const getLeadTime = (lead) => {
+        if (lead.createdAt) {
+          const t = new Date(lead.createdAt).getTime();
+          if (!isNaN(t)) return t;
+        }
+        if (lead.updatedAt) {
+          const t = new Date(lead.updatedAt).getTime();
+          if (!isNaN(t)) return t;
+        }
+        if (lead._id && String(lead._id).length === 24) {
+          const t = parseInt(String(lead._id).substring(0, 8), 16) * 1000;
+          if (!isNaN(t)) return t;
+        }
+        if (lead.createdDate) {
+          const t = new Date(lead.createdDate).getTime();
+          if (!isNaN(t)) return t;
+        }
+        if (lead.date) {
+          const t = new Date(lead.date).getTime();
+          if (!isNaN(t)) return t;
+        }
+        return 0;
+      };
+      return getLeadTime(b) - getLeadTime(a);
     });
   }, [leads, filterScope, filterStatus, filterLeadType, filterJobType, filterLeadLabel, searchTerm]);
 
@@ -948,16 +1024,20 @@ const Lead = () => {
   };
 
   // Submit Schedule Form
-  const handleSaveSchedule = (e) => {
+  const handleSaveSchedule = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     if (!scheduleModalLead) return;
 
     const activeNotes = scheduleFormData.notes || scheduleFormData.nextDiscussionTopic || "Follow-up scheduled";
 
     let formattedDisplayDate = scheduleFormData.date;
-    if (scheduleFormData.date && scheduleFormData.date.includes("-")) {
-      const [year, month, day] = scheduleFormData.date.split("-");
-      formattedDisplayDate = `${day} ${new Date(year, month - 1, day).toLocaleString("en-IN", { month: "short" })} ${year}`;
+    if (scheduleFormData.date) {
+      try {
+        const d = new Date(scheduleFormData.date);
+        if (!isNaN(d.getTime())) {
+          formattedDisplayDate = d.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+        }
+      } catch (err) {}
     }
 
     const newHistoryEntry = {
@@ -968,26 +1048,78 @@ const Lead = () => {
       status: scheduleFormData.type || "Scheduled"
     };
 
+    let updatedTargetLead = null;
+
     const updated = leads.map((item) => {
-      if (item.id === scheduleModalLead.id) {
-        const prevHist = item.followupHistory || [];
-        return {
+      if (String(item.id || item._id) === String(scheduleModalLead.id || scheduleModalLead._id)) {
+        const prevHist = Array.isArray(item.followupHistory) ? item.followupHistory : [];
+        const newHist = [newHistoryEntry, ...prevHist];
+        updatedTargetLead = {
           ...item,
           nextFollowupDate: formattedDisplayDate,
           nextFollowupDateRaw: scheduleFormData.date,
           nextFollowupTime: scheduleFormData.time || "10:00 am",
           channelType: scheduleFormData.type || "Call",
           clientRating: scheduleFormData.clientRating,
-          followupRemarksCount: prevHist.length + 1,
-          followupHistory: [newHistoryEntry, ...prevHist],
-          assignTo: scheduleFormData.assignedTo
+          isFollowupScheduled: true,
+          followupScheduled: true,
+          followupRemarksCount: newHist.length,
+          followupHistory: newHist,
+          assignTo: scheduleFormData.assignedTo || item.assignTo || item.salesPerson
         };
+        return updatedTargetLead;
       }
       return item;
     });
 
-    saveLeads(updated);
+    // Update lead in Lead Management Sheet with new followup count and scheduled date
+    setLeads(updated);
+
+    if (updatedTargetLead) {
+      const targetId = String(updatedTargetLead._id || updatedTargetLead.id || updatedTargetLead.leadId);
+      if (targetId) {
+        scheduledFollowupCacheRef.current.set(targetId, updatedTargetLead);
+
+        try {
+          await addFollowupApi({
+            leadId: targetId,
+            clientName: updatedTargetLead.clientName,
+            phoneNumber: updatedTargetLead.phoneNumber || updatedTargetLead.phone || updatedTargetLead.contact,
+            remarks: activeNotes,
+            remark: activeNotes,
+            notes: activeNotes,
+            scheduledDate: scheduleFormData.date,
+            nextFollowupDate: scheduleFormData.date,
+            date: scheduleFormData.date,
+            scheduledTime: scheduleFormData.time || "10:00 am",
+            nextFollowupTime: scheduleFormData.time || "10:00 am",
+            time: scheduleFormData.time || "10:00 am",
+            followupType: scheduleFormData.type || "Call",
+            channelType: scheduleFormData.type || "Call",
+            assignedTo: scheduleFormData.assignedTo || updatedTargetLead.salesPerson
+          });
+
+          await updateLeadApi(targetId, {
+            nextFollowupDate: scheduleFormData.date,
+            nextFollowupDateRaw: scheduleFormData.date,
+            followupTime: scheduleFormData.time || "10:00 am",
+            followupRemark: activeNotes,
+            isFollowup: true,
+            isFollowupScheduled: true,
+            followupCount: updatedTargetLead.followupRemarksCount,
+            followupRemarksCount: updatedTargetLead.followupRemarksCount,
+            followupHistory: updatedTargetLead.followupHistory
+          });
+        } catch (err) {
+          console.error("Error updating lead followup in backend:", err);
+        }
+      }
+
+      updateLeadInStorage(updatedTargetLead);
+    }
+
     setScheduleModalLead(null);
+    toast.success("Follow-up scheduled and lead moved to Follow-up directory! 🎯");
   };
 
   // Reset Filters

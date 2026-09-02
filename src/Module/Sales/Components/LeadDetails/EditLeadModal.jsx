@@ -23,6 +23,7 @@ import {
   workCategoryList
 } from "../../data/addLeadData";
 import { updateLeadInStorage } from "../../utils/leadStorageUtils";
+import { updateLeadApi } from "../../../../services/api";
 
 const EditLeadModal = ({ lead, isOpen, onClose, onSaveSuccess }) => {
   if (!isOpen || !lead) return null;
@@ -170,6 +171,11 @@ const EditLeadModal = ({ lead, isOpen, onClose, onSaveSuccess }) => {
       googleLocation: formData.googleLocation.trim(),
       lastModified: new Date().toISOString()
     };
+
+    const targetId = lead._id || lead.id || lead.leadId;
+    if (targetId) {
+      updateLeadApi(targetId, updatedLead).catch((err) => console.error("Error updating lead API:", err));
+    }
 
     updateLeadInStorage(updatedLead);
     toast.success("Lead details updated successfully!");

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef } from "react";
+import React, { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
@@ -19,8 +19,8 @@ import {
   initialScheduledLeads
 } from "../../data/followUpData";
 
-import { subscribeToLeadUpdates, updateLeadInStorage } from "../../utils/leadStorageUtils";
-import { addFollowupApi, getFollowupLeadsApi, markLeadAsLossApi, createLossLeadApi } from "../../../../services/api";
+import { subscribeToLeadUpdates, updateLeadInStorage, getScheduledLeadsFromCache } from "../../utils/leadStorageUtils";
+import { addFollowupApi, getFollowupLeadsApi, getAllFollowupsApi, getAllLeadsApi, markLeadAsLossApi, createLossLeadApi } from "../../../../services/api";
 
 const leadModesList = [
   "ALL",
@@ -41,151 +41,208 @@ const notInterestedReasonsList = [
 const Follow = () => {
   const navigate = useNavigate();
 
-  const isValidScheduledFollowup = (l) => {
-    if (!l) return false;
-    const hasHistory = Array.isArray(l.followupHistory) && l.followupHistory.length > 0;
-    const hasDate = !!(l.nextFollowupDate && l.nextFollowupDate !== "--" && l.nextFollowupDate !== "" && l.nextFollowupDate !== "Completed");
-    const isExplicitScheduled = l.isFollowupScheduled === true || l.followupScheduled === true || !!l.nextFollowupDateRaw;
-    return hasHistory || (hasDate && isExplicitScheduled);
-  };
+  // State for all scheduled leads fetched directly from backend API
+  const [leads, setLeads] = useState([]);
 
-  const loadLeadsData = React.useCallback(() => {
+  const fetchBackendFollowups = React.useCallback(async () => {
     try {
-      const savedScheduled = localStorage.getItem("dss_scheduled_leads_sheet");
-      const savedFollowup = localStorage.getItem("dss_followup_leads");
-      const savedMgmt = localStorage.getItem("dss_lead_management_sheet_v1");
+      let combinedRaw = [];
 
-      const scheduledLeads = savedScheduled ? JSON.parse(savedScheduled) : [];
-      const followupLeads = savedFollowup ? JSON.parse(savedFollowup) : [];
-      const mgmtLeads = savedMgmt ? JSON.parse(savedMgmt) : [];
-
-      const mergedMap = new Map();
-
-      if (Array.isArray(mgmtLeads)) {
-        mgmtLeads.forEach((l) => {
-          if (isValidScheduledFollowup(l)) {
-            mergedMap.set(String(l.id || l.leadId), l);
-          }
-        });
+      // 1. Fetch from getFollowupLeadsApi
+      try {
+        const res = await getFollowupLeadsApi();
+        if (res && res.success && res.data) {
+          const list = Array.isArray(res.data)
+            ? res.data
+            : (res.data.leads || res.data.followups || res.data.data || []);
+          if (Array.isArray(list)) combinedRaw.push(...list);
+        }
+      } catch (err) {
+        console.warn("getFollowupLeadsApi warning:", err);
       }
 
-      if (Array.isArray(scheduledLeads)) {
-        scheduledLeads.forEach((l) => {
-          if (isValidScheduledFollowup(l)) {
-            mergedMap.set(String(l.id || l.leadId), l);
-          }
-        });
+      // 2. Fetch from getAllFollowupsApi
+      try {
+        const resAll = await getAllFollowupsApi();
+        if (resAll && resAll.success && resAll.data) {
+          const listAll = Array.isArray(resAll.data)
+            ? resAll.data
+            : (resAll.data.leads || resAll.data.followups || resAll.data.data || []);
+          if (Array.isArray(listAll)) combinedRaw.push(...listAll);
+        }
+      } catch (err) {
+        console.warn("getAllFollowupsApi warning:", err);
       }
 
-      if (Array.isArray(followupLeads)) {
-        followupLeads.forEach((l) => {
-          if (isValidScheduledFollowup(l)) {
-            mergedMap.set(String(l.id || l.leadId), l);
-          }
-        });
+      // 3. Fetch from getAllLeadsApi to capture any scheduled leads
+      try {
+        const resLeads = await getAllLeadsApi();
+        if (resLeads && resLeads.success && resLeads.data) {
+          const listLeads = Array.isArray(resLeads.data)
+            ? resLeads.data
+            : (resLeads.data.leads || resLeads.data.data || []);
+          if (Array.isArray(listLeads)) combinedRaw.push(...listLeads);
+        }
+      } catch (err) {
+        console.warn("getAllLeadsApi warning:", err);
       }
 
-      const mergedList = Array.from(mergedMap.values());
-      return mergedList;
-    } catch (e) {
-      return [];
+      // 4. Merge live in-memory scheduled leads cache
+      const cachedScheduledList = getScheduledLeadsFromCache();
+      cachedScheduledList.forEach((cachedLead) => {
+        if (cachedLead) combinedRaw.push(cachedLead);
+      });
+
+      const map = new Map();
+      combinedRaw.forEach((rawBackendLead) => {
+        const idKey = String(rawBackendLead.leadId || rawBackendLead._id || rawBackendLead.id);
+        if (!idKey) return;
+
+        const cachedScheduled = cachedScheduledList.find(c => String(c._id || c.id || c.leadId) === idKey);
+
+        const backendLead = cachedScheduled
+          ? {
+              ...rawBackendLead,
+              ...cachedScheduled,
+              followupHistory: (cachedScheduled.followupHistory && cachedScheduled.followupHistory.length > 0)
+                ? cachedScheduled.followupHistory
+                : (Array.isArray(rawBackendLead.followupHistory) ? rawBackendLead.followupHistory : []),
+              followupRemarksCount: Math.max(
+                cachedScheduled.followupRemarksCount || 1,
+                Number(rawBackendLead.followupRemarksCount) || 0
+              ),
+              nextFollowupDate: cachedScheduled.nextFollowupDate || rawBackendLead.nextFollowupDate,
+              nextFollowupDateRaw: cachedScheduled.nextFollowupDateRaw || rawBackendLead.nextFollowupDateRaw,
+              nextFollowupTime: cachedScheduled.nextFollowupTime || rawBackendLead.nextFollowupTime,
+              isFollowupScheduled: true
+            }
+          : rawBackendLead;
+
+        const historyCount = Array.isArray(backendLead.followupHistory) ? backendLead.followupHistory.length : 0;
+        const remarksCount = Number(backendLead.followupRemarksCount) || Number(backendLead.followupCount) || 0;
+        const rawNext = backendLead.nextFollowupDate || backendLead.nextFollowup || "";
+        const hasNextDate = !!(rawNext && rawNext !== "--" && rawNext !== "Completed" && rawNext !== "Invalid Date");
+        const isExplicitScheduled = backendLead.isFollowupScheduled === true || backendLead.followupScheduled === true;
+
+        const hasValidFollowup = historyCount > 0 || remarksCount > 0 || (isExplicitScheduled && hasNextDate);
+        if (!hasValidFollowup) return;
+
+        const dateObj = new Date(backendLead.createdAt || Date.now());
+        const formattedDate = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+        const formattedTime = backendLead.createdTime || dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+        const assignee = backendLead.salesPerson || (typeof backendLead.assignedTo === 'object' ? backendLead.assignedTo?.name : backendLead.assignedTo) || "Sales TL";
+
+        let formattedNextDate = "";
+        if (backendLead.nextFollowupDate) {
+          try {
+            const d = new Date(backendLead.nextFollowupDate);
+            if (!isNaN(d.getTime())) {
+              formattedNextDate = d.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+            } else {
+              formattedNextDate = String(backendLead.nextFollowupDate);
+            }
+          } catch (e) {
+            formattedNextDate = String(backendLead.nextFollowupDate);
+          }
+        }
+
+        const count = Math.max(
+          Array.isArray(backendLead.followupHistory) ? backendLead.followupHistory.length : 0,
+          Number(backendLead.followupRemarksCount) || 0,
+          Number(backendLead.followupCount) || 0,
+          (isExplicitScheduled && formattedNextDate && formattedNextDate !== "--") ? 1 : 0
+        );
+
+        const nextTime = backendLead.nextFollowupTime || backendLead.followupTime || "10:00 am";
+
+        const processed = {
+          ...backendLead,
+          id: backendLead.leadId || backendLead._id || backendLead.id,
+          leadId: backendLead.leadId || backendLead._id || backendLead.id,
+          _id: backendLead._id,
+          clientName: backendLead.clientName || backendLead.concernPersonName || "Client",
+          concernPersonName: backendLead.clientName || backendLead.concernPersonName || "Client",
+          phoneNumber: backendLead.phoneNumber || backendLead.phone || backendLead.contact || "--",
+          contact: backendLead.phoneNumber || backendLead.phone || backendLead.contact || "--",
+          alternateNumber: backendLead.alternateNumber || "--",
+          emailAddress: backendLead.emailAddress || backendLead.email || "--",
+          email: backendLead.emailAddress || backendLead.email || "--",
+          status: backendLead.leadStatus || backendLead.status || "Warm",
+          leadStatus: backendLead.leadStatus || backendLead.status || "Warm",
+          leadType: backendLead.leadType || "FRESH",
+          leadMode: backendLead.leadMode || backendLead.leadSource || "Business networking",
+          leadSource: backendLead.leadSource || backendLead.leadMode || "Business networking",
+          workCategory: backendLead.workCategory || "Design",
+          workType: Array.isArray(backendLead.workType) ? backendLead.workType : (backendLead.workType ? [backendLead.workType] : ["Concept Drawing"]),
+          address: backendLead.address || backendLead.siteAddress || "--",
+          city: backendLead.city || "--",
+          pincode: backendLead.pincode || "--",
+          state: backendLead.state || "--",
+          projectDetail: backendLead.projectDetail || backendLead.projectDetails || backendLead.notes || "--",
+          expectedBusiness: String(backendLead.expectedBusiness || backendLead.budget || 0),
+          salesPerson: assignee,
+          assignedTo: assignee,
+          assignTo: assignee,
+          createdDate: formattedDate,
+          createdTime: formattedTime,
+          nextFollowupDate: formattedNextDate || backendLead.nextFollowupDate || "--",
+          nextFollowupDateRaw: backendLead.nextFollowupDateRaw || backendLead.nextFollowupDate || "",
+          nextFollowupTime: nextTime,
+          followupTime: nextTime,
+          followupCount: count,
+          followupRemarksCount: count,
+          followupHistory: Array.isArray(backendLead.followupHistory) ? backendLead.followupHistory : [],
+          isFollowupScheduled: count > 0,
+          isFollowup: count > 0,
+          remark: backendLead.remark || backendLead.requirement || backendLead.followupRemark || backendLead.notes || "--",
+          followupRemark: backendLead.followupRemark || backendLead.remark || backendLead.requirement || backendLead.notes || "--"
+        };
+
+        map.set(idKey, { ...map.get(idKey), ...processed });
+      });
+
+      const getLeadTime = (lead) => {
+        if (lead.createdAt) {
+          const t = new Date(lead.createdAt).getTime();
+          if (!isNaN(t)) return t;
+        }
+        if (lead.updatedAt) {
+          const t = new Date(lead.updatedAt).getTime();
+          if (!isNaN(t)) return t;
+        }
+        if (lead._id && String(lead._id).length === 24) {
+          const t = parseInt(String(lead._id).substring(0, 8), 16) * 1000;
+          if (!isNaN(t)) return t;
+        }
+        if (lead.createdDate) {
+          const t = new Date(lead.createdDate).getTime();
+          if (!isNaN(t)) return t;
+        }
+        if (lead.date) {
+          const t = new Date(lead.date).getTime();
+          if (!isNaN(t)) return t;
+        }
+        return 0;
+      };
+
+      const sortedLeads = Array.from(map.values()).sort((a, b) => getLeadTime(b) - getLeadTime(a));
+      setLeads(sortedLeads);
+    } catch (err) {
+      console.error("Error fetching followup leads from API:", err);
     }
   }, []);
 
-  // State for all scheduled leads
-  const [leads, setLeads] = useState(loadLeadsData);
-
   React.useEffect(() => {
-    const handleRefresh = () => {
-      setLeads(loadLeadsData());
-    };
-    const unsubscribe = subscribeToLeadUpdates(handleRefresh);
-
-    const fetchBackendFollowups = async () => {
-      try {
-        const res = await getFollowupLeadsApi();
-        if (res && res.success && res.data && res.data.leads) {
-          const apiFollowups = res.data.leads.map((backendLead) => {
-            const dateObj = new Date(backendLead.createdAt || Date.now());
-            const formattedDate = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
-            const assignee = backendLead.salesPerson || (typeof backendLead.assignedTo === 'object' ? backendLead.assignedTo?.name : backendLead.assignedTo) || "Sales TL";
-
-            let formattedNextDate = "";
-            if (backendLead.nextFollowupDate) {
-              try {
-                const d = new Date(backendLead.nextFollowupDate);
-                if (!isNaN(d.getTime())) {
-                  formattedNextDate = d.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
-                } else {
-                  formattedNextDate = String(backendLead.nextFollowupDate);
-                }
-              } catch (e) {
-                formattedNextDate = String(backendLead.nextFollowupDate);
-              }
-            }
-
-            return {
-              id: backendLead.leadId || backendLead._id,
-              leadId: backendLead.leadId || backendLead._id,
-              _id: backendLead._id,
-              clientName: backendLead.clientName || "Client",
-              concernPersonName: backendLead.clientName || "Client",
-              phoneNumber: backendLead.phoneNumber || backendLead.phone || "--",
-              alternateNumber: backendLead.alternateNumber || "--",
-              emailAddress: backendLead.emailAddress || backendLead.email || "--",
-              status: backendLead.leadStatus || backendLead.status || "Warm",
-              leadStatus: backendLead.leadStatus || backendLead.status || "Warm",
-              leadMode: backendLead.leadMode || backendLead.leadSource || "Business networking",
-              workCategory: backendLead.workCategory || "Design",
-              workType: Array.isArray(backendLead.workType) ? backendLead.workType : (backendLead.workType ? [backendLead.workType] : ["Concept Drawing"]),
-              expectedBusiness: String(backendLead.expectedBusiness || backendLead.budget || 0),
-              salesPerson: assignee,
-              createdDate: formattedDate,
-              nextFollowupDate: formattedNextDate,
-              followupTime: backendLead.followupTime || "",
-              followupRemark: backendLead.followupRemark || backendLead.remark || ""
-            };
-          });
-
-          if (apiFollowups.length > 0) {
-            setLeads((prev) => {
-              const map = new Map(prev.map(l => [String(l.id || l.leadId), l]));
-              apiFollowups.forEach(af => map.set(String(af.id), { ...map.get(String(af.id)), ...af }));
-              return Array.from(map.values());
-            });
-          }
-        }
-      } catch (err) {
-        console.error("Error fetching followup leads from API:", err);
-      }
-    };
-
     fetchBackendFollowups();
+    const unsubscribe = subscribeToLeadUpdates(() => {
+      fetchBackendFollowups();
+    });
 
     return () => unsubscribe();
-  }, [loadLeadsData]);
+  }, [fetchBackendFollowups]);
 
   const saveLeads = (newLeads) => {
     setLeads(newLeads);
-    try {
-      localStorage.setItem("dss_scheduled_leads_sheet", JSON.stringify(newLeads));
-
-      // Also sync to Lead Management sheet
-      const savedMgmt = localStorage.getItem("dss_lead_management_sheet_v1");
-      const currentMgmt = savedMgmt ? JSON.parse(savedMgmt) : [];
-
-      const mgmtMap = new Map();
-      if (Array.isArray(currentMgmt)) {
-        currentMgmt.forEach((item) => mgmtMap.set(item.id, item));
-      }
-
-      newLeads.forEach((l) => {
-        mgmtMap.set(l.id, l);
-      });
-
-      const updatedMgmtList = Array.from(mgmtMap.values());
-      localStorage.setItem("dss_lead_management_sheet_v1", JSON.stringify(updatedMgmtList));
-    } catch (e) {}
   };
 
   // Filter States
@@ -280,13 +337,7 @@ const Follow = () => {
         nextFollowupTime: "11:00 am"
       };
 
-      try {
-        const savedMgmt = localStorage.getItem("dss_lead_management_sheet_v1");
-        const currentMgmt = savedMgmt ? JSON.parse(savedMgmt) : [];
-        const filteredMgmt = currentMgmt.filter(l => l.id !== statusModalLead.id);
-        localStorage.setItem("dss_lead_management_sheet_v1", JSON.stringify([leadData, ...filteredMgmt]));
-      } catch (e) {}
-
+      updateLeadInStorage(leadData);
       toast.success(`Lead ${statusModalLead.clientName || statusModalLead.concernPersonName} marked as INTERESTED and sent to Lead Management! 🎯`);
     } else if (selectedClientStatus === "NOT INTERESTED") {
       const lostLeadData = {
@@ -303,11 +354,6 @@ const Follow = () => {
       };
 
       try {
-        const savedLost = localStorage.getItem("dss_lost_leads");
-        const currentLost = savedLost ? JSON.parse(savedLost) : [];
-        const filteredLost = currentLost.filter(l => l.id !== statusModalLead.id);
-        localStorage.setItem("dss_lost_leads", JSON.stringify([lostLeadData, ...filteredLost]));
-
         // Sync with MongoDB backend LossLead collection
         const targetId = statusModalLead._id || statusModalLead.id || statusModalLead.leadId;
         const lossPayload = {
@@ -432,22 +478,13 @@ const Follow = () => {
       label: "NEXT FOLLOW-UP",
       align: "center",
       render: (val, row) => {
-        const historyCount = (row.followupHistory && Array.isArray(row.followupHistory))
-          ? row.followupHistory.length
-          : (Number(row.followupRemarksCount) || 0);
-
-        // If 0 follow-ups have been done/logged, strictly do NOT display next followup date
-        if (historyCount === 0) {
-          return <span className="text-slate-400 font-medium text-xs">--</span>;
-        }
-
         const rawDate = row.nextFollowupDate || row.nextFollowup || "";
-        if (!rawDate || rawDate === "--" || rawDate === "Completed") {
+        if (!rawDate || rawDate === "--" || rawDate === "Completed" || rawDate === "Invalid Date") {
           return <span className="text-slate-400 font-medium text-xs">--</span>;
         }
 
-        let formattedNextDate = "--";
-        let nextTime = row.nextFollowupTime || row.followupTime || "";
+        let formattedNextDate = rawDate;
+        let nextTime = row.nextFollowupTime || row.followupTime || "10:00 am";
 
         const str = String(rawDate);
         if (str.includes("T") || str.includes("-") || str.includes("/")) {
@@ -455,20 +492,9 @@ const Follow = () => {
             const d = new Date(str);
             if (!isNaN(d.getTime())) {
               formattedNextDate = d.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
-              if (!nextTime) {
-                nextTime = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
-              }
-            } else {
-              formattedNextDate = str;
             }
-          } catch (e) {
-            formattedNextDate = str;
-          }
-        } else {
-          formattedNextDate = str;
+          } catch (e) {}
         }
-
-        const channel = row.channelType || row.channel || "";
 
         return (
           <div className="inline-flex flex-col items-center px-2.5 py-1 rounded-lg bg-rose-50 text-rose-900 border border-rose-200/90 shadow-2xs">
@@ -484,19 +510,18 @@ const Follow = () => {
       label: "FOLLOW-UP REMARK",
       align: "center",
       render: (val, row) => {
-        const count = (row.followupHistory && Array.isArray(row.followupHistory) && row.followupHistory.length > 0)
-          ? row.followupHistory.length
-          : (Number(row.followupRemarksCount) || 0);
+        const count = Math.max(
+          (row.followupHistory && Array.isArray(row.followupHistory)) ? row.followupHistory.length : 0,
+          Number(row.followupRemarksCount) || 0,
+          Number(row.followupCount) || 0,
+          1
+        );
 
         return (
           <button
             type="button"
             onClick={() => setRemarksModalLead(row)}
-            className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors cursor-pointer shadow-2xs ${
-              count > 0
-                ? "bg-blue-50/90 text-blue-600 border border-blue-200 hover:bg-blue-100"
-                : "bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200"
-            }`}
+            className="px-3 py-1 rounded-full text-xs font-semibold transition-colors cursor-pointer shadow-2xs bg-blue-50/90 text-blue-600 border border-blue-200 hover:bg-blue-100"
           >
             {count} Follow-up{count !== 1 ? "s" : ""}
           </button>
@@ -919,6 +944,15 @@ const Follow = () => {
   // Filtered Leads
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
+      const historyCount = Array.isArray(lead.followupHistory) ? lead.followupHistory.length : 0;
+      const remarksCount = Number(lead.followupRemarksCount) || Number(lead.followupCount) || 0;
+      const rawNext = lead.nextFollowupDate || lead.nextFollowup || "";
+      const hasNextDate = !!(rawNext && rawNext !== "--" && rawNext !== "Completed" && rawNext !== "Invalid Date");
+      const isExplicitScheduled = lead.isFollowupScheduled === true || lead.followupScheduled === true;
+
+      const hasValidFollowup = historyCount > 0 || remarksCount > 0 || (isExplicitScheduled && hasNextDate);
+      if (!hasValidFollowup) return false;
+
       // Search Box
       if (searchTerm) {
         const q = searchTerm.toLowerCase();
@@ -952,6 +986,31 @@ const Follow = () => {
       }
 
       return true;
+    }).sort((a, b) => {
+      const getLeadTime = (lead) => {
+        if (lead.createdAt) {
+          const t = new Date(lead.createdAt).getTime();
+          if (!isNaN(t)) return t;
+        }
+        if (lead.updatedAt) {
+          const t = new Date(lead.updatedAt).getTime();
+          if (!isNaN(t)) return t;
+        }
+        if (lead._id && String(lead._id).length === 24) {
+          const t = parseInt(String(lead._id).substring(0, 8), 16) * 1000;
+          if (!isNaN(t)) return t;
+        }
+        if (lead.createdDate) {
+          const t = new Date(lead.createdDate).getTime();
+          if (!isNaN(t)) return t;
+        }
+        if (lead.date) {
+          const t = new Date(lead.date).getTime();
+          if (!isNaN(t)) return t;
+        }
+        return 0;
+      };
+      return getLeadTime(b) - getLeadTime(a);
     });
   }, [
     leads,
@@ -1001,16 +1060,20 @@ const Follow = () => {
   };
 
   // Submit Schedule Form
-  const handleSaveSchedule = (e) => {
+  const handleSaveSchedule = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     if (!scheduleModalLead) return;
 
     const activeNotes = scheduleFormData.notes || scheduleFormData.nextDiscussionTopic || "Follow-up scheduled";
 
     let formattedDisplayDate = scheduleFormData.date;
-    if (scheduleFormData.date && scheduleFormData.date.includes("-")) {
-      const [year, month, day] = scheduleFormData.date.split("-");
-      formattedDisplayDate = `${day} ${new Date(year, month - 1, day).toLocaleString("en-IN", { month: "short" })} ${year}`;
+    if (scheduleFormData.date) {
+      try {
+        const d = new Date(scheduleFormData.date);
+        if (!isNaN(d.getTime())) {
+          formattedDisplayDate = d.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+        }
+      } catch (err) {}
     }
 
     const newHistoryEntry = {
@@ -1023,39 +1086,75 @@ const Follow = () => {
 
     let targetUpdatedLead = null;
     const updated = leads.map((l) => {
-      if (l.id === scheduleModalLead.id) {
+      if (String(l.id || l._id || l.leadId) === String(scheduleModalLead.id || scheduleModalLead._id || scheduleModalLead.leadId)) {
+        const prevHist = Array.isArray(l.followupHistory) ? l.followupHistory : [];
+        const newHist = [newHistoryEntry, ...prevHist];
         targetUpdatedLead = {
           ...l,
           nextFollowupDate: formattedDisplayDate,
           nextFollowupDateRaw: scheduleFormData.date,
           nextFollowupTime: scheduleFormData.time || "10:00 am",
-          assignTo: scheduleFormData.assignedTo,
+          assignTo: scheduleFormData.assignedTo || l.assignTo || l.salesPerson,
           clientRating: scheduleFormData.clientRating,
           reminder: scheduleFormData.reminder,
           reminderHours: scheduleFormData.reminderHours,
-          followupRemarksCount: (l.followupRemarksCount || 0) + 1,
-          followupHistory: [newHistoryEntry, ...(l.followupHistory || [])]
+          isFollowupScheduled: true,
+          isFollowup: true,
+          followupRemarksCount: newHist.length,
+          followupCount: newHist.length,
+          followupHistory: newHist
         };
         return targetUpdatedLead;
       }
       return l;
     });
 
-    saveLeads(updated);
+    setLeads(updated);
+
     if (targetUpdatedLead) {
+      const targetId = String(targetUpdatedLead._id || targetUpdatedLead.id || targetUpdatedLead.leadId);
+      if (targetId) {
+        try {
+          await addFollowupApi({
+            leadId: targetId,
+            clientName: targetUpdatedLead.clientName,
+            phoneNumber: targetUpdatedLead.phoneNumber || targetUpdatedLead.phone || targetUpdatedLead.contact,
+            remarks: activeNotes,
+            remark: activeNotes,
+            notes: activeNotes,
+            scheduledDate: scheduleFormData.date,
+            nextFollowupDate: scheduleFormData.date,
+            date: scheduleFormData.date,
+            scheduledTime: scheduleFormData.time || "10:00 am",
+            nextFollowupTime: scheduleFormData.time || "10:00 am",
+            time: scheduleFormData.time || "10:00 am",
+            followupType: scheduleFormData.type || "Call",
+            channelType: scheduleFormData.type || "Call",
+            assignedTo: scheduleFormData.assignedTo || targetUpdatedLead.salesPerson
+          });
+
+          await updateLeadApi(targetId, {
+            nextFollowupDate: scheduleFormData.date,
+            nextFollowupDateRaw: scheduleFormData.date,
+            followupTime: scheduleFormData.time || "10:00 am",
+            followupRemark: activeNotes,
+            isFollowup: true,
+            isFollowupScheduled: true,
+            followupCount: targetUpdatedLead.followupRemarksCount,
+            followupRemarksCount: targetUpdatedLead.followupRemarksCount,
+            followupHistory: targetUpdatedLead.followupHistory
+          });
+        } catch (err) {
+          console.error("Error updating lead followup in backend:", err);
+        }
+      }
+
       updateLeadInStorage(targetUpdatedLead);
     }
 
-    if (scheduleModalLead.id && !String(scheduleModalLead.id).startsWith("LM-")) {
-      addFollowupApi({
-        leadId: scheduleModalLead.id,
-        remarks: activeNotes,
-        scheduledDate: scheduleFormData.date ? new Date(scheduleFormData.date) : new Date(),
-        status: "SCHEDULED"
-      }).catch((err) => console.error("Error calling addFollowupApi:", err));
-    }
-
     setScheduleModalLead(null);
+    toast.success("Follow-up scheduled successfully!");
+    fetchBackendFollowups();
   };
 
   return (

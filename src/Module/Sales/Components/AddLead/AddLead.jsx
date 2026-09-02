@@ -3,8 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
-import { createLeadApi } from "../../../../services/api";
-import { getStoredLeads } from "../../utils/leadStorageUtils";
+import { createLeadApi, getAllLeadsApi } from "../../../../services/api";
+import { notifyLeadChange } from "../../utils/leadStorageUtils";
 import {
   salesPersonsList,
   leadSourcesList,
@@ -123,23 +123,34 @@ const Addlead = () => {
   const [clientSearchTerm, setClientSearchTerm] = useState("");
   const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
   const clientDropdownRef = useRef(null);
+  const [backendLeadsForRepeat, setBackendLeadsForRepeat] = useState([]);
+
+  useEffect(() => {
+    const loadRepeatLeads = async () => {
+      try {
+        const res = await getAllLeadsApi();
+        if (res && res.success && res.data && res.data.leads) {
+          setBackendLeadsForRepeat(res.data.leads);
+        }
+      } catch (err) {
+        console.error("Error fetching leads for repeat client list:", err);
+      }
+    };
+    loadRepeatLeads();
+  }, []);
 
   // Fetch unique existing clients for Repeat Lead selection
   const existingClients = useMemo(() => {
     try {
-      const leadsFromTotal = getStoredLeads("dss_leads") || [];
-      const leadsFromMgmt = getStoredLeads("dss_lead_management_sheet_v1") || [];
-      const combined = [...leadsFromTotal, ...leadsFromMgmt];
-
       const clientMap = new Map();
-      combined.forEach((l) => {
+      backendLeadsForRepeat.forEach((l) => {
         const name = (l.clientName || l.concernPersonName || "").trim();
         const phone = (l.phoneNumber || l.contact || l.phone || "").replace(/\D/g, "");
         if (name && name !== "Client" && name !== "--") {
           const key = phone && phone.length >= 7 ? phone : name.toLowerCase();
           if (!clientMap.has(key)) {
             clientMap.set(key, {
-              id: l.id,
+              id: l._id || l.leadId || l.id,
               clientName: name,
               phoneNumber: l.phoneNumber || l.contact || l.phone || "",
               alternateNumber: l.alternateNumber || l.alternateNo || "",
@@ -156,7 +167,7 @@ const Addlead = () => {
     } catch (e) {
       return [];
     }
-  }, []);
+  }, [backendLeadsForRepeat]);
 
   // Filter clients based on search query
   const filteredClients = useMemo(() => {
@@ -673,30 +684,6 @@ const Addlead = () => {
         followupHistory: []
       };
 
-      const safeSaveLocalStorage = (key, dataArray) => {
-        try {
-          localStorage.setItem(key, JSON.stringify(dataArray));
-        } catch (err) {
-          console.warn(`Quota exceeded for ${key}, trimming large base64 URLs...`, err);
-          try {
-            const sanitized = dataArray.map((item) => ({
-              ...item,
-              remarkAttachments: (item.remarkAttachments || []).map((att) => ({
-                ...att,
-                url: att.url?.startsWith("data:") ? "" : att.url
-              })),
-              attachments: (item.attachments || []).map((att) => ({
-                ...att,
-                url: att.url?.startsWith("data:") ? "" : att.url
-              }))
-            }));
-            localStorage.setItem(key, JSON.stringify(sanitized));
-          } catch (e) {
-            console.error(`Failed to save to ${key}:`, e);
-          }
-        }
-      };
-
       try {
         // Save lead to backend MongoDB Atlas Database with all form fields & attachments
         const apiRes = await createLeadApi(newLead);
@@ -706,32 +693,9 @@ const Addlead = () => {
           newLead.leadId = bLead.leadId || bLead._id;
           newLead._id = bLead._id;
         }
-
-        // 1. Save to dss_leads (Used by Total Leads Directory)
-        const savedTotal = localStorage.getItem("dss_leads");
-        const currentTotalLeads = savedTotal ? JSON.parse(savedTotal) : initialTotalLeads;
-        const updatedTotalLeads = [newLead, ...currentTotalLeads];
-        safeSaveLocalStorage("dss_leads", updatedTotalLeads);
-
-        // 2. Save to dss_lead_management_sheet_v1 (Used by Lead Sheet)
-        const savedSheet = localStorage.getItem("dss_lead_management_sheet_v1");
-        const currentSheetLeads = savedSheet ? JSON.parse(savedSheet) : [];
-        const updatedSheetLeads = [newLead, ...currentSheetLeads];
-        safeSaveLocalStorage("dss_lead_management_sheet_v1", updatedSheetLeads);
-
-        // 3. Save to dss_assigned_leads (Used by Assigned Leads)
-        const savedAssigned = localStorage.getItem("dss_assigned_leads");
-        const currentAssignedLeads = savedAssigned ? JSON.parse(savedAssigned) : [];
-        const updatedAssignedLeads = [newLead, ...currentAssignedLeads];
-        safeSaveLocalStorage("dss_assigned_leads", updatedAssignedLeads);
-
-        // 4. Save to dss_scheduled_leads_sheet (Used by Followup Directory)
-        const savedScheduled = localStorage.getItem("dss_scheduled_leads_sheet");
-        const currentScheduledLeads = savedScheduled ? JSON.parse(savedScheduled) : [];
-        const updatedScheduledLeads = [newLead, ...currentScheduledLeads];
-        safeSaveLocalStorage("dss_scheduled_leads_sheet", updatedScheduledLeads);
+        notifyLeadChange(newLead);
       } catch (err) {
-        console.error("Failed to save lead to localStorage", err);
+        console.error("Failed to save lead via backend API", err);
       }
 
       setIsSubmitting(false);

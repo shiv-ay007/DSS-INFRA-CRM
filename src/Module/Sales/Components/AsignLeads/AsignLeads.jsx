@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import Table from "../../../../Common/Components/Table";
@@ -31,113 +31,164 @@ const notInterestedReasonsList = [
 
 const AsignLeads = () => {
   const navigate = useNavigate();
+  const location = useLocation();
 
-  // Leads state with LocalStorage support & automatic seeding
+  // Leads state fetched directly from backend API
   const [leads, setLeads] = useState(() => {
-    return getStoredLeads("dss_assigned_leads");
+    if (location.state?.assignedLead) {
+      return [location.state.assignedLead];
+    }
+    return [];
   });
 
-  React.useEffect(() => {
-    const handleRefresh = () => {
-      setLeads(getStoredLeads("dss_assigned_leads"));
-    };
-    const unsubscribe = subscribeToLeadUpdates(handleRefresh);
+  const fetchBackendAssignedLeads = useCallback(async () => {
+    try {
+      let combinedRaw = [];
 
-    const fetchBackendAssignedLeads = async () => {
+      // 1. Fetch from Assigned Leads API endpoint
       try {
-        const res = await getAllAssignedLeadsApi();
-        if (res && res.success && res.data) {
-          const rawAssigned = res.data.assignedLeads || res.data.leads || res.data.data || [];
-          if (Array.isArray(rawAssigned) && rawAssigned.length > 0) {
-            const backendAssigned = rawAssigned.map((backendLead) => {
-              const dateObj = new Date(backendLead.assignedDate || backendLead.createdAt || Date.now());
-              const formattedDate = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
-              const formattedTime = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
-              const explicitExecutiveAssignees = ["Rahul Sharma", "Pooja Verma", "Vikram Malhotra", "Ankit Patel", "Sanjay Gupta", "Neha Verma"];
-              const rawAssignTo = (
-                backendLead.assignTo ||
-                (typeof backendLead.assignedTo === "object" ? backendLead.assignedTo?.name : backendLead.assignedTo) ||
-                ""
-              ).replace(" (Current User)", "").replace("(Current User)", "").trim();
+        const resAssigned = await getAllAssignedLeadsApi();
+        if (resAssigned && resAssigned.success && resAssigned.data) {
+          const list = Array.isArray(resAssigned.data)
+            ? resAssigned.data
+            : (resAssigned.data.assignedLeads || resAssigned.data.leads || resAssigned.data.data || []);
+          if (Array.isArray(list)) combinedRaw.push(...list);
+        }
+      } catch (e) {
+        console.warn("getAllAssignedLeadsApi warning:", e);
+      }
 
-              const rawSalesPerson = (backendLead.salesPerson || "").replace(" (Current User)", "").replace("(Current User)", "").trim();
-
-              let assignee = "";
-              let isExplicitAssigned = false;
-
-              if (explicitExecutiveAssignees.includes(rawAssignTo)) {
-                assignee = rawAssignTo;
-                isExplicitAssigned = true;
-              } else if (explicitExecutiveAssignees.includes(rawSalesPerson)) {
-                assignee = rawSalesPerson;
-                isExplicitAssigned = true;
-              } else if (backendLead.assignedType === "self" || rawAssignTo === "Sales TL" || (backendLead.isAssigned === true && rawSalesPerson === "Sales TL" && !!backendLead.assignedType)) {
-                assignee = "Sales TL";
-                isExplicitAssigned = true;
-              } else if (backendLead.isAssigned === true && rawAssignTo && rawAssignTo !== "Unassigned") {
-                assignee = rawAssignTo;
-                isExplicitAssigned = true;
-              }
-
-              return {
-                id: backendLead.leadId || backendLead._id,
-                leadId: backendLead.leadId || backendLead._id,
-                _id: backendLead._id,
-                clientName: backendLead.clientName || "Client",
-                concernPersonName: backendLead.clientName || "Client",
-                phoneNumber: backendLead.phoneNumber || backendLead.phone || "--",
-                contact: backendLead.phoneNumber || backendLead.phone || "--",
-                alternateNumber: backendLead.alternateNumber || "--",
-                emailAddress: backendLead.emailAddress || backendLead.email || "--",
-                email: backendLead.emailAddress || backendLead.email || "--",
-                status: backendLead.leadStatus || backendLead.status || "Warm",
-                leadStatus: backendLead.leadStatus || backendLead.status || "Warm",
-                leadType: backendLead.leadType || "FRESH",
-                leadMode: backendLead.leadMode || backendLead.leadSource || "DIRECT",
-                leadSource: backendLead.leadSource || backendLead.leadMode || "DIRECT",
-                workCategory: backendLead.workCategory || "Design",
-                workType: Array.isArray(backendLead.workType) ? backendLead.workType : (backendLead.workType ? [backendLead.workType] : []),
-                address: backendLead.address || "--",
-                city: backendLead.city || "--",
-                pincode: backendLead.pincode || "--",
-                state: backendLead.state || "--",
-                expectedBusiness: String(backendLead.expectedBusiness || backendLead.budget || 0),
-                isAssigned: isExplicitAssigned,
-                assignTo: assignee,
-                salesPerson: assignee,
-                assignedTo: assignee,
-                assignedDate: formattedDate,
-                assignedTime: formattedTime,
-                remark: backendLead.remark || backendLead.notes || "--"
-              };
+      // 2. Fetch from All Leads API endpoint for leads with assignment
+      try {
+        const resAll = await getAllLeadsApi();
+        if (resAll && resAll.success && resAll.data) {
+          const rawAll = Array.isArray(resAll.data)
+            ? resAll.data
+            : (resAll.data.leads || resAll.data.data || []);
+          if (Array.isArray(rawAll)) {
+            const list = rawAll.filter((l) => {
+              const assignee = (l.salesPerson || (typeof l.assignedTo === 'object' ? l.assignedTo?.name : l.assignedTo) || l.assignTo || "").trim();
+              return l.isAssigned === true || (!!assignee && assignee !== "Unassigned" && assignee !== "");
             });
-
-            setLeads((prev) => {
-              const map = new Map(prev.map((l) => [String(l.id || l.leadId), l]));
-              backendAssigned.forEach((al) => map.set(String(al.id), { ...al }));
-              const merged = Array.from(map.values());
-              try {
-                localStorage.setItem("dss_assigned_leads", JSON.stringify(merged));
-              } catch (e) {}
-              return merged;
-            });
+            combinedRaw.push(...list);
           }
         }
       } catch (e) {
-        console.error("Error fetching backend assigned leads:", e);
+        console.warn("getAllLeadsApi warning in AsignLeads:", e);
       }
-    };
 
+      const map = new Map();
+      combinedRaw.forEach((backendLead) => {
+        const idKey = String(backendLead.leadId || backendLead._id || backendLead.id);
+        if (!idKey) return;
+
+        const dateObj = new Date(backendLead.assignedDate || backendLead.createdAt || Date.now());
+        const formattedDate = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+        const formattedTime = backendLead.createdTime || dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+
+        const rawAssignTo = (
+          backendLead.assignTo ||
+          (typeof backendLead.assignedTo === "object" ? backendLead.assignedTo?.name : backendLead.assignedTo) ||
+          backendLead.salesPerson ||
+          ""
+        ).replace(" (Current User)", "").replace("(Current User)", "").trim();
+
+        const assignee = rawAssignTo || "Sales TL";
+
+        const processedLead = {
+          ...backendLead,
+          id: backendLead.leadId || backendLead._id || backendLead.id,
+          leadId: backendLead.leadId || backendLead._id || backendLead.id,
+          _id: backendLead._id,
+          clientName: backendLead.clientName || "Client",
+          concernPersonName: backendLead.clientName || "Client",
+          phoneNumber: backendLead.phoneNumber || backendLead.phone || "--",
+          contact: backendLead.phoneNumber || backendLead.phone || "--",
+          alternateNumber: backendLead.alternateNumber || "--",
+          emailAddress: backendLead.emailAddress || backendLead.email || "--",
+          email: backendLead.emailAddress || backendLead.email || "--",
+          status: backendLead.leadStatus || backendLead.status || "Warm",
+          leadStatus: backendLead.leadStatus || backendLead.status || "Warm",
+          leadType: backendLead.leadType || "FRESH",
+          leadMode: backendLead.leadMode || backendLead.leadSource || "DIRECT",
+          leadSource: backendLead.leadSource || backendLead.leadMode || "DIRECT",
+          workCategory: backendLead.workCategory || "Design",
+          workType: Array.isArray(backendLead.workType) ? backendLead.workType : (backendLead.workType ? [backendLead.workType] : []),
+          address: backendLead.address || backendLead.siteAddress || "--",
+          city: backendLead.city || "--",
+          pincode: backendLead.pincode || "--",
+          state: backendLead.state || "--",
+          expectedBusiness: String(backendLead.expectedBusiness || backendLead.budget || 0),
+          isAssigned: true,
+          assignTo: assignee,
+          salesPerson: assignee,
+          assignedTo: assignee,
+          assignedDate: formattedDate,
+          createdDate: formattedDate,
+          assignedTime: formattedTime,
+          createdTime: formattedTime,
+          remark: backendLead.remark || backendLead.requirement || backendLead.notes || "--",
+          projectDetail: backendLead.projectDetail || backendLead.notes || "--"
+        };
+
+        map.set(idKey, { ...map.get(idKey), ...processedLead });
+      });
+
+      setLeads((prev) => {
+        const backendList = Array.from(map.values());
+        if (backendList.length === 0) return prev;
+        
+        // Merge with existing in-memory state
+        const mergedMap = new Map();
+        prev.forEach((item) => {
+          const key = String(item.id || item._id);
+          if (key) mergedMap.set(key, item);
+        });
+        backendList.forEach((item) => {
+          const key = String(item.id || item._id);
+          if (key) mergedMap.set(key, { ...mergedMap.get(key), ...item });
+        });
+        return Array.from(mergedMap.values());
+      });
+    } catch (e) {
+      console.error("Error fetching backend assigned leads:", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (location.state?.assignedLead) {
+      const assigned = location.state.assignedLead;
+      setLeads((prev) => {
+        const exists = prev.some((l) => String(l.id || l._id) === String(assigned.id || assigned._id));
+        if (exists) return prev;
+        return [assigned, ...prev];
+      });
+    }
     fetchBackendAssignedLeads();
 
+    const unsubscribe = subscribeToLeadUpdates((updatedData) => {
+      if (updatedData?.lead) {
+        const newLead = updatedData.lead;
+        const assignee = (newLead.assignTo || newLead.assignedTo || newLead.salesPerson || "").trim();
+        if (newLead.isAssigned || (assignee && assignee !== "Unassigned" && assignee !== "")) {
+          setLeads((prev) => {
+            const exists = prev.some((l) => String(l.id || l._id) === String(newLead.id || newLead._id));
+            if (exists) {
+              return prev.map((l) => (String(l.id || l._id) === String(newLead.id || newLead._id) ? { ...l, ...newLead } : l));
+            } else {
+              return [newLead, ...prev];
+            }
+          });
+        }
+      }
+      fetchBackendAssignedLeads();
+    });
+
     return () => unsubscribe();
-  }, []);
+  }, [fetchBackendAssignedLeads, location.state]);
 
   const saveLeads = (newLeads) => {
     setLeads(newLeads);
-    try {
-      localStorage.setItem("dss_assigned_leads", JSON.stringify(newLeads));
-    } catch (e) {}
   };
 
   // Filter States
@@ -241,6 +292,9 @@ const AsignLeads = () => {
         leadStatus: "Hot",
         status: "INTERESTED",
         isInterested: true,
+        followupCount: 0,
+        followupRemarksCount: 0,
+        followupHistory: [],
         remark: statusRemark || statusModalLead.remark || "",
         remarkAttachments: processedAttachments.length > 0 ? processedAttachments : (statusModalLead.remarkAttachments || []),
         attachments: processedAttachments.length > 0 ? processedAttachments : (statusModalLead.attachments || []),
@@ -248,38 +302,33 @@ const AsignLeads = () => {
         movedToLeadManagementTime: formattedTime,
         nextFollowupDate: "",
         nextFollowupTime: "",
-        isFollowupScheduled: false
+        isFollowupScheduled: false,
+        isFollowup: false
       };
 
       try {
-        // Save to Lead Management Sheet ONLY
-        const savedMgmt = localStorage.getItem("dss_lead_management_sheet_v1");
-        const currentMgmt = savedMgmt ? JSON.parse(savedMgmt) : [];
-        const filteredMgmt = currentMgmt.filter(l => String(l.id) !== String(statusModalLead.id));
-        localStorage.setItem("dss_lead_management_sheet_v1", JSON.stringify([leadData, ...filteredMgmt]));
-
-        // Remove from Followup Leads until scheduled explicitly
-        const savedFollowup = localStorage.getItem("dss_followup_leads");
-        if (savedFollowup) {
-          const currentFollowup = JSON.parse(savedFollowup);
-          const filteredFollowup = currentFollowup.filter(l => String(l.id) !== String(statusModalLead.id));
-          localStorage.setItem("dss_followup_leads", JSON.stringify(filteredFollowup));
-        }
-
-        // Remove from Scheduled Sheet until scheduled explicitly
-        const savedScheduled = localStorage.getItem("dss_scheduled_leads_sheet");
-        if (savedScheduled) {
-          const currentScheduled = JSON.parse(savedScheduled);
-          const filteredScheduled = currentScheduled.filter(l => String(l.id) !== String(statusModalLead.id));
-          localStorage.setItem("dss_scheduled_leads_sheet", JSON.stringify(filteredScheduled));
-        }
-      } catch (e) {
-        console.error("Error saving lead to Lead Management:", e);
+        const targetId = statusModalLead._id || statusModalLead.id || statusModalLead.leadId;
+        await updateLeadApi(targetId, {
+          leadStatus: "Hot",
+          status: "INTERESTED",
+          isInterested: true,
+          followupCount: 0,
+          followupRemarksCount: 0,
+          followupHistory: [],
+          isFollowupScheduled: false,
+          isFollowup: false,
+          nextFollowupDate: null,
+          nextFollowupTime: "",
+          remark: statusRemark || statusModalLead.remark || ""
+        });
+      } catch (err) {
+        console.error("Error syncing INTERESTED lead to backend:", err);
       }
 
+      updateLeadInStorage(leadData);
       toast.success(`Lead ${statusModalLead.clientName || statusModalLead.concernPersonName} marked as INTERESTED and sent to Lead Management! 🎯`);
     } else if (selectedClientStatus === "NOT INTERESTED") {
-      // 2. Move to Lost Leads (dss_lost_leads)
+      // 2. Move to Lost Leads
       const lostLeadData = {
         ...statusModalLead,
         leadStatus: "Cold",
@@ -294,11 +343,6 @@ const AsignLeads = () => {
       };
 
       try {
-        const savedLost = localStorage.getItem("dss_lost_leads");
-        const currentLost = savedLost ? JSON.parse(savedLost) : [];
-        const filteredLost = currentLost.filter(l => l.id !== statusModalLead.id);
-        localStorage.setItem("dss_lost_leads", JSON.stringify([lostLeadData, ...filteredLost]));
-
         // Sync with MongoDB backend LossLead collection
         const targetId = statusModalLead._id || statusModalLead.id || statusModalLead.leadId;
         const lossPayload = {

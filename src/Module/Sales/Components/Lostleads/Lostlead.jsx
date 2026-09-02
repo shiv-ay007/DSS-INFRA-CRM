@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import Table from "../../../../Common/Components/Table";
 import ScopeTabs from "../../../../Common/Components/ScopeTabs";
@@ -24,77 +24,106 @@ const teamMembers = [
 ];
 
 import { subscribeToLeadUpdates, getStoredLeads } from "../../utils/leadStorageUtils";
-import { getLossLeadsApi } from "../../../../services/api";
+import { getLossLeadsApi, getAllLossLeadsApi } from "../../../../services/api";
 
 const Lostlead = () => {
-  const [leads, setLeads] = useState(() => {
-    return getStoredLeads("dss_lost_leads");
-  });
+  const [leads, setLeads] = useState([]);
 
-  React.useEffect(() => {
-    const handleRefresh = () => {
-      setLeads(getStoredLeads("dss_lost_leads"));
-    };
-    const unsubscribe = subscribeToLeadUpdates(handleRefresh);
+  const fetchBackendLossLeads = React.useCallback(async () => {
+    try {
+      let combinedRaw = [];
 
-    const fetchBackendLossLeads = async () => {
+      // 1. Fetch from /leads/loss endpoint
       try {
         const res = await getLossLeadsApi();
         if (res && res.success && res.data) {
-          const rawLossLeads = res.data.leads || res.data.lossLeads || res.data.data || [];
-          if (Array.isArray(rawLossLeads) && rawLossLeads.length > 0) {
-            const apiLossLeads = rawLossLeads.map((item) => {
-              const dateObj = new Date(item.lossDate || item.createdAt || Date.now());
-              const formattedDate = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
-              const assignee = item.salesPerson || (typeof item.assignedTo === 'object' ? item.assignedTo?.name : item.assignedTo) || "Sales TL";
-
-              return {
-                id: item.leadId || item._id,
-                leadId: item.leadId || item._id,
-                _id: item._id,
-                clientName: item.clientName || "Client",
-                phoneNumber: item.phoneNumber || item.phone || "--",
-                alternateNumber: item.alternateNumber || "--",
-                emailAddress: item.emailAddress || item.email || "--",
-                workCategory: item.workCategory || "Design",
-                workType: Array.isArray(item.workType) ? item.workType : (item.workType ? [item.workType] : ["Concept Drawing"]),
-                expectedBusiness: String(item.expectedBusiness || item.budget || 0),
-                reason: item.lossReason || item.reason || "Closed Lost",
-                remark: item.lossRemark || item.remark || "",
-                lossDate: formattedDate,
-                date: item.date || formattedDate,
-                salesPerson: assignee,
-                leadMode: item.leadMode || item.leadSource || "Business networking",
-                leadType: item.leadType || "FRESH"
-              };
-            });
-
-            setLeads((prev) => {
-              const map = new Map(prev.map(l => [String(l.id || l.leadId), l]));
-              apiLossLeads.forEach(al => map.set(String(al.id), { ...map.get(String(al.id)), ...al }));
-              const merged = Array.from(map.values());
-              try {
-                localStorage.setItem("dss_lost_leads", JSON.stringify(merged));
-              } catch (e) {}
-              return merged;
-            });
-          }
+          const rawLossLeads = Array.isArray(res.data)
+            ? res.data
+            : (res.data.leads || res.data.lossLeads || res.data.data || []);
+          if (Array.isArray(rawLossLeads)) combinedRaw.push(...rawLossLeads);
         }
       } catch (err) {
-        console.error("Error fetching loss leads from API:", err);
+        console.warn("getLossLeadsApi warning:", err);
       }
-    };
 
+      // 2. Fetch from /loss-leads endpoint
+      try {
+        const resDirect = await getAllLossLeadsApi();
+        if (resDirect && resDirect.success && resDirect.data) {
+          const rawDirect = Array.isArray(resDirect.data)
+            ? resDirect.data
+            : (resDirect.data.leads || resDirect.data.lossLeads || resDirect.data.data || []);
+          if (Array.isArray(rawDirect)) combinedRaw.push(...rawDirect);
+        }
+      } catch (err) {
+        console.warn("getAllLossLeadsApi warning:", err);
+      }
+
+      const map = new Map();
+      combinedRaw.forEach((item) => {
+        const idKey = String(item.leadId || item._id || item.id);
+        if (!idKey) return;
+
+        const dateObj = new Date(item.lossDate || item.createdAt || Date.now());
+        const formattedDate = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+        const formattedTime = item.createdTime || dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+        const assignee = item.salesPerson || (typeof item.assignedTo === 'object' ? item.assignedTo?.name : item.assignedTo) || "Sales TL";
+
+        const processed = {
+          ...item,
+          id: item.leadId || item._id || item.id,
+          leadId: item.leadId || item._id || item.id,
+          _id: item._id,
+          clientName: item.clientName || item.concernPersonName || "Client",
+          concernPersonName: item.clientName || item.concernPersonName || "Client",
+          phoneNumber: item.phoneNumber || item.phone || item.contact || "--",
+          contact: item.phoneNumber || item.phone || item.contact || "--",
+          alternateNumber: item.alternateNumber || "--",
+          emailAddress: item.emailAddress || item.email || "--",
+          email: item.emailAddress || item.email || "--",
+          workCategory: item.workCategory || "Design",
+          workType: Array.isArray(item.workType) ? item.workType : (item.workType ? [item.workType] : ["Concept Drawing"]),
+          address: item.address || item.siteAddress || "--",
+          city: item.city || "--",
+          pincode: item.pincode || "--",
+          state: item.state || "--",
+          projectDetail: item.projectDetail || item.projectDetails || item.notes || "--",
+          expectedBusiness: String(item.expectedBusiness || item.budget || 0),
+          reason: item.lossReason || item.reason || "Closed Lost",
+          lostReason: item.lossReason || item.reason || "Closed Lost",
+          remark: item.lossRemark || item.remark || item.requirement || item.notes || "--",
+          lossDate: formattedDate,
+          createdDate: formattedDate,
+          createdTime: formattedTime,
+          date: item.date || formattedDate,
+          salesPerson: assignee,
+          assignedTo: assignee,
+          assignTo: assignee,
+          leadMode: item.leadMode || item.leadSource || "Business networking",
+          leadSource: item.leadSource || item.leadMode || "Business networking",
+          leadType: item.leadType || "FRESH"
+        };
+
+        map.set(idKey, { ...map.get(idKey), ...processed });
+      });
+
+      setLeads(Array.from(map.values()));
+    } catch (err) {
+      console.error("Error fetching loss leads from API:", err);
+    }
+  }, []);
+
+  React.useEffect(() => {
     fetchBackendLossLeads();
+    const unsubscribe = subscribeToLeadUpdates(() => {
+      fetchBackendLossLeads();
+    });
 
     return () => unsubscribe();
-  }, []);
+  }, [fetchBackendLossLeads]);
 
   const saveLeads = (newLeads) => {
     setLeads(newLeads);
-    try {
-      localStorage.setItem("dss_lost_leads", JSON.stringify(newLeads));
-    } catch (e) {}
   };
 
   // Filter States
@@ -495,19 +524,9 @@ const Lostlead = () => {
       remark: `${reviveModalLead.remark || ""} [Reopened: ${reviveNotes || "Revived lead for fresh negotiation"}]`
     };
 
-    // 1. Remove from dss_lost_leads
     const updatedLost = leads.filter((l) => l.id !== reviveModalLead.id);
     saveLeads(updatedLost);
-
-    // 2. Add to dss_leads (Total Leads Directory)
-    try {
-      const savedTotal = localStorage.getItem("dss_leads");
-      const currentTotal = savedTotal ? JSON.parse(savedTotal) : [];
-      const filteredTotal = currentTotal.filter((l) => l.id !== reviveModalLead.id);
-      localStorage.setItem("dss_leads", JSON.stringify([revivedItem, ...filteredTotal]));
-    } catch (e) {
-      console.error("Error reviving lead to total leads:", e);
-    }
+    notifyLeadChange(revivedItem);
 
     setReviveModalLead(null);
     setReviveNotes("");

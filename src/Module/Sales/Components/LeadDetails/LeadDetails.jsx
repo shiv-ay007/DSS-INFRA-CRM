@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import LeadHeaderBanner from "./LeadHeaderBanner";
 import ClientInfoCard from "./ClientInfoCard";
@@ -6,8 +6,8 @@ import LeadOverviewCard from "./LeadOverviewCard";
 import RequirementAddressCard from "./RequirementAddressCard";
 import FollowupTimelineCard from "./FollowupTimelineCard";
 import EditLeadModal from "./EditLeadModal";
-import { initialTotalLeads } from "../../data/totalLeadsData";
 import { updateLeadInStorage, subscribeToLeadUpdates } from "../../utils/leadStorageUtils";
+import { getLeadByIdApi } from "../../../../services/api";
 
 const LeadDetails = () => {
   const { id } = useParams();
@@ -16,49 +16,56 @@ const LeadDetails = () => {
   const [showFollowupModal, setShowFollowupModal] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  const fetchLeadData = () => {
+  const fetchLeadData = useCallback(async () => {
     // 1. Check location state
-    if (location.state?.lead && (!id || location.state.lead.id === id)) {
+    if (location.state?.lead && (!id || String(location.state.lead.id || location.state.lead._id) === String(id))) {
       setLead(location.state.lead);
       return;
     }
 
-    // 2. Check localStorage keys
-    try {
-      const keys = ["dss_leads", "dss_lead_management_sheet_v1", "dss_assigned_leads", "dss_followup_leads"];
-      for (let key of keys) {
-        const saved = localStorage.getItem(key);
-        if (saved) {
-          const list = JSON.parse(saved);
-          if (Array.isArray(list)) {
-            const found = list.find((item) => String(item.id) === String(id));
-            if (found) {
-              setLead(found);
-              return;
-            }
-          }
+    // 2. Fetch from Backend API
+    if (id) {
+      try {
+        const res = await getLeadByIdApi(id);
+        if (res && res.success && res.data) {
+          const backendLead = res.data.lead || res.data;
+          const dateObj = new Date(backendLead.createdAt || Date.now());
+          const formattedDate = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+          const assignee = backendLead.salesPerson || (typeof backendLead.assignedTo === 'object' ? backendLead.assignedTo?.name : backendLead.assignedTo) || "";
+
+          setLead({
+            id: backendLead.leadId || backendLead._id,
+            leadId: backendLead.leadId || backendLead._id,
+            _id: backendLead._id,
+            clientName: backendLead.clientName || "Client",
+            concernPersonName: backendLead.clientName || "Client",
+            phoneNumber: backendLead.phoneNumber || backendLead.phone || "--",
+            alternateNumber: backendLead.alternateNumber || "--",
+            emailAddress: backendLead.emailAddress || backendLead.email || "--",
+            status: backendLead.leadStatus || backendLead.status || "Warm",
+            leadStatus: backendLead.leadStatus || backendLead.status || "Warm",
+            leadMode: backendLead.leadMode || backendLead.leadSource || "Business networking",
+            workCategory: backendLead.workCategory || "Design",
+            workType: Array.isArray(backendLead.workType) ? backendLead.workType : (backendLead.workType ? [backendLead.workType] : ["Concept Drawing"]),
+            expectedBusiness: String(backendLead.expectedBusiness || backendLead.budget || 0),
+            salesPerson: assignee,
+            createdDate: formattedDate,
+            date: formattedDate,
+            address: backendLead.address || "--",
+            projectDetail: backendLead.projectDetail || backendLead.remark || "",
+            remarkAttachments: backendLead.remarkAttachments || backendLead.attachments || [],
+            attachments: backendLead.remarkAttachments || backendLead.attachments || []
+          });
         }
+      } catch (err) {
+        console.error("Error fetching lead details from API:", err);
       }
-    } catch (err) {
-      console.error("Error reading lead from storage:", err);
     }
-
-    // 3. Fallback search in initial total leads dataset
-    const foundInitial = initialTotalLeads.find((item) => String(item.id) === String(id));
-    if (foundInitial) {
-      setLead(foundInitial);
-      return;
-    }
-
-    // 4. Default fallback item if no ID match
-    if (initialTotalLeads.length > 0) {
-      setLead(initialTotalLeads[0]);
-    }
-  };
+  }, [id, location.state]);
 
   useEffect(() => {
     fetchLeadData();
-  }, [id, location.state]);
+  }, [fetchLeadData]);
 
   // Subscribe to live lead updates across components
   useEffect(() => {
@@ -70,7 +77,7 @@ const LeadDetails = () => {
       }
     });
     return () => unsubscribe();
-  }, [id]);
+  }, [id, fetchLeadData]);
 
   const handleAddRemark = (remarkData) => {
     if (!lead) return;
