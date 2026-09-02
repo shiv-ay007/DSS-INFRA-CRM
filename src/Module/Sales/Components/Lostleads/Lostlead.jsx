@@ -178,8 +178,31 @@ const Lostlead = () => {
       label: "LOST DATE",
       align: "center",
       render: (val, row) => {
-        const dateStr = row.lostDate || val || row.createdDate || row.date || "2026-08-18";
-        const timeStr = row.createdTime || row.lostTime || "11:00 am";
+        const rawDate = row.lostDate || val || row.createdDate || row.createdAt || row.date || Date.now();
+        let dateStr = "--";
+        let timeStr = row.createdTime || row.lostTime || "";
+
+        const str = String(rawDate);
+        if (str.includes(",")) {
+          const parts = str.split(",");
+          dateStr = parts[0].trim();
+          if (!timeStr && parts[1]) {
+            timeStr = parts[1].trim();
+          }
+        } else {
+          dateStr = str;
+        }
+
+        try {
+          const parseTarget = dateStr.includes("/") ? dateStr.split("/").reverse().join("-") : dateStr;
+          const d = new Date(parseTarget);
+          if (!isNaN(d.getTime())) {
+            dateStr = d.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+          }
+        } catch (e) {}
+
+        if (!timeStr) timeStr = "11:00 am";
+
         return (
           <div className="inline-flex flex-col items-center px-2.5 py-1 rounded-lg bg-rose-50 text-rose-900 border border-rose-200/90 shadow-2xs">
             <span className="font-extrabold text-xs whitespace-nowrap">{dateStr}</span>
