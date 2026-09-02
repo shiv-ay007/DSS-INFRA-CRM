@@ -52,14 +52,19 @@ const sanitizeLeadForStorage = (item, key) => {
     }
   });
 
-  // For total leads list (dss_leads), if lead was NOT explicitly assigned, mark unassigned!
+  // For total leads list (dss_leads), preserve explicit assignments
   if (key === "dss_leads") {
     const explicitAssignees = ["Sales TL", "Self", "Rahul Sharma", "Pooja Verma", "Vikram Malhotra", "Ankit Patel", "Sanjay Gupta", "Neha Verma"];
-    const isExplicit =
-      cleaned.isAssigned === true &&
-      (cleaned.assignedDate || cleaned.assignedType || explicitAssignees.includes(cleaned.assignTo) || explicitAssignees.includes(cleaned.salesPerson));
+    const person = (cleaned.assignTo || cleaned.salesPerson || cleaned.assignedTo || "").trim();
+    const hasValidPerson = explicitAssignees.includes(person) || (person && person !== "Unassigned");
+    const isExplicit = cleaned.isAssigned === true || hasValidPerson;
 
-    if (!isExplicit) {
+    if (isExplicit && hasValidPerson) {
+      cleaned.isAssigned = true;
+      cleaned.assignTo = person;
+      cleaned.salesPerson = person;
+      cleaned.assignedTo = person;
+    } else if (!isExplicit) {
       cleaned.isAssigned = false;
       cleaned.assignTo = "";
       cleaned.salesPerson = "";

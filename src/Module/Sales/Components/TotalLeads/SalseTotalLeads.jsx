@@ -173,13 +173,34 @@ const SalseTotalLeads = () => {
               ""
             ).replace(" (Current User)", "").replace("(Current User)", "").trim();
 
-            const explicitExecutiveAssignees = ["Rahul Sharma", "Pooja Verma", "Vikram Malhotra", "Ankit Patel", "Sanjay Gupta", "Neha Verma"];
-            const isExplicitBackendAssign = 
-              backendLead.isAssigned === true && 
-              (!!backendLead.assignedType || explicitExecutiveAssignees.includes(rawPerson));
+            const explicitExecutiveAssignees = ["Sales TL", "Rahul Sharma", "Pooja Verma", "Vikram Malhotra", "Ankit Patel", "Sanjay Gupta", "Neha Verma"];
+            const rawAssignTo = (
+              backendLead.assignTo ||
+              (typeof backendLead.assignedTo === 'object' ? backendLead.assignedTo?.name : backendLead.assignedTo) ||
+              ""
+            ).replace(" (Current User)", "").replace("(Current User)", "").trim();
 
-            const finalPerson = isExplicitBackendAssign ? rawPerson : "";
-            const finalIsAssigned = isExplicitBackendAssign;
+            const rawSalesPerson = (backendLead.salesPerson || "").replace(" (Current User)", "").replace("(Current User)", "").trim();
+
+            let finalPerson = "";
+            let finalIsAssigned = false;
+
+            if (explicitExecutiveAssignees.includes(rawAssignTo)) {
+              finalPerson = rawAssignTo;
+              finalIsAssigned = true;
+            } else if (explicitExecutiveAssignees.includes(rawSalesPerson)) {
+              finalPerson = rawSalesPerson;
+              finalIsAssigned = true;
+            } else if (backendLead.assignedType === "self" || rawAssignTo === "Sales TL" || (backendLead.isAssigned === true && (rawSalesPerson === "Sales TL" || rawAssignTo === "Sales TL"))) {
+              finalPerson = "Sales TL";
+              finalIsAssigned = true;
+            } else if (backendLead.isAssigned === true && rawAssignTo && rawAssignTo !== "Unassigned") {
+              finalPerson = rawAssignTo;
+              finalIsAssigned = true;
+            } else if (rawPerson && rawPerson !== "Unassigned") {
+              finalPerson = rawPerson;
+              finalIsAssigned = true;
+            }
 
             return {
               id: backendLead.leadId || backendLead._id,
@@ -225,40 +246,83 @@ const SalseTotalLeads = () => {
 
           if (apiLeads.length > 0) {
             setLeads((prevLeads) => {
-              const cleanPrev = prevLeads.filter((l) => !l.clientName?.toLowerCase().includes("vikram"));
-              const localLeadMap = new Map(cleanPrev.map((l) => [String(l.id), l]));
+              const cleanPrev = prevLeads || [];
+              const localLeadMap = new Map();
+
+              cleanPrev.forEach((l) => {
+                if (!l) return;
+                if (l.id) localLeadMap.set(String(l.id), l);
+                if (l._id) localLeadMap.set(String(l._id), l);
+                if (l.leadId) localLeadMap.set(String(l.leadId), l);
+                const cleanPhone = String(l.phoneNumber || l.contact || "").replace(/\D/g, "");
+                if (cleanPhone && cleanPhone.length >= 7) {
+                  localLeadMap.set(`phone:${cleanPhone}`, l);
+                }
+              });
 
               const mergedApiLeads = apiLeads.map((apiLead) => {
-                const existingLocal = localLeadMap.get(String(apiLead.id));
+                const cleanPhone = String(apiLead.phoneNumber || apiLead.contact || "").replace(/\D/g, "");
+                const existingLocal =
+                  localLeadMap.get(String(apiLead.id)) ||
+                  localLeadMap.get(String(apiLead._id)) ||
+                  localLeadMap.get(String(apiLead.leadId)) ||
+                  (cleanPhone ? localLeadMap.get(`phone:${cleanPhone}`) : null);
+
                 if (existingLocal) {
-                  if (existingLocal.isAssigned === true) {
-                    return {
-                      ...apiLead,
-                      isAssigned: true,
-                      assignTo: existingLocal.assignTo || existingLocal.salesPerson,
-                      salesPerson: existingLocal.assignTo || existingLocal.salesPerson,
-                      assignedTo: existingLocal.assignTo || existingLocal.salesPerson,
-                      assignedType: existingLocal.assignedType,
-                      assignedBranch: existingLocal.assignedBranch,
-                      assignedDate: existingLocal.assignedDate,
-                      assignedTime: existingLocal.assignedTime,
-                      assignmentRemark: existingLocal.assignmentRemark
-                    };
-                  } else if (existingLocal.isAssigned === false) {
-                    return {
-                      ...apiLead,
-                      isAssigned: false,
-                      assignTo: "",
-                      salesPerson: "",
-                      assignedTo: ""
-                    };
-                  }
+                  const hasLocalAssign = existingLocal.isAssigned === true || (!!existingLocal.assignTo && existingLocal.assignTo !== "Unassigned") || (!!existingLocal.salesPerson && existingLocal.salesPerson !== "Unassigned");
+                  const resolvedAssignee = hasLocalAssign
+                    ? (existingLocal.assignTo || existingLocal.salesPerson || existingLocal.assignedTo)
+                    : (apiLead.salesPerson || apiLead.assignTo);
+
+                  const resolvedIsAssigned = hasLocalAssign || apiLead.isAssigned;
+
+                  const localAtts = existingLocal.remarkAttachments || existingLocal.attachments || [];
+                  const apiAtts = apiLead.remarkAttachments || apiLead.attachments || [];
+                  const mergedAtts = localAtts.length > 0 ? localAtts : apiAtts;
+
+                  return {
+                    ...apiLead,
+                    ...existingLocal,
+                    ...apiLead,
+                    id: apiLead.id || existingLocal.id,
+                    _id: apiLead._id || existingLocal._id,
+                    leadId: apiLead.leadId || existingLocal.leadId || apiLead.id,
+                    isAssigned: resolvedIsAssigned,
+                    assignTo: resolvedIsAssigned ? resolvedAssignee : "",
+                    salesPerson: resolvedIsAssigned ? resolvedAssignee : "",
+                    assignedTo: resolvedIsAssigned ? resolvedAssignee : "",
+                    assignedType: existingLocal.assignedType || apiLead.assignedType,
+                    assignedBranch: existingLocal.assignedBranch || apiLead.assignedBranch,
+                    assignedDate: existingLocal.assignedDate || apiLead.assignedDate,
+                    assignedTime: existingLocal.assignedTime || apiLead.assignedTime,
+                    assignmentRemark: existingLocal.assignmentRemark || apiLead.assignmentRemark,
+                    remarkAttachments: mergedAtts,
+                    attachments: mergedAtts
+                  };
                 }
                 return apiLead;
               });
 
-              const apiIds = new Set(mergedApiLeads.map((l) => String(l.id)));
-              const localOnlyLeads = cleanPrev.filter((l) => !apiIds.has(String(l.id)));
+              const apiIds = new Set();
+              mergedApiLeads.forEach((l) => {
+                if (l.id) apiIds.add(String(l.id));
+                if (l._id) apiIds.add(String(l._id));
+                if (l.leadId) apiIds.add(String(l.leadId));
+                const cleanPhone = String(l.phoneNumber || l.contact || "").replace(/\D/g, "");
+                if (cleanPhone) apiIds.add(`phone:${cleanPhone}`);
+              });
+
+              const localOnlyLeads = cleanPrev.filter((l) => {
+                if (!l) return false;
+                const cleanPhone = String(l.phoneNumber || l.contact || "").replace(/\D/g, "");
+                return (
+                  !apiIds.has(String(l.id)) &&
+                  !apiIds.has(String(l._id)) &&
+                  !apiIds.has(String(l.leadId)) &&
+                  (!cleanPhone || !apiIds.has(`phone:${cleanPhone}`))
+                );
+              });
+
               const combined = [...mergedApiLeads, ...localOnlyLeads];
               try { localStorage.setItem("dss_leads", JSON.stringify(combined)); } catch (e) {}
               return combined;
@@ -573,7 +637,6 @@ const SalseTotalLeads = () => {
     setAssignModalLead(null);
     setAssignmentRemark("");
     setAssignmentFiles([]);
-    navigate("/sales/leads/assigned");
   };
 
   // Table Column Configuration matching AddLead form fields in exact sequence
@@ -608,20 +671,31 @@ const SalseTotalLeads = () => {
               </svg>
             </button>
 
-            {/* Assign Lead Icon Button (ONLY SHOWN FOR UNASSIGNED LEADS ON 'ALL' TAB) */}
-            {filterScope?.toUpperCase() === "ALL" && !isAssigned && (
+            {/* Assign / Re-assign Lead Icon Button (Available on ALL tab) */}
+            {filterScope?.toUpperCase() === "ALL" && (
               <button
                 type="button"
                 onClick={() => {
-                  setAssignType("executive");
-                  setSelectedExecutive("Rahul Sharma");
-                  setExecutiveBranch("Noida Branch");
+                  const currentAssignee = row.assignTo || row.assignedTo || row.salesPerson;
+                  const isSelf = currentAssignee?.toLowerCase().includes("tl") || currentAssignee?.toLowerCase().includes("self");
+                  setAssignType(isSelf ? "self" : "executive");
+                  if (!isSelf && currentAssignee && currentAssignee !== "Unassigned") {
+                    setSelectedExecutive(currentAssignee);
+                    setExecutiveBranch(executiveBranchMap[currentAssignee] || "Noida Branch");
+                  } else {
+                    setSelectedExecutive("Rahul Sharma");
+                    setExecutiveBranch("Noida Branch");
+                  }
                   setAssignModalLead(row);
                 }}
-                className="w-7 h-7 rounded-lg border border-blue-200 bg-blue-50/70 text-blue-600 hover:bg-blue-100 hover:border-blue-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
-                title="Assign Lead"
+                className={`w-7 h-7 rounded-lg border flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95 ${
+                  isAssigned
+                    ? "border-amber-200 bg-amber-50/70 text-amber-600 hover:bg-amber-100 hover:border-amber-300"
+                    : "border-blue-200 bg-blue-50/70 text-blue-600 hover:bg-blue-100 hover:border-blue-300"
+                }`}
+                title={isAssigned ? "Re-assign Lead" : "Assign Lead"}
               >
-                <FaUserPlus className="w-3.5 h-3.5" />
+                {isAssigned ? <HiOutlineUsers className="w-3.5 h-3.5" /> : <FaUserPlus className="w-3.5 h-3.5" />}
               </button>
             )}
           </div>
