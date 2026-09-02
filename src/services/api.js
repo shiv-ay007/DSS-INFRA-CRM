@@ -150,6 +150,61 @@ export const assignLeadApi = async (leadId, assignData) => {
   }
 };
 
+export const getLossLeadsApi = async (params = {}) => {
+  try {
+    const finalParams = { limit: 1000, ...params };
+    const queryParams = new URLSearchParams(finalParams).toString();
+    const response = await fetch(`${API_BASE_URL}/leads/loss?${queryParams}`, {
+      headers: getAuthHeaders()
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("API getLossLeadsApi error:", error);
+    return { success: false, message: error.message };
+  }
+};
+
+export const getFollowupLeadsApi = async (params = {}) => {
+  try {
+    const finalParams = { limit: 1000, ...params };
+    const queryParams = new URLSearchParams(finalParams).toString();
+    const response = await fetch(`${API_BASE_URL}/leads/followup-leads?${queryParams}`, {
+      headers: getAuthHeaders()
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("API getFollowupLeadsApi error:", error);
+    return { success: false, message: error.message };
+  }
+};
+
+export const markLeadAsLossApi = async (leadId, lossData = {}) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/leads/${leadId}/loss`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(lossData)
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("API markLeadAsLossApi error:", error);
+    return { success: false, message: error.message };
+  }
+};
+
+export const deleteLeadApi = async (leadId) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/leads/${leadId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders()
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("API deleteLeadApi error:", error);
+    return { success: false, message: error.message };
+  }
+};
+
 // ================= FOLLOWUP APIs =================
 export const addFollowupApi = async (followupData) => {
   try {
@@ -273,6 +328,186 @@ export const getUserByIdApi = async (userId) => {
     return await response.json();
   } catch (error) {
     console.error("API getUserByIdApi error:", error);
+    return { success: false, message: error.message };
+  }
+};
+
+export const updateUserRoleApi = async (userId, role) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/users/${userId}/role`, {
+      method: "PATCH",
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ role })
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("API updateUserRoleApi error:", error);
+    return { success: false, message: error.message };
+  }
+};
+
+export const deleteUserApi = async (userId) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/users/${userId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders()
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("API deleteUserApi error:", error);
+    return { success: false, message: error.message };
+  }
+};
+
+// ================= LOSS LEAD DIRECT APIs =================
+export const getAllLossLeadsApi = async (params = {}) => {
+  try {
+    const finalParams = { limit: 1000, ...params };
+    const queryParams = new URLSearchParams(finalParams).toString();
+    const response = await fetch(`${API_BASE_URL}/loss-leads?${queryParams}`, {
+      headers: getAuthHeaders()
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("API getAllLossLeadsApi error:", error);
+    return { success: false, message: error.message };
+  }
+};
+
+export const createLossLeadApi = async (lossData) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/loss-leads`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(lossData)
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("API createLossLeadApi error:", error);
+    return { success: false, message: error.message };
+  }
+};
+
+export const getLossLeadByIdApi = async (id) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/loss-leads/${id}`, {
+      headers: getAuthHeaders()
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("API getLossLeadByIdApi error:", error);
+    return { success: false, message: error.message };
+  }
+};
+
+export const updateLossLeadApi = async (id, updateData) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/loss-leads/${id}`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(updateData)
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("API updateLossLeadApi error:", error);
+    return { success: false, message: error.message };
+  }
+};
+
+export const deleteLossLeadApi = async (id) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/loss-leads/${id}`, {
+      method: "DELETE",
+      headers: getAuthHeaders()
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("API deleteLossLeadApi error:", error);
+    return { success: false, message: error.message };
+  }
+};
+
+// ================= FOLLOWUP LIST APIs =================
+export const getAllFollowupsApi = async (params = {}) => {
+  try {
+    const finalParams = { limit: 1000, ...params };
+    const queryParams = new URLSearchParams(finalParams).toString();
+    const response = await fetch(`${API_BASE_URL}/followups?${queryParams}`, {
+      headers: getAuthHeaders()
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("API getAllFollowupsApi error:", error);
+    return { success: false, message: error.message };
+  }
+};
+
+// ================= ASSIGNED LEAD DIRECT APIs =================
+export const getAllAssignedLeadsApi = async (params = {}) => {
+  try {
+    const finalParams = { limit: 1000, ...params };
+    const queryParams = new URLSearchParams(finalParams).toString();
+    const response = await fetch(`${API_BASE_URL}/assigned-leads?${queryParams}`, {
+      headers: getAuthHeaders()
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("API getAllAssignedLeadsApi error:", error);
+    return { success: false, message: error.message };
+  }
+};
+
+export const createAssignedLeadApi = async (assignedData) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/assigned-leads`, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(assignedData)
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("API createAssignedLeadApi error:", error);
+    return { success: false, message: error.message };
+  }
+};
+
+export const updateAssignedLeadApi = async (id, updateData) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/assigned-leads/${id}`, {
+      method: "PUT",
+      headers: getAuthHeaders(),
+      body: JSON.stringify(updateData)
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("API updateAssignedLeadApi error:", error);
+    return { success: false, message: error.message };
+  }
+};
+
+export const deleteAssignedLeadApi = async (id) => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/assigned-leads/${id}`, {
+      method: "DELETE",
+      headers: getAuthHeaders()
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("API deleteAssignedLeadApi error:", error);
+    return { success: false, message: error.message };
+  }
+};
+
+// ================= REFRESH TOKEN API =================
+export const refreshTokenApi = async () => {
+  try {
+    const response = await fetch(`${API_BASE_URL}/auth/refresh-token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" }
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("API refreshTokenApi error:", error);
     return { success: false, message: error.message };
   }
 };

@@ -8,6 +8,7 @@ import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
 import { initialLeadsData } from "../../data/leadManagementData";
 import { FaUserPlus, FaUsers, FaUser } from "react-icons/fa";
 import { subscribeToLeadUpdates, getStoredLeads, updateLeadInStorage } from "../../utils/leadStorageUtils";
+import { markLeadAsLossApi, createLossLeadApi } from "../../../../services/api";
 import LeadKpiSlider from "./LeadKpiSlider";
 import SalesTransferModal from "./SalesTransferModal";
 
@@ -58,6 +59,58 @@ const Lead = () => {
       setLeads(getStoredLeads("dss_lead_management_sheet_v1"));
     };
     const unsubscribe = subscribeToLeadUpdates(handleRefresh);
+
+    const fetchBackendLeads = async () => {
+      try {
+        const res = await getAllLeadsApi();
+        if (res && res.success && res.data && res.data.leads) {
+          const activeBackendLeads = res.data.leads
+            .filter((l) => !l.isLoss && l.leadStatus !== "CLOSED_LOST" && l.status !== "CLOSED_LOST")
+            .map((backendLead) => {
+              const dateObj = new Date(backendLead.createdAt || Date.now());
+              const formattedDate = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+              const assignee = backendLead.salesPerson || (typeof backendLead.assignedTo === 'object' ? backendLead.assignedTo?.name : backendLead.assignedTo) || "Sales TL";
+
+              return {
+                id: backendLead.leadId || backendLead._id,
+                leadId: backendLead.leadId || backendLead._id,
+                _id: backendLead._id,
+                clientName: backendLead.clientName || "Client",
+                concernPersonName: backendLead.clientName || "Client",
+                phoneNumber: backendLead.phoneNumber || backendLead.phone || "--",
+                alternateNumber: backendLead.alternateNumber || "--",
+                emailAddress: backendLead.emailAddress || backendLead.email || "--",
+                status: backendLead.leadStatus || backendLead.status || "Warm",
+                leadStatus: backendLead.leadStatus || backendLead.status || "Warm",
+                leadMode: backendLead.leadMode || backendLead.leadSource || "Business networking",
+                workCategory: backendLead.workCategory || "Design",
+                workType: Array.isArray(backendLead.workType) ? backendLead.workType : (backendLead.workType ? [backendLead.workType] : ["Concept Drawing"]),
+                expectedBusiness: String(backendLead.expectedBusiness || backendLead.budget || 0),
+                salesPerson: assignee,
+                date: formattedDate,
+                createdDate: formattedDate,
+                address: backendLead.address || "--",
+                projectDetail: backendLead.projectDetail || backendLead.remark || ""
+              };
+            });
+
+          setLeads((prev) => {
+            const map = new Map(prev.map((l) => [String(l.id || l.leadId), l]));
+            activeBackendLeads.forEach((bl) => map.set(String(bl.id), { ...map.get(String(bl.id)), ...bl }));
+            const merged = Array.from(map.values());
+            try {
+              localStorage.setItem("dss_lead_management_sheet_v1", JSON.stringify(merged));
+            } catch (e) {}
+            return merged;
+          });
+        }
+      } catch (err) {
+        console.error("Error fetching leads for Lead Management Sheet:", err);
+      }
+    };
+
+    fetchBackendLeads();
+
     return () => unsubscribe();
   }, []);
 
@@ -484,7 +537,7 @@ const Lead = () => {
   const [transferInitialRemark, setTransferInitialRemark] = useState("");
 
   // Handler to move lead to Lost Leads or open pre-filled Sales Transfer Form
-  const handleSendToSalesManagement = () => {
+  const handleSendToSalesManagement = async () => {
     if (!statusModalLead) return;
 
     if (!selectedClientStatus) {
@@ -548,6 +601,30 @@ const Lead = () => {
         const currentLost = savedLost ? JSON.parse(savedLost) : [];
         const filteredLost = currentLost.filter(l => l.id !== statusModalLead.id);
         localStorage.setItem("dss_lost_leads", JSON.stringify([lostLeadData, ...filteredLost]));
+
+        // Sync with MongoDB backend LossLead collection
+        const targetId = statusModalLead._id || statusModalLead.id || statusModalLead.leadId;
+        const lossPayload = {
+          leadId: targetId,
+          clientName: statusModalLead.clientName || statusModalLead.concernPersonName,
+          phoneNumber: statusModalLead.phoneNumber || statusModalLead.contact,
+          phone: statusModalLead.phoneNumber || statusModalLead.contact,
+          emailAddress: statusModalLead.emailAddress || statusModalLead.email,
+          email: statusModalLead.emailAddress || statusModalLead.email,
+          workCategory: statusModalLead.workCategory,
+          workType: statusModalLead.workType,
+          expectedBusiness: statusModalLead.expectedBusiness,
+          lossReason: finalReason,
+          reason: finalReason,
+          lossRemark: statusRemark || statusModalLead.remark || "",
+          remark: statusRemark || statusModalLead.remark || ""
+        };
+
+        if (targetId) {
+          await markLeadAsLossApi(targetId, lossPayload);
+        } else {
+          await createLossLeadApi(lossPayload);
+        }
       } catch (e) {
         console.error("Error saving to lost leads:", e);
       }

@@ -24,6 +24,7 @@ const teamMembers = [
 ];
 
 import { subscribeToLeadUpdates, getStoredLeads } from "../../utils/leadStorageUtils";
+import { getLossLeadsApi } from "../../../../services/api";
 
 const Lostlead = () => {
   const [leads, setLeads] = useState(() => {
@@ -35,6 +36,57 @@ const Lostlead = () => {
       setLeads(getStoredLeads("dss_lost_leads"));
     };
     const unsubscribe = subscribeToLeadUpdates(handleRefresh);
+
+    const fetchBackendLossLeads = async () => {
+      try {
+        const res = await getLossLeadsApi();
+        if (res && res.success && res.data) {
+          const rawLossLeads = res.data.leads || res.data.lossLeads || res.data.data || [];
+          if (Array.isArray(rawLossLeads) && rawLossLeads.length > 0) {
+            const apiLossLeads = rawLossLeads.map((item) => {
+              const dateObj = new Date(item.lossDate || item.createdAt || Date.now());
+              const formattedDate = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+              const assignee = item.salesPerson || (typeof item.assignedTo === 'object' ? item.assignedTo?.name : item.assignedTo) || "Sales TL";
+
+              return {
+                id: item.leadId || item._id,
+                leadId: item.leadId || item._id,
+                _id: item._id,
+                clientName: item.clientName || "Client",
+                phoneNumber: item.phoneNumber || item.phone || "--",
+                alternateNumber: item.alternateNumber || "--",
+                emailAddress: item.emailAddress || item.email || "--",
+                workCategory: item.workCategory || "Design",
+                workType: Array.isArray(item.workType) ? item.workType : (item.workType ? [item.workType] : ["Concept Drawing"]),
+                expectedBusiness: String(item.expectedBusiness || item.budget || 0),
+                reason: item.lossReason || item.reason || "Closed Lost",
+                remark: item.lossRemark || item.remark || "",
+                lossDate: formattedDate,
+                date: item.date || formattedDate,
+                salesPerson: assignee,
+                leadMode: item.leadMode || item.leadSource || "Business networking",
+                leadType: item.leadType || "FRESH"
+              };
+            });
+
+            setLeads((prev) => {
+              const map = new Map(prev.map(l => [String(l.id || l.leadId), l]));
+              apiLossLeads.forEach(al => map.set(String(al.id), { ...map.get(String(al.id)), ...al }));
+              const merged = Array.from(map.values());
+              try {
+                localStorage.setItem("dss_lost_leads", JSON.stringify(merged));
+              } catch (e) {}
+              return merged;
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching loss leads from API:", err);
+      }
+    };
+
+    fetchBackendLossLeads();
+
     return () => unsubscribe();
   }, []);
 

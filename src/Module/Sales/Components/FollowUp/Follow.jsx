@@ -20,7 +20,7 @@ import {
 } from "../../data/followUpData";
 
 import { subscribeToLeadUpdates, updateLeadInStorage } from "../../utils/leadStorageUtils";
-import { addFollowupApi } from "../../../../services/api";
+import { addFollowupApi, getFollowupLeadsApi, markLeadAsLossApi, createLossLeadApi } from "../../../../services/api";
 
 const leadModesList = [
   "ALL",
@@ -41,34 +41,56 @@ const notInterestedReasonsList = [
 const Follow = () => {
   const navigate = useNavigate();
 
+  const isValidScheduledFollowup = (l) => {
+    if (!l) return false;
+    const hasHistory = Array.isArray(l.followupHistory) && l.followupHistory.length > 0;
+    const isExplicitScheduled =
+      l.isFollowupScheduled === true ||
+      l.followupScheduled === true ||
+      (l.nextFollowupDate && l.nextFollowupDate !== "--" && l.nextFollowupDate !== "");
+    return hasHistory || isExplicitScheduled;
+  };
+
   const loadLeadsData = React.useCallback(() => {
     try {
       const savedScheduled = localStorage.getItem("dss_scheduled_leads_sheet");
+      const savedFollowup = localStorage.getItem("dss_followup_leads");
       const savedMgmt = localStorage.getItem("dss_lead_management_sheet_v1");
 
       const scheduledLeads = savedScheduled ? JSON.parse(savedScheduled) : [];
+      const followupLeads = savedFollowup ? JSON.parse(savedFollowup) : [];
       const mgmtLeads = savedMgmt ? JSON.parse(savedMgmt) : [];
 
       const mergedMap = new Map();
 
       if (Array.isArray(mgmtLeads)) {
         mgmtLeads.forEach((l) => {
-          if (l.nextFollowupDate || (l.followupHistory && l.followupHistory.length > 0)) {
-            mergedMap.set(l.id, l);
+          if (isValidScheduledFollowup(l)) {
+            mergedMap.set(String(l.id || l.leadId), l);
           }
         });
       }
 
       if (Array.isArray(scheduledLeads)) {
         scheduledLeads.forEach((l) => {
-          mergedMap.set(l.id, l);
+          if (isValidScheduledFollowup(l)) {
+            mergedMap.set(String(l.id || l.leadId), l);
+          }
+        });
+      }
+
+      if (Array.isArray(followupLeads)) {
+        followupLeads.forEach((l) => {
+          if (isValidScheduledFollowup(l)) {
+            mergedMap.set(String(l.id || l.leadId), l);
+          }
         });
       }
 
       const mergedList = Array.from(mergedMap.values());
-      return mergedList.length > 0 ? mergedList : initialScheduledLeads;
+      return mergedList;
     } catch (e) {
-      return initialScheduledLeads;
+      return [];
     }
   }, []);
 
@@ -80,6 +102,54 @@ const Follow = () => {
       setLeads(loadLeadsData());
     };
     const unsubscribe = subscribeToLeadUpdates(handleRefresh);
+
+    const fetchBackendFollowups = async () => {
+      try {
+        const res = await getFollowupLeadsApi();
+        if (res && res.success && res.data && res.data.leads) {
+          const apiFollowups = res.data.leads.map((backendLead) => {
+            const dateObj = new Date(backendLead.createdAt || Date.now());
+            const formattedDate = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+            const assignee = backendLead.salesPerson || (typeof backendLead.assignedTo === 'object' ? backendLead.assignedTo?.name : backendLead.assignedTo) || "Sales TL";
+
+            return {
+              id: backendLead.leadId || backendLead._id,
+              leadId: backendLead.leadId || backendLead._id,
+              _id: backendLead._id,
+              clientName: backendLead.clientName || "Client",
+              concernPersonName: backendLead.clientName || "Client",
+              phoneNumber: backendLead.phoneNumber || backendLead.phone || "--",
+              alternateNumber: backendLead.alternateNumber || "--",
+              emailAddress: backendLead.emailAddress || backendLead.email || "--",
+              status: backendLead.leadStatus || backendLead.status || "Warm",
+              leadStatus: backendLead.leadStatus || backendLead.status || "Warm",
+              leadMode: backendLead.leadMode || backendLead.leadSource || "Business networking",
+              workCategory: backendLead.workCategory || "Design",
+              workType: Array.isArray(backendLead.workType) ? backendLead.workType : (backendLead.workType ? [backendLead.workType] : ["Concept Drawing"]),
+              expectedBusiness: String(backendLead.expectedBusiness || backendLead.budget || 0),
+              salesPerson: assignee,
+              createdDate: formattedDate,
+              nextFollowupDate: backendLead.nextFollowupDate || "",
+              followupTime: backendLead.followupTime || "",
+              followupRemark: backendLead.followupRemark || backendLead.remark || ""
+            };
+          });
+
+          if (apiFollowups.length > 0) {
+            setLeads((prev) => {
+              const map = new Map(prev.map(l => [String(l.id || l.leadId), l]));
+              apiFollowups.forEach(af => map.set(String(af.id), { ...map.get(String(af.id)), ...af }));
+              return Array.from(map.values());
+            });
+          }
+        }
+      } catch (err) {
+        console.error("Error fetching followup leads from API:", err);
+      }
+    };
+
+    fetchBackendFollowups();
+
     return () => unsubscribe();
   }, [loadLeadsData]);
 
@@ -149,7 +219,7 @@ const Follow = () => {
   const [statusRemarkAttachments, setStatusRemarkAttachments] = useState([]);
 
   // Handler to move lead to Lead Management or Lost Leads based on Client Status
-  const handleSendToSalesManagement = () => {
+  const handleSendToSalesManagement = async () => {
     if (!statusModalLead) return;
 
     if (!selectedClientStatus) {
@@ -225,7 +295,33 @@ const Follow = () => {
         const currentLost = savedLost ? JSON.parse(savedLost) : [];
         const filteredLost = currentLost.filter(l => l.id !== statusModalLead.id);
         localStorage.setItem("dss_lost_leads", JSON.stringify([lostLeadData, ...filteredLost]));
-      } catch (e) {}
+
+        // Sync with MongoDB backend LossLead collection
+        const targetId = statusModalLead._id || statusModalLead.id || statusModalLead.leadId;
+        const lossPayload = {
+          leadId: targetId,
+          clientName: statusModalLead.clientName || statusModalLead.concernPersonName,
+          phoneNumber: statusModalLead.phoneNumber || statusModalLead.contact,
+          phone: statusModalLead.phoneNumber || statusModalLead.contact,
+          emailAddress: statusModalLead.emailAddress || statusModalLead.email,
+          email: statusModalLead.emailAddress || statusModalLead.email,
+          workCategory: statusModalLead.workCategory,
+          workType: statusModalLead.workType,
+          expectedBusiness: statusModalLead.expectedBusiness,
+          lossReason: finalReason,
+          reason: finalReason,
+          lossRemark: statusRemark || statusModalLead.remark || "",
+          remark: statusRemark || statusModalLead.remark || ""
+        };
+
+        if (targetId) {
+          await markLeadAsLossApi(targetId, lossPayload);
+        } else {
+          await createLossLeadApi(lossPayload);
+        }
+      } catch (e) {
+        console.error("Error saving to lost leads:", e);
+      }
 
       // Remove from followup leads
       const filtered = leads.filter(l => l.id !== statusModalLead.id);

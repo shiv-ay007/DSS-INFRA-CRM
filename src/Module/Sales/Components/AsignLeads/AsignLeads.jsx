@@ -11,7 +11,7 @@ import { FaUserPlus, FaSearch, FaFilter, FaUserCheck, FaUser, FaRegCheckCircle }
 import { HiOutlineUsers } from "react-icons/hi";
 
 import { subscribeToLeadUpdates, getStoredLeads, updateLeadInStorage } from "../../utils/leadStorageUtils";
-import { updateLeadApi, getAllLeadsApi } from "../../../../services/api";
+import { updateLeadApi, getAllLeadsApi, markLeadAsLossApi, createLossLeadApi, getAllAssignedLeadsApi, createAssignedLeadApi, updateAssignedLeadApi } from "../../../../services/api";
 
 const leadModesList = [
   "ALL",
@@ -45,55 +45,83 @@ const AsignLeads = () => {
 
     const fetchBackendAssignedLeads = async () => {
       try {
-        const res = await getAllLeadsApi();
-        if (res && res.success && res.data && res.data.leads) {
-          const stored = getStoredLeads("dss_assigned_leads");
-          const backendAssigned = res.data.leads.map((backendLead) => {
-            const dateObj = new Date(backendLead.createdAt || Date.now());
-            const formattedDate = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
-            const formattedTime = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
-            const assignee = backendLead.salesPerson || (typeof backendLead.assignedTo === "object" ? backendLead.assignedTo?.name : backendLead.assignedTo) || "Sales TL";
+        const res = await getAllAssignedLeadsApi();
+        if (res && res.success && res.data) {
+          const rawAssigned = res.data.assignedLeads || res.data.leads || res.data.data || [];
+          if (Array.isArray(rawAssigned) && rawAssigned.length > 0) {
+            const backendAssigned = rawAssigned.map((backendLead) => {
+              const dateObj = new Date(backendLead.assignedDate || backendLead.createdAt || Date.now());
+              const formattedDate = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+              const formattedTime = dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+              const explicitExecutiveAssignees = ["Rahul Sharma", "Pooja Verma", "Vikram Malhotra", "Ankit Patel", "Sanjay Gupta", "Neha Verma"];
+              const rawAssignTo = (
+                backendLead.assignTo ||
+                (typeof backendLead.assignedTo === "object" ? backendLead.assignedTo?.name : backendLead.assignedTo) ||
+                ""
+              ).replace(" (Current User)", "").replace("(Current User)", "").trim();
 
-            return {
-              id: backendLead._id,
-              clientName: backendLead.clientName || "Client",
-              concernPersonName: backendLead.clientName || "Client",
-              phoneNumber: backendLead.phoneNumber || backendLead.phone || "--",
-              contact: backendLead.phoneNumber || backendLead.phone || "--",
-              alternateNumber: backendLead.alternateNumber || "--",
-              emailAddress: backendLead.emailAddress || backendLead.email || "--",
-              email: backendLead.emailAddress || backendLead.email || "--",
-              status: backendLead.leadStatus || backendLead.status || "Warm",
-              leadStatus: backendLead.leadStatus || backendLead.status || "Warm",
-              leadType: backendLead.leadType || "FRESH",
-              leadMode: backendLead.leadMode || backendLead.leadSource || "DIRECT",
-              leadSource: backendLead.leadSource || backendLead.leadMode || "DIRECT",
-              workCategory: backendLead.workCategory || "Design",
-              workType: backendLead.workType || [],
-              address: backendLead.address || "--",
-              city: backendLead.city || "--",
-              pincode: backendLead.pincode || "--",
-              state: backendLead.state || "--",
-              expectedBusiness: backendLead.expectedBusiness || backendLead.budget || 0,
-              assignTo: assignee,
-              salesPerson: assignee,
-              assignedTo: assignee,
-              assignedDate: formattedDate,
-              assignedTime: formattedTime,
-              remark: backendLead.remark || backendLead.requirement || "--"
-            };
-          });
+              const rawSalesPerson = (backendLead.salesPerson || "").replace(" (Current User)", "").replace("(Current User)", "").trim();
 
-          const merged = [...stored];
-          backendAssigned.forEach((bLead) => {
-            if (!merged.some((m) => String(m.id) === String(bLead.id))) {
-              merged.push(bLead);
-            }
-          });
-          setLeads(merged);
-          try {
-            localStorage.setItem("dss_assigned_leads", JSON.stringify(merged));
-          } catch (e) {}
+              let assignee = "";
+              let isExplicitAssigned = false;
+
+              if (explicitExecutiveAssignees.includes(rawAssignTo)) {
+                assignee = rawAssignTo;
+                isExplicitAssigned = true;
+              } else if (explicitExecutiveAssignees.includes(rawSalesPerson)) {
+                assignee = rawSalesPerson;
+                isExplicitAssigned = true;
+              } else if (backendLead.assignedType === "self" || rawAssignTo === "Sales TL" || (backendLead.isAssigned === true && rawSalesPerson === "Sales TL" && !!backendLead.assignedType)) {
+                assignee = "Sales TL";
+                isExplicitAssigned = true;
+              } else if (backendLead.isAssigned === true && rawAssignTo && rawAssignTo !== "Unassigned") {
+                assignee = rawAssignTo;
+                isExplicitAssigned = true;
+              }
+
+              return {
+                id: backendLead.leadId || backendLead._id,
+                leadId: backendLead.leadId || backendLead._id,
+                _id: backendLead._id,
+                clientName: backendLead.clientName || "Client",
+                concernPersonName: backendLead.clientName || "Client",
+                phoneNumber: backendLead.phoneNumber || backendLead.phone || "--",
+                contact: backendLead.phoneNumber || backendLead.phone || "--",
+                alternateNumber: backendLead.alternateNumber || "--",
+                emailAddress: backendLead.emailAddress || backendLead.email || "--",
+                email: backendLead.emailAddress || backendLead.email || "--",
+                status: backendLead.leadStatus || backendLead.status || "Warm",
+                leadStatus: backendLead.leadStatus || backendLead.status || "Warm",
+                leadType: backendLead.leadType || "FRESH",
+                leadMode: backendLead.leadMode || backendLead.leadSource || "DIRECT",
+                leadSource: backendLead.leadSource || backendLead.leadMode || "DIRECT",
+                workCategory: backendLead.workCategory || "Design",
+                workType: Array.isArray(backendLead.workType) ? backendLead.workType : (backendLead.workType ? [backendLead.workType] : []),
+                address: backendLead.address || "--",
+                city: backendLead.city || "--",
+                pincode: backendLead.pincode || "--",
+                state: backendLead.state || "--",
+                expectedBusiness: String(backendLead.expectedBusiness || backendLead.budget || 0),
+                isAssigned: isExplicitAssigned,
+                assignTo: assignee,
+                salesPerson: assignee,
+                assignedTo: assignee,
+                assignedDate: formattedDate,
+                assignedTime: formattedTime,
+                remark: backendLead.remark || backendLead.notes || "--"
+              };
+            });
+
+            setLeads((prev) => {
+              const map = new Map(prev.map((l) => [String(l.id || l.leadId), l]));
+              backendAssigned.forEach((al) => map.set(String(al.id), { ...al }));
+              const merged = Array.from(map.values());
+              try {
+                localStorage.setItem("dss_assigned_leads", JSON.stringify(merged));
+              } catch (e) {}
+              return merged;
+            });
+          }
         }
       } catch (e) {
         console.error("Error fetching backend assigned leads:", e);
@@ -172,7 +200,7 @@ const AsignLeads = () => {
   };
 
   // Handler to move lead to Lead Management (Followup) or Lost Leads based on Client Status
-  const handleSendToSalesManagement = () => {
+  const handleSendToSalesManagement = async () => {
     if (!statusModalLead) return;
 
     if (!selectedClientStatus) {
@@ -207,7 +235,7 @@ const AsignLeads = () => {
     const targetPath = selectedClientStatus === "INTERESTED" ? "/sales/leads/all" : "/sales/leads/lost";
 
     if (selectedClientStatus === "INTERESTED") {
-      // 1. Move to Lead Management (dss_lead_management_sheet_v1) & Followup Leads
+      // 1. Move to Lead Management (dss_lead_management_sheet_v1) ONLY
       const leadData = {
         ...statusModalLead,
         leadStatus: "Hot",
@@ -216,30 +244,35 @@ const AsignLeads = () => {
         remark: statusRemark || statusModalLead.remark || "",
         remarkAttachments: processedAttachments.length > 0 ? processedAttachments : (statusModalLead.remarkAttachments || []),
         attachments: processedAttachments.length > 0 ? processedAttachments : (statusModalLead.attachments || []),
-        movedToFollowupDate: formattedDate,
-        movedToFollowupTime: formattedTime,
-        nextFollowupDate: formattedDate,
-        nextFollowupTime: "11:00 am"
+        movedToLeadManagementDate: formattedDate,
+        movedToLeadManagementTime: formattedTime,
+        nextFollowupDate: "",
+        nextFollowupTime: "",
+        isFollowupScheduled: false
       };
 
       try {
-        // Save to Lead Management Sheet
+        // Save to Lead Management Sheet ONLY
         const savedMgmt = localStorage.getItem("dss_lead_management_sheet_v1");
         const currentMgmt = savedMgmt ? JSON.parse(savedMgmt) : [];
-        const filteredMgmt = currentMgmt.filter(l => l.id !== statusModalLead.id);
+        const filteredMgmt = currentMgmt.filter(l => String(l.id) !== String(statusModalLead.id));
         localStorage.setItem("dss_lead_management_sheet_v1", JSON.stringify([leadData, ...filteredMgmt]));
 
-        // Sync to Followup Leads
+        // Remove from Followup Leads until scheduled explicitly
         const savedFollowup = localStorage.getItem("dss_followup_leads");
-        const currentFollowup = savedFollowup ? JSON.parse(savedFollowup) : [];
-        const filteredFollowup = currentFollowup.filter(l => l.id !== statusModalLead.id);
-        localStorage.setItem("dss_followup_leads", JSON.stringify([leadData, ...filteredFollowup]));
+        if (savedFollowup) {
+          const currentFollowup = JSON.parse(savedFollowup);
+          const filteredFollowup = currentFollowup.filter(l => String(l.id) !== String(statusModalLead.id));
+          localStorage.setItem("dss_followup_leads", JSON.stringify(filteredFollowup));
+        }
 
-        // Sync to Scheduled Sheet
+        // Remove from Scheduled Sheet until scheduled explicitly
         const savedScheduled = localStorage.getItem("dss_scheduled_leads_sheet");
-        const currentScheduled = savedScheduled ? JSON.parse(savedScheduled) : [];
-        const filteredScheduled = currentScheduled.filter(l => l.id !== statusModalLead.id);
-        localStorage.setItem("dss_scheduled_leads_sheet", JSON.stringify([leadData, ...filteredScheduled]));
+        if (savedScheduled) {
+          const currentScheduled = JSON.parse(savedScheduled);
+          const filteredScheduled = currentScheduled.filter(l => String(l.id) !== String(statusModalLead.id));
+          localStorage.setItem("dss_scheduled_leads_sheet", JSON.stringify(filteredScheduled));
+        }
       } catch (e) {
         console.error("Error saving lead to Lead Management:", e);
       }
@@ -265,6 +298,30 @@ const AsignLeads = () => {
         const currentLost = savedLost ? JSON.parse(savedLost) : [];
         const filteredLost = currentLost.filter(l => l.id !== statusModalLead.id);
         localStorage.setItem("dss_lost_leads", JSON.stringify([lostLeadData, ...filteredLost]));
+
+        // Sync with MongoDB backend LossLead collection
+        const targetId = statusModalLead._id || statusModalLead.id || statusModalLead.leadId;
+        const lossPayload = {
+          leadId: targetId,
+          clientName: statusModalLead.clientName || statusModalLead.concernPersonName,
+          phoneNumber: statusModalLead.phoneNumber || statusModalLead.contact,
+          phone: statusModalLead.phoneNumber || statusModalLead.contact,
+          emailAddress: statusModalLead.emailAddress || statusModalLead.email,
+          email: statusModalLead.emailAddress || statusModalLead.email,
+          workCategory: statusModalLead.workCategory,
+          workType: statusModalLead.workType,
+          expectedBusiness: statusModalLead.expectedBusiness,
+          lossReason: finalReason,
+          reason: finalReason,
+          lossRemark: statusRemark || statusModalLead.remark || "",
+          remark: statusRemark || statusModalLead.remark || ""
+        };
+
+        if (targetId) {
+          await markLeadAsLossApi(targetId, lossPayload);
+        } else {
+          await createLossLeadApi(lossPayload);
+        }
       } catch (e) {
         console.error("Error saving to lost leads:", e);
       }
@@ -468,7 +525,8 @@ const AsignLeads = () => {
       label: "ASSIGNED TO",
       align: "center",
       render: (val, row) => {
-        const assignee = row.assignTo || row.assignedTo || row.salesPerson;
+        const rawAssignee = row.assignTo || row.assignedTo || row.salesPerson || "";
+        const assignee = String(rawAssignee).replace(" (Current User)", "").replace("(Current User)", "").trim();
         const isAssigned = row.isAssigned || (assignee && assignee !== "Unassigned" && assignee !== "");
 
         if (!isAssigned || !assignee || assignee === "Unassigned") {
@@ -735,14 +793,36 @@ const AsignLeads = () => {
     saveLeads(updated);
     updateLeadInStorage(updatedLeadData);
 
-    if (reassignModalLead.id && !String(reassignModalLead.id).startsWith("LM-")) {
-      try {
-        await updateLeadApi(reassignModalLead.id, {
-          salesPerson: assignedPerson
-        });
-      } catch (err) {
-        console.error("Backend reassign sync error:", err);
-      }
+    try {
+      const targetId = reassignModalLead._id || reassignModalLead.id || reassignModalLead.leadId;
+      await updateLeadApi(targetId, {
+        salesPerson: assignedPerson
+      });
+
+      await createAssignedLeadApi({
+        leadId: targetId,
+        clientName: reassignModalLead.clientName || reassignModalLead.concernPersonName,
+        phoneNumber: reassignModalLead.phoneNumber || reassignModalLead.contact,
+        phone: reassignModalLead.phoneNumber || reassignModalLead.contact,
+        emailAddress: reassignModalLead.emailAddress || reassignModalLead.email,
+        email: reassignModalLead.emailAddress || reassignModalLead.email,
+        workCategory: reassignModalLead.workCategory,
+        workType: reassignModalLead.workType,
+        address: reassignModalLead.address || "",
+        city: reassignModalLead.city || "",
+        pincode: reassignModalLead.pincode || "",
+        state: reassignModalLead.state || "",
+        expectedBusiness: reassignModalLead.expectedBusiness,
+        salesPerson: assignedPerson,
+        assignTo: assignedPerson,
+        assignedTo: assignedPerson,
+        isAssigned: true,
+        status: reassignModalLead.status || reassignModalLead.leadStatus || "Warm",
+        leadStatus: reassignModalLead.status || reassignModalLead.leadStatus || "Warm",
+        remark: reassignmentRemark || reassignModalLead.remark || ""
+      });
+    } catch (err) {
+      console.error("Backend reassign sync error:", err);
     }
 
     toast.success(`Lead ${reassignModalLead.clientName || reassignModalLead.concernPersonName} reassigned to ${assignedPerson} successfully! 🎯`);

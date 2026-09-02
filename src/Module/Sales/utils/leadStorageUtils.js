@@ -16,13 +16,13 @@ const STORAGE_KEYS = [
 ];
 
 const INITIAL_DATA_MAP = {
-  dss_leads: initialTotalLeads,
-  dss_lead_management_sheet_v1: initialLeadsData,
-  dss_assigned_leads: initialAssignedLeads,
-  dss_followup_leads: initialScheduledLeads,
-  dss_scheduled_leads_sheet: initialScheduledLeads,
-  dss_lost_leads: initialLostLeads,
-  dss_sales_management_sheet_v1: initialSalesData
+  dss_leads: [],
+  dss_lead_management_sheet_v1: [],
+  dss_assigned_leads: [],
+  dss_followup_leads: [],
+  dss_scheduled_leads_sheet: [],
+  dss_lost_leads: [],
+  dss_sales_management_sheet_v1: []
 };
 
 const cleanDigits = (str) => (str ? String(str).replace(/\D/g, "") : "");
@@ -48,7 +48,7 @@ const sanitizeLeadForStorage = (item, key) => {
   // Remove "(Current User)" text from any field
   ["assignTo", "salesPerson", "assignedTo", "leadBy"].forEach((f) => {
     if (typeof cleaned[f] === "string") {
-      cleaned[f] = cleaned[f].replace(" (Current User)", "").trim();
+      cleaned[f] = cleaned[f].replace(" (Current User)", "").replace("(Current User)", "").trim();
     }
   });
 
@@ -101,6 +101,13 @@ export const getStoredLeads = (key) => {
             return hasHistory || isExplicitlyScheduled || isInitialSeed;
           });
         }
+        // Filter out old static seed items if present
+        sanitized = sanitized.filter((item) => {
+          const idStr = String(item.id || item.leadId || item.clientId || "");
+          const isSeedId = idStr.startsWith("LM-00") || idStr.startsWith("LD-SCH-0") || idStr.startsWith("DSS260") || idStr.startsWith("LD-10");
+          return !isSeedId;
+        });
+
         try {
           localStorage.setItem(key, JSON.stringify(sanitized));
         } catch (e) {}
@@ -110,11 +117,7 @@ export const getStoredLeads = (key) => {
   } catch (e) {
     console.error(`Error reading ${key} from localStorage:`, e);
   }
-  const defaultData = (INITIAL_DATA_MAP[key] || []).map((item) => sanitizeLeadForStorage(item, key));
-  try {
-    localStorage.setItem(key, JSON.stringify(defaultData));
-  } catch (e) {}
-  return defaultData;
+  return [];
 };
 
 /**

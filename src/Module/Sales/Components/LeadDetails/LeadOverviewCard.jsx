@@ -10,8 +10,32 @@ const LeadOverviewCard = ({ lead }) => {
   const jobType = lead?.jobType || "NEW";
   const clientType = lead?.clientType || "Individual";
   const leadAge = lead?.leadAge || "0 Days";
-  const createdDate = lead?.createdDate || lead?.date || "--";
-  const createdTime = lead?.createdTime || "";
+  const rawDateVal =
+    lead?.createdDate ||
+    lead?.createdAtIST ||
+    lead?.createdAt ||
+    lead?.date ||
+    lead?.assignedDate;
+
+  let createdDate = "--";
+  let createdTime = lead?.createdTime || lead?.assignedTime || "";
+
+  if (rawDateVal && rawDateVal !== "--") {
+    try {
+      const d = new Date(rawDateVal);
+      if (!isNaN(d.getTime())) {
+        createdDate = d.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+        if (!createdTime) {
+          createdTime = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+        }
+      } else {
+        createdDate = String(rawDateVal);
+      }
+    } catch (e) {
+      createdDate = String(rawDateVal);
+    }
+  }
+
   const assignTo = lead?.assignTo || lead?.salesPerson || "Sales TL";
 
   const getStatusBadge = (s) => {

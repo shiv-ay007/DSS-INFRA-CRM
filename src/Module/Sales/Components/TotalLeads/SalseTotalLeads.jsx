@@ -12,7 +12,7 @@ import { FaUserPlus, FaUsers, FaUserCheck, FaImage, FaVideo, FaMicrophone, FaFil
 import { HiOutlineUsers } from "react-icons/hi";
 
 import { subscribeToLeadUpdates, updateLeadInStorage, getStoredLeads } from "../../utils/leadStorageUtils";
-import { getAllLeadsApi, updateLeadApi } from "../../../../services/api";
+import { getAllLeadsApi, updateLeadApi, createAssignedLeadApi } from "../../../../services/api";
 
 const salesPersonsList = [
   "ALL",
@@ -443,7 +443,7 @@ const SalseTotalLeads = () => {
 
   // Assign Lead Modal States (Matching User Screenshot Design)
   const [assignModalLead, setAssignModalLead] = useState(null);
-  const [assignType, setAssignType] = useState("self"); // "self" or "executive"
+  const [assignType, setAssignType] = useState("executive"); // "executive" or "self"
   const [selectedExecutive, setSelectedExecutive] = useState("Rahul Sharma");
   const [executiveBranch, setExecutiveBranch] = useState("Noida Branch");
   const [leadPriority, setLeadPriority] = useState("Medium");
@@ -531,17 +531,42 @@ const SalseTotalLeads = () => {
       console.error("Error saving assigned lead:", e);
     }
 
-    // 3. Sync assignment to MongoDB backend DB if valid ID
-    if (assignModalLead.id && !String(assignModalLead.id).startsWith("LM-")) {
-      try {
-        await updateLeadApi(assignModalLead.id, {
-          salesPerson: assignedPerson,
-          leadStatus: assignModalLead.status || assignModalLead.leadStatus || "Warm",
-          requirement: assignmentRemark || assignModalLead.remark || ""
-        });
-      } catch (err) {
-        console.error("Backend assign lead sync error:", err);
-      }
+    // 3. Sync assignment to MongoDB backend DB assignedleads collection
+    try {
+      const targetId = assignModalLead._id || assignModalLead.id || assignModalLead.leadId;
+      await updateLeadApi(targetId, {
+        salesPerson: assignedPerson,
+        assignTo: assignedPerson,
+        assignedTo: assignedPerson,
+        isAssigned: true,
+        leadStatus: assignModalLead.status || assignModalLead.leadStatus || "Warm",
+        requirement: assignmentRemark || assignModalLead.remark || ""
+      });
+
+      await createAssignedLeadApi({
+        leadId: targetId,
+        clientName: assignModalLead.clientName || assignModalLead.concernPersonName,
+        phoneNumber: assignModalLead.phoneNumber || assignModalLead.contact,
+        phone: assignModalLead.phoneNumber || assignModalLead.contact,
+        emailAddress: assignModalLead.emailAddress || assignModalLead.email,
+        email: assignModalLead.emailAddress || assignModalLead.email,
+        workCategory: assignModalLead.workCategory,
+        workType: assignModalLead.workType,
+        address: assignModalLead.address || "",
+        city: assignModalLead.city || "",
+        pincode: assignModalLead.pincode || "",
+        state: assignModalLead.state || "",
+        expectedBusiness: assignModalLead.expectedBusiness,
+        salesPerson: assignedPerson,
+        assignTo: assignedPerson,
+        assignedTo: assignedPerson,
+        isAssigned: true,
+        status: assignModalLead.status || assignModalLead.leadStatus || "Warm",
+        leadStatus: assignModalLead.status || assignModalLead.leadStatus || "Warm",
+        remark: assignmentRemark || assignModalLead.remark || ""
+      });
+    } catch (err) {
+      console.error("Backend assign lead sync error:", err);
     }
 
     toast.success(`Lead ${assignModalLead.clientName || assignModalLead.concernPersonName || assignModalLead.id} assigned to ${assignedPerson} successfully! 🎯`);
@@ -713,7 +738,8 @@ const SalseTotalLeads = () => {
       render: (val, row) => {
         // Show assignee name ONLY if lead has been explicitly assigned
         const isAssigned = row.isAssigned === true;
-        const assignee = row.assignTo || row.assignedTo || row.salesPerson;
+        const rawAssignee = row.assignTo || row.assignedTo || row.salesPerson || "";
+        const assignee = String(rawAssignee).replace(" (Current User)", "").replace("(Current User)", "").trim();
 
         if (!isAssigned || !assignee || assignee === "Unassigned" || assignee === "") {
           return <span className="text-slate-400 font-medium text-xs">--</span>;
@@ -1562,7 +1588,7 @@ const SalseTotalLeads = () => {
                       checked={assignType === "executive"}
                       onChange={() => {
                         setAssignType("executive");
-                        const firstExec = salesPersonsList.find(p => p !== "ALL" && !p.includes("Current")) || "Rahul Sharma";
+                        const firstExec = salesPersonsList.find(p => p !== "ALL" && !p.includes("Current") && !p.includes("TL") && !p.includes("Self")) || "Rahul Sharma";
                         setSelectedExecutive(firstExec);
                         setExecutiveBranch(executiveBranchMap[firstExec] || "Noida Branch");
                       }}
@@ -1585,7 +1611,7 @@ const SalseTotalLeads = () => {
                       onChange={(e) => handleExecutiveChange(e.target.value)}
                       className="w-full px-3.5 py-2.5 rounded-xl border border-orange-300 text-xs sm:text-sm font-bold text-slate-800 bg-white focus:outline-none focus:border-[#ff5722] shadow-2xs cursor-pointer"
                     >
-                      {salesPersonsList.filter(p => p !== "ALL" && !p.includes("Current")).map((p) => (
+                      {salesPersonsList.filter(p => p !== "ALL" && !p.includes("Current") && !p.includes("TL") && !p.includes("Self")).map((p) => (
                         <option key={p} value={p}>{p}</option>
                       ))}
                     </select>
