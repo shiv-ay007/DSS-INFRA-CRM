@@ -637,6 +637,7 @@ const SalseTotalLeads = () => {
     setAssignModalLead(null);
     setAssignmentRemark("");
     setAssignmentFiles([]);
+    navigate("/sales/leads/assigned");
   };
 
   // Table Column Configuration matching AddLead form fields in exact sequence
