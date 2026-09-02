@@ -46,6 +46,15 @@ const Salse = () => {
   // Table Column Configuration
   const columnConfig = useMemo(
     () => ({
+      srNo: {
+        label: "SR. NO.",
+        align: "center",
+        render: (val, row, idx) => (
+          <span className="font-mono font-bold text-slate-700 text-xs">
+            {(currentPage - 1) * rowsPerPage + idx + 1}
+          </span>
+        )
+      },
       actions: {
         label: "ACTIONS",
         align: "center",
@@ -196,7 +205,7 @@ const Salse = () => {
         )
       }
     }),
-    [navigate]
+    [navigate, currentPage, rowsPerPage]
   );
 
   // KPI numbers

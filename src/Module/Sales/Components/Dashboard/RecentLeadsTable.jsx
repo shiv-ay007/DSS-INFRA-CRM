@@ -45,7 +45,7 @@ const RecentLeadsTable = ({ recentLeads = recentLeadsData }) => {
         label: "Date",
         align: "left",
         render: (val) => (
-          <span className="font-mono text-slate-600 whitespace-nowrap">{val}</span>
+          <span className="font-mono text-xs text-slate-600 whitespace-nowrap">{val}</span>
         ),
       },
       name: {
@@ -54,8 +54,8 @@ const RecentLeadsTable = ({ recentLeads = recentLeadsData }) => {
         headerClass: "min-w-[200px]",
         render: (val, row) => (
           <div className="text-left">
-            <div className="font-bold text-slate-900 text-sm sm:text-base">{val}</div>
-            <div className="text-xs sm:text-sm text-slate-500 font-medium">{row.company}</div>
+            <div className="font-bold text-slate-900 text-xs">{val}</div>
+            <div className="text-[11px] text-slate-500 font-medium">{row.company}</div>
           </div>
         ),
       },
@@ -63,7 +63,7 @@ const RecentLeadsTable = ({ recentLeads = recentLeadsData }) => {
         label: "Source",
         align: "left",
         render: (val) => (
-          <span className={`inline-block px-2.5 py-1 rounded-lg text-xs font-semibold border ${getSourceBadge(val)}`}>
+          <span className={`inline-block px-2 py-0.5 rounded-lg text-xs font-semibold border ${getSourceBadge(val)}`}>
             {val}
           </span>
         ),
@@ -72,7 +72,7 @@ const RecentLeadsTable = ({ recentLeads = recentLeadsData }) => {
         label: "Deal Value",
         align: "left",
         render: (val) => (
-          <span className="font-mono font-black text-emerald-700 text-sm sm:text-base whitespace-nowrap">
+          <span className="font-mono font-bold text-emerald-700 text-xs whitespace-nowrap">
             {val}
           </span>
         ),
@@ -81,7 +81,7 @@ const RecentLeadsTable = ({ recentLeads = recentLeadsData }) => {
         label: "Status",
         align: "center",
         render: (val) => (
-          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold border ${getStatusBadge(val)} shadow-2xs`}>
+          <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold border ${getStatusBadge(val)} shadow-2xs`}>
             {val === "Hot" && "🔥 "}
             {val === "Warm" && "⚡ "}
             {val === "Cold" && "❄️ "}
@@ -95,7 +95,7 @@ const RecentLeadsTable = ({ recentLeads = recentLeadsData }) => {
         render: () => (
           <Link
             to="/sales/leads/total"
-            className="px-3.5 py-1.5 rounded-xl text-xs sm:text-sm font-bold text-white bg-slate-900 hover:bg-black transition-all cursor-pointer shadow-xs"
+            className="px-3 py-1 rounded-lg text-xs font-bold text-white bg-slate-900 hover:bg-black transition-all cursor-pointer shadow-xs"
           >
             View
           </Link>
@@ -107,25 +107,25 @@ const RecentLeadsTable = ({ recentLeads = recentLeadsData }) => {
 
   return (
     <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
-      <div className="p-5 sm:p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100">
+      <div className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100">
         <div>
-          <h2 className="text-base sm:text-lg font-extrabold text-slate-900 tracking-tight">
+          <h2 className="text-sm sm:text-base font-extrabold text-slate-900 tracking-tight">
             Recent Incoming Leads
           </h2>
-          <p className="text-xs sm:text-sm text-slate-500 mt-0.5 font-medium">
+          <p className="text-xs text-slate-500 mt-0.5 font-medium">
             Latest inquiries, customer details, potential deal value, and their current pipeline status.
           </p>
         </div>
         <Link
           to="/sales/leads/total"
-          className="inline-flex items-center gap-1 px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs sm:text-sm font-bold transition-all cursor-pointer self-start sm:self-auto"
+          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition-all cursor-pointer self-start sm:self-auto"
         >
           <span>View All Leads</span>
           <span>→</span>
         </Link>
       </div>
 
-      <Table data={recentLeads} columnConfig={columnConfig} showSrNo={false} />
+      <Table data={recentLeads} columnConfig={columnConfig} showSrNo={true} />
     </div>
   );
 };

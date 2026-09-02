@@ -32,7 +32,7 @@ const Table = ({
             <tr className="bg-black text-white text-xs font-bold uppercase tracking-wider select-none">
               {showSrNo && (
                 <th className="py-2.5 px-2.5 text-center w-10 font-bold uppercase bg-black text-white border-r border-slate-800">
-                  S. NO.
+                  SR. NO.
                 </th>
               )}
               {columns.map((col) => {

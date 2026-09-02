@@ -116,7 +116,7 @@ const Lead = () => {
       align: "center",
       render: (val, row) => (
         <div className="grid grid-cols-2 gap-1.5 w-14 mx-auto">
-          {/* 1. View Lead Details */}
+          {/* 1. View Lead Details (Top-Left) */}
           <button
             type="button"
             onClick={() => navigate(`/sales/leads/details/${row.id}`, { state: { lead: row } })}
@@ -129,19 +129,19 @@ const Lead = () => {
             </svg>
           </button>
 
-          {/* 2. Follow-up Remarks & History */}
+          {/* 2. Schedule / Reschedule Follow-up (Top-Right) */}
           <button
             type="button"
-            onClick={() => setRemarksModalLead(row)}
-            className="w-6 h-6 rounded-lg border border-purple-200 bg-purple-50/70 text-purple-600 hover:bg-purple-100 hover:border-purple-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
-            title="View Follow-up Remarks & History"
+            onClick={() => handleOpenScheduleModal(row)}
+            className="w-6 h-6 rounded-lg border border-blue-200 bg-blue-50/70 text-blue-600 hover:bg-blue-100 hover:border-blue-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
+            title="Schedule / Reschedule Follow-up"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
             </svg>
           </button>
 
-          {/* 3. Client Status (Interested / Not Interested) */}
+          {/* 3. Client Status (Interested / Not Interested) (Bottom-Left) */}
           <button
             type="button"
             onClick={() => {
@@ -160,15 +160,15 @@ const Lead = () => {
             </svg>
           </button>
 
-          {/* 4. Schedule / Reschedule Follow-up */}
+          {/* 4. Follow-up Remarks & History (Bottom-Right) */}
           <button
             type="button"
-            onClick={() => handleOpenScheduleModal(row)}
-            className="w-6 h-6 rounded-lg border border-blue-200 bg-blue-50/70 text-blue-600 hover:bg-blue-100 hover:border-blue-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
-            title="Schedule / Reschedule Follow-up"
+            onClick={() => setRemarksModalLead(row)}
+            className="w-6 h-6 rounded-lg border border-purple-200 bg-purple-50/70 text-purple-600 hover:bg-purple-100 hover:border-purple-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
+            title="View Follow-up Remarks & History"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </button>
         </div>
