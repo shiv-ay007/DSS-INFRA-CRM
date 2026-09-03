@@ -497,6 +497,11 @@ const SalseTotalLeads = () => {
       console.error("Backend assign lead sync error:", err);
     }
 
+    // Invalidate caches so Total Leads, Assigned Leads, etc. reflect fresh assignment
+    invalidateCache("totalLeads");
+    invalidateCache("assignedLeads");
+    invalidateCache("leadManagement");
+
     toast.success(`Lead ${assignModalLead.clientName || assignModalLead.concernPersonName || assignModalLead.id} assigned to ${assignedPerson} successfully! 🎯`);
     setAssignModalLead(null);
     setAssignmentRemark("");
@@ -538,31 +543,20 @@ const SalseTotalLeads = () => {
               </svg>
             </button>
 
-            {/* Assign / Re-assign Lead Icon Button (Available on ALL tab) */}
-            {filterScope?.toUpperCase() === "ALL" && (
+            {/* Assign Lead Icon Button (Available only if lead is NOT yet assigned) */}
+            {filterScope?.toUpperCase() === "ALL" && !isAssigned && (
               <button
                 type="button"
                 onClick={() => {
-                  const currentAssignee = row.assignTo || row.assignedTo || row.salesPerson;
-                  const isSelf = currentAssignee?.toLowerCase().includes("tl") || currentAssignee?.toLowerCase().includes("self");
-                  setAssignType(isSelf ? "self" : "executive");
-                  if (!isSelf && currentAssignee && currentAssignee !== "Unassigned") {
-                    setSelectedExecutive(currentAssignee);
-                    setExecutiveBranch(executiveBranchMap[currentAssignee] || "Noida Branch");
-                  } else {
-                    setSelectedExecutive("Rahul Sharma");
-                    setExecutiveBranch("Noida Branch");
-                  }
+                  setAssignType("executive");
+                  setSelectedExecutive("Rahul Sharma");
+                  setExecutiveBranch("Noida Branch");
                   setAssignModalLead(row);
                 }}
-                className={`w-7 h-7 rounded-lg border flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95 ${
-                  isAssigned
-                    ? "border-amber-200 bg-amber-50/70 text-amber-600 hover:bg-amber-100 hover:border-amber-300"
-                    : "border-blue-200 bg-blue-50/70 text-blue-600 hover:bg-blue-100 hover:border-blue-300"
-                }`}
-                title={isAssigned ? "Re-assign Lead" : "Assign Lead"}
+                className="w-7 h-7 rounded-lg border border-blue-200 bg-blue-50/70 text-blue-600 hover:bg-blue-100 hover:border-blue-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
+                title="Assign Lead"
               >
-                {isAssigned ? <HiOutlineUsers className="w-3.5 h-3.5" /> : <FaUserPlus className="w-3.5 h-3.5" />}
+                <FaUserPlus className="w-3.5 h-3.5" />
               </button>
             )}
           </div>

@@ -2,7 +2,7 @@ import React, { createContext, useContext, useRef, useCallback } from "react";
 import { subscribeToLeadUpdates } from "../Module/Sales/utils/leadStorageUtils";
 
 const LeadContext = createContext(null);
-const SESSION_CACHE_KEY = "dss_lead_session_cache_v1";
+const SESSION_CACHE_KEY = "dss_lead_session_cache_v3";
 
 // Helper to load session cache on initial mount
 const loadSessionCache = () => {

@@ -95,8 +95,16 @@ const AsignLeads = () => {
                 ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(l.leadStatus || "").toUpperCase()) ||
                 ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(l.status || "").toUpperCase());
               if (isLost) return false;
+
+              // If already marked INTERESTED, lead has moved to Lead Management Sheet!
+              const isInterested =
+                l.isInterested === true ||
+                String(l.status || "").toUpperCase() === "INTERESTED" ||
+                String(l.leadStatus || "").toUpperCase() === "INTERESTED";
+              if (isInterested) return false;
+
               const assignee = (l.salesPerson || (typeof l.assignedTo === 'object' ? l.assignedTo?.name : l.assignedTo) || l.assignTo || "").trim();
-              return l.isAssigned === true || (!!assignee && assignee !== "Unassigned" && assignee !== "");
+              return l.isAssigned === true && !!assignee && assignee !== "Unassigned" && assignee !== "";
             });
             combinedRaw.push(...list);
           }
@@ -113,6 +121,14 @@ const AsignLeads = () => {
           ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(backendLead.status || "").toUpperCase());
         if (isLost) return;
 
+        const isInterested =
+          backendLead.isInterested === true ||
+          String(backendLead.status || "").toUpperCase() === "INTERESTED" ||
+          String(backendLead.leadStatus || "").toUpperCase() === "INTERESTED";
+        if (isInterested) return;
+
+        if (backendLead.isAssigned !== true) return;
+
         const idKey = String(backendLead.leadId || backendLead._id || backendLead.id);
         if (!idKey) return;
 
@@ -127,7 +143,8 @@ const AsignLeads = () => {
           ""
         ).replace(" (Current User)", "").replace("(Current User)", "").trim();
 
-        const assignee = rawAssignTo || "Sales TL";
+        if (!rawAssignTo || rawAssignTo === "Unassigned") return;
+        const assignee = rawAssignTo;
 
         const processedLead = {
           ...backendLead,

@@ -14,6 +14,7 @@ import { getAllFollowupsApi, addFollowupApi } from "../../../../services/followu
 import { useLeadContext } from "../../../../context/LeadContext";
 import LeadKpiSlider from "./LeadKpiSlider";
 import SalesTransferModal from "./SalesTransferModal";
+import DateTimePicker from "../Common/DateTimePicker";
 
 const notInterestedReasonsList = [
   "High Price / Budget Out",
@@ -96,7 +97,23 @@ const Lead = () => {
               l.isLoss === true ||
               ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(l.leadStatus || "").toUpperCase()) ||
               ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(l.status || "").toUpperCase());
-            return !isLost;
+            if (isLost) return false;
+
+            // Only show leads that belong in Lead Management Sheet:
+            // 1. Marked INTERESTED (sent from Assigned Leads or call status)
+            // 2. OR Have an active follow-up scheduled or followup history
+            const isInterested =
+              l.isInterested === true ||
+              String(l.status || "").toUpperCase() === "INTERESTED" ||
+              String(l.leadStatus || "").toUpperCase() === "INTERESTED";
+
+            const hasFollowup =
+              (l.isFollowupScheduled === true || l.isFollowup === true) &&
+              ((Array.isArray(l.followupHistory) && l.followupHistory.length > 0) ||
+                Number(l.followupRemarksCount) > 0 ||
+                (l.nextFollowupDate && l.nextFollowupDate !== "--" && l.nextFollowupDate !== "Invalid Date" && l.nextFollowupDate !== ""));
+
+            return isInterested || hasFollowup;
           })
           .map((backendLead) => {
             const idKey = String(backendLead._id || backendLead.leadId || backendLead.id);
@@ -104,7 +121,7 @@ const Lead = () => {
 
             const dateObj = new Date(backendLead.createdAt || Date.now());
             const formattedDate = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
-            const assignee = backendLead.salesPerson || (typeof backendLead.assignedTo === 'object' ? backendLead.assignedTo?.name : backendLead.assignedTo) || "Sales TL";
+            const assignee = backendLead.salesPerson || (typeof backendLead.assignedTo === 'object' ? backendLead.assignedTo?.name : backendLead.assignedTo) || backendLead.assignTo || "--";
             const formattedTime = backendLead.createdTime || dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
 
             const historyCount = Array.isArray(backendLead.followupHistory) ? backendLead.followupHistory.length : 0;
@@ -377,7 +394,7 @@ const Lead = () => {
         return (
           <button
             type="button"
-            onClick={() => setRemarksModalLead(row)}
+            onClick={() => setFollowupDetailsModalLead(row)}
             className={`px-3 py-1 rounded-full text-xs font-semibold transition-colors cursor-pointer shadow-2xs ${
               count > 0
                 ? "bg-blue-50/90 text-blue-600 border border-blue-200 hover:bg-blue-100"
@@ -604,6 +621,7 @@ const Lead = () => {
   const [detailModalLead, setDetailModalLead] = useState(null);
   const [scheduleModalLead, setScheduleModalLead] = useState(null);
   const [remarksModalLead, setRemarksModalLead] = useState(null);
+  const [followupDetailsModalLead, setFollowupDetailsModalLead] = useState(null);
   const [completeModalLead, setCompleteModalLead] = useState(null);
 
   // Client Status Modal States
@@ -1070,8 +1088,16 @@ const Lead = () => {
     const newHistoryEntry = {
       date: formattedDisplayDate,
       time: scheduleFormData.time || "10:00 am",
-      notes: activeNotes,
-      rep: scheduleFormData.assignedTo || "Sales TL",
+      notes: scheduleFormData.notes || activeNotes || "--",
+      discussionWithClient: scheduleFormData.notes || activeNotes || "--",
+      nextDiscussionTopic: scheduleFormData.nextDiscussionTopic || "--",
+      talkToPerson: scheduleFormData.talkToPerson || scheduleModalLead.concernPersonName || scheduleModalLead.clientName || "--",
+      personDesignation: scheduleFormData.personDesignation || scheduleModalLead.clientDesignation || "--",
+      discussionType: scheduleFormData.type || "Call",
+      type: scheduleFormData.type || "Call",
+      rep: scheduleModalLead.salesPerson || scheduleFormData.assignedTo || "Sales Manager",
+      repDesignation: "Sales Manager",
+      department: "Sales",
       status: scheduleFormData.type || "Scheduled"
     };
 
@@ -1092,6 +1118,10 @@ const Lead = () => {
           followupScheduled: true,
           followupRemarksCount: newHist.length,
           followupHistory: newHist,
+          notes: scheduleFormData.notes || activeNotes,
+          nextDiscussionTopic: scheduleFormData.nextDiscussionTopic || item.nextDiscussionTopic,
+          talkToPerson: scheduleFormData.talkToPerson || item.talkToPerson,
+          personDesignation: scheduleFormData.personDesignation || item.personDesignation,
           assignTo: scheduleFormData.assignedTo || item.assignTo || item.salesPerson
         };
         return updatedTargetLead;
@@ -1400,11 +1430,16 @@ const Lead = () => {
                   <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
                     SCHEDULE DATE & TIME (OPTIONAL)
                   </label>
-                  <input
-                    type="date"
-                    value={scheduleFormData.date}
-                    onChange={(e) => setScheduleFormData({ ...scheduleFormData, date: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-medium text-slate-800 focus:outline-none focus:border-blue-500 transition-all cursor-pointer shadow-2xs"
+                  <DateTimePicker
+                    dateValue={scheduleFormData.date}
+                    timeValue={scheduleFormData.time}
+                    onDateTimeChange={({ date, time }) => {
+                      setScheduleFormData((prev) => ({
+                        ...prev,
+                        date,
+                        time
+                      }));
+                    }}
                     placeholder="Select date and time (optional)"
                   />
                 </div>
@@ -1464,7 +1499,7 @@ const Lead = () => {
                 </div>
               </div>
 
-              {/* Row 4: CLIENT RATING (0-10) & ASSIGNED TO */}
+              {/* Row 4: CLIENT RATING (0-10) */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
@@ -1477,21 +1512,6 @@ const Lead = () => {
                   >
                     {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((num) => (
                       <option key={num} value={num}>{num}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
-                    ASSIGNED TO
-                  </label>
-                  <select
-                    value={scheduleFormData.assignedTo || "Sales TL"}
-                    onChange={(e) => setScheduleFormData({ ...scheduleFormData, assignedTo: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-800 focus:outline-none focus:border-blue-500 transition-all cursor-pointer shadow-2xs"
-                  >
-                    {teamMembers.map((m) => (
-                      <option key={m} value={m}>{m}</option>
                     ))}
                   </select>
                 </div>
@@ -1611,7 +1631,7 @@ const Lead = () => {
         </div>
       )}
 
-      {/* ================= MODAL 2: DISCUSSION LOGS / REMARKS HISTORY MODAL ================= */}
+      {/* ================= MODAL 2A: DISCUSSION LOGS / REMARKS HISTORY TIMELINE (FROM ACTION ICON) ================= */}
       {remarksModalLead && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150">
           <div className="bg-white rounded-3xl max-w-xl w-full shadow-2xl border border-slate-100 overflow-hidden my-8 animate-in zoom-in-95 duration-150">
@@ -1731,6 +1751,139 @@ const Lead = () => {
           </div>
         </div>
       )}
+
+      {/* ================= MODAL 2B: FOLLOW-UP DETAILS MODAL (FROM BADGE CLICK) ================= */}
+      {followupDetailsModalLead && (() => {
+        const getOrdinal = (n) => {
+          const s = ["th", "st", "nd", "rd"];
+          const v = n % 100;
+          return n + (s[(v - 20) % 10] || s[v] || s[0]);
+        };
+
+        const historyList = (Array.isArray(followupDetailsModalLead.followupHistory) && followupDetailsModalLead.followupHistory.length > 0)
+          ? [...followupDetailsModalLead.followupHistory].reverse()
+          : (followupDetailsModalLead.notes || followupDetailsModalLead.remark || followupDetailsModalLead.nextFollowupDate || followupDetailsModalLead.isFollowupScheduled)
+          ? [{
+              repDesignation: "Sales Manager",
+              department: "Sales",
+              talkToPerson: followupDetailsModalLead.clientName || followupDetailsModalLead.concernPersonName || "--",
+              discussionType: followupDetailsModalLead.channelType || followupDetailsModalLead.type || "Call",
+              personDesignation: followupDetailsModalLead.clientDesignation || "--",
+              discussionWithClient: followupDetailsModalLead.notes || followupDetailsModalLead.remark || followupDetailsModalLead.requirement || "--",
+              nextDiscussionTopic: followupDetailsModalLead.nextDiscussionTopic || "--"
+            }]
+          : [];
+
+        return (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150">
+            <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-100 overflow-hidden my-8 animate-in zoom-in-95 duration-150">
+              
+              {/* Modal Header */}
+              <div className="p-5 sm:p-6 pb-4 flex items-center justify-between border-b border-slate-100 bg-white">
+                <h2 className="text-xl font-black text-slate-900 tracking-tight">
+                  Follow-up Details
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setFollowupDetailsModalLead(null)}
+                  className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 font-bold flex items-center justify-center transition-colors cursor-pointer text-sm shrink-0"
+                  title="Close"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Follow-up Cards Body */}
+              <div className="p-5 sm:p-6 max-h-[68vh] overflow-y-auto space-y-6">
+                {historyList.length > 0 ? (
+                  historyList.map((hist, idx) => (
+                    <div key={idx} className="space-y-2">
+                      <h3 className="text-base font-extrabold text-slate-900">
+                        {getOrdinal(idx + 1)} Follow-up
+                      </h3>
+
+                      <div className="rounded-2xl border border-slate-200/90 p-5 bg-white shadow-2xs space-y-4">
+                        {/* Row 1: REPRESENTATIVE DESIGNATION, DEPARTMENT, TALKED TO PERSON */}
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                          <div>
+                            <span className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
+                              REPRESENTATIVE DESIGNATION
+                            </span>
+                            <span className="font-bold text-slate-800 text-sm mt-0.5 block">
+                              {hist.repDesignation || hist.rep || "Sales Manager"}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
+                              DEPARTMENT
+                            </span>
+                            <span className="font-bold text-slate-800 text-sm mt-0.5 block">
+                              {hist.department || "Sales"}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
+                              TALKED TO PERSON
+                            </span>
+                            <span className="font-bold text-slate-800 text-sm mt-0.5 block">
+                              {hist.talkToPerson || followupDetailsModalLead.clientName || followupDetailsModalLead.concernPersonName || "--"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Row 2: DISCUSSION TYPE & TALK TO PERSON DESIGNATION */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <div>
+                            <span className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
+                              DISCUSSION TYPE
+                            </span>
+                            <span className="font-extrabold text-purple-600 text-sm mt-0.5 block">
+                              {hist.discussionType || hist.type || hist.status || "Call"}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
+                              TALK TO PERSON DESIGNATION
+                            </span>
+                            <span className="font-extrabold text-blue-600 text-sm mt-0.5 block">
+                              {hist.personDesignation || followupDetailsModalLead.clientDesignation || "--"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Row 3: DISCUSSION WITH CLIENT */}
+                        <div>
+                          <span className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
+                            DISCUSSION WITH CLIENT
+                          </span>
+                          <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 text-slate-800 text-sm font-medium min-h-[44px]">
+                            {hist.discussionWithClient || hist.notes || hist.remark || "--"}
+                          </div>
+                        </div>
+
+                        {/* Row 4: NEXT DISCUSSION TOPIC */}
+                        <div>
+                          <span className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
+                            NEXT DISCUSSION TOPIC
+                          </span>
+                          <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 text-slate-800 text-sm font-medium min-h-[44px]">
+                            {hist.nextDiscussionTopic || "--"}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-10 text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200 font-medium text-sm">
+                    No follow-up details recorded yet.
+                  </div>
+                )}
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ================= MODAL 3: LEAD DETAIL MODAL ================= */}
       {detailModalLead && (

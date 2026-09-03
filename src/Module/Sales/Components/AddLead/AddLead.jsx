@@ -676,12 +676,14 @@ const Addlead = () => {
         date: formData.date || today.toISOString().split("T")[0],
         createdTime: formattedTime,
         leadAge: "0 Days",
-        nextFollowupDate: formattedDate,
-        nextFollowupDateRaw: formData.date || today.toISOString().split("T")[0],
-        nextFollowupTime: "11:00 am",
+        nextFollowupDate: "",
+        nextFollowupDateRaw: "",
+        nextFollowupTime: "",
         channelType: formData.channel || "Sales",
         followupRemarksCount: 0,
-        followupHistory: []
+        followupHistory: [],
+        isFollowup: false,
+        isFollowupScheduled: false
       };
 
       try {
