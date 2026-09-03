@@ -199,6 +199,20 @@ export default function DateTimePicker({
     });
   };
 
+  // Clear both date and time
+  const handleClear = (e) => {
+    e.stopPropagation();
+    setSelectedDate(null);
+    setSelectedTime("");
+    setIsOpen(false);
+    
+    onDateTimeChange?.({
+      date: "",
+      time: "",
+      rawDate: null
+    });
+  };
+
   // Formatted display in input box
   const getDisplayText = () => {
     if (!selectedDate && !dateValue) return "";
@@ -211,6 +225,9 @@ export default function DateTimePicker({
 
     return `${day}/${month}/${year}${selectedTime ? `   ${selectedTime}` : ""}`;
   };
+
+  // Check if any value is selected
+  const hasValue = selectedDate || dateValue;
 
   return (
     <div ref={containerRef} className="relative w-full">
@@ -226,19 +243,45 @@ export default function DateTimePicker({
         <span className={getDisplayText() ? "text-slate-800 font-semibold" : "text-slate-400"}>
           {getDisplayText() || placeholder}
         </span>
-        <svg
-          className="w-4 h-4 text-slate-400"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-          />
-        </svg>
+        <div className="flex items-center gap-1">
+          {/* Clear Button - X icon */}
+          {hasValue && (
+            <button
+              type="button"
+              onClick={handleClear}
+              className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors cursor-pointer"
+              title="Clear date and time"
+            >
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          )}
+          {/* Calendar Icon */}
+          <svg
+            className="w-4 h-4 text-slate-400"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+            />
+          </svg>
+        </div>
       </div>
 
       {/* Popover Dropdown matching Screenshot 2 */}
