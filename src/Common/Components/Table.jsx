@@ -4,9 +4,11 @@ const Table = ({
   data = [],
   columnConfig = {},
   onPageChange,
+  onItemsPerPageChange,
   currentPage = 1,
   totalItems = 0,
   itemsPerPage = 10,
+  itemsPerPageOptions = [10, 25, 50, 100],
   isLoading = false,
   showSrNo = false,
 }) => {
@@ -117,32 +119,59 @@ const Table = ({
       </div>
 
       {/* 2. FIXED PAGINATION FOOTER */}
-      {totalItems > 0 && onPageChange && (
+      {totalItems > 0 && (
         <div className="flex flex-col sm:flex-row justify-between items-center gap-3 p-3.5 border-t border-slate-100 bg-slate-50/50 text-xs sm:text-sm">
-          <div className="text-slate-600 font-medium text-center sm:text-left">
-            Showing <strong className="text-slate-900 font-bold">{startItem}</strong> to{" "}
-            <strong className="text-slate-900 font-bold">{endItem}</strong> of{" "}
-            <strong className="text-slate-900 font-bold">{totalItems}</strong> entries
-          </div>
-          <div className="flex flex-wrap items-center justify-center gap-1.5">
-            <button
-              onClick={() => onPageChange && onPageChange(currentPage - 1)}
-              disabled={currentPage === 1}
-              className="px-3 py-1.5 border border-slate-200 rounded-xl bg-white text-slate-700 font-bold text-xs sm:text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 cursor-pointer shadow-2xs transition-colors"
-            >
-              Previous
-            </button>
-            <span className="px-3 py-1.5 border border-slate-200 rounded-xl bg-white font-mono font-bold text-xs sm:text-sm text-slate-800 shadow-2xs">
-              Page {currentPage} of {totalPages}
+          <div className="flex flex-wrap items-center gap-3 text-slate-600 font-medium text-center sm:text-left">
+            <span>
+              Showing <strong className="text-slate-900 font-bold">{startItem}</strong> to{" "}
+              <strong className="text-slate-900 font-bold">{endItem}</strong> of{" "}
+              <strong className="text-slate-900 font-bold">{totalItems}</strong> entries
             </span>
-            <button
-              onClick={() => onPageChange && onPageChange(currentPage + 1)}
-              disabled={currentPage >= totalPages}
-              className="px-3 py-1.5 border border-slate-200 rounded-xl bg-white text-slate-700 font-bold text-xs sm:text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 cursor-pointer shadow-2xs transition-colors"
-            >
-              Next
-            </button>
+            {onItemsPerPageChange && (
+              <div className="flex items-center gap-1.5 ml-1">
+                <span className="text-slate-500 font-bold text-xs">Per page:</span>
+                <div className="relative w-20">
+                  <select
+                    value={itemsPerPage}
+                    onChange={(e) => onItemsPerPageChange(Number(e.target.value))}
+                    className="w-full appearance-none px-2.5 py-1 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-800 focus:outline-hidden focus:border-black cursor-pointer pr-6 shadow-2xs"
+                  >
+                    {itemsPerPageOptions.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
+          {onPageChange && (
+            <div className="flex flex-wrap items-center justify-center gap-1.5">
+              <button
+                onClick={() => onPageChange && onPageChange(currentPage - 1)}
+                disabled={currentPage === 1}
+                className="px-3 py-1.5 border border-slate-200 rounded-xl bg-white text-slate-700 font-bold text-xs sm:text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 cursor-pointer shadow-2xs transition-colors"
+              >
+                Previous
+              </button>
+              <span className="px-3 py-1.5 border border-slate-200 rounded-xl bg-white font-mono font-bold text-xs sm:text-sm text-slate-800 shadow-2xs">
+                Page {currentPage} of {totalPages}
+              </span>
+              <button
+                onClick={() => onPageChange && onPageChange(currentPage + 1)}
+                disabled={currentPage >= totalPages}
+                className="px-3 py-1.5 border border-slate-200 rounded-xl bg-white text-slate-700 font-bold text-xs sm:text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 cursor-pointer shadow-2xs transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

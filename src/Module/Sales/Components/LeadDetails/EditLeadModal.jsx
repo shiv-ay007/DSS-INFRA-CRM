@@ -23,7 +23,7 @@ import {
   workCategoryList
 } from "../../data/addLeadData";
 import { updateLeadInStorage } from "../../utils/leadStorageUtils";
-import { updateLeadApi } from "../../../../services/api";
+import { updateLeadApi } from "../../../../services/totalLeads.api";
 
 const EditLeadModal = ({ lead, isOpen, onClose, onSaveSuccess }) => {
   if (!isOpen || !lead) return null;

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
-import { createLeadApi, getAllLeadsApi } from "../../../../services/api";
+import { createLeadApi, getAllLeadsApi } from "../../../../services/totalLeads.api";
 import { notifyLeadChange } from "../../utils/leadStorageUtils";
 import {
   salesPersonsList,
@@ -128,7 +128,7 @@ const Addlead = () => {
   useEffect(() => {
     const loadRepeatLeads = async () => {
       try {
-        const res = await getAllLeadsApi();
+        const res = await getAllLeadsApi({ limit: 1000 });
         if (res && res.success && res.data && res.data.leads) {
           setBackendLeadsForRepeat(res.data.leads);
         }

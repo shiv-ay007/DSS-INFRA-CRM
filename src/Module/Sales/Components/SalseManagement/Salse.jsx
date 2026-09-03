@@ -4,7 +4,8 @@ import PageHeader from "../../../../Common/Components/PageHeader";
 import Table from "../../../../Common/Components/Table";
 import ScopeTabs from "../../../../Common/Components/ScopeTabs";
 import { subscribeToLeadUpdates } from "../../utils/leadStorageUtils";
-import { getAllLeadsApi } from "../../../../services/api";
+import { getAllLeadsApi } from "../../../../services/totalLeads.api";
+import { useLeadContext } from "../../../../context/LeadContext";
 import { workCategoryList } from "../../data/addLeadData";
 import { FaFilter, FaSearch } from "react-icons/fa";
 
@@ -21,25 +22,40 @@ const Salse = () => {
   const navigate = useNavigate();
 
   const [salesData, setSalesData] = useState([]);
+  const { getCachedData, setCachedData } = useLeadContext();
 
-  const fetchSalesLeads = useCallback(async () => {
+  const fetchSalesLeads = useCallback(async (forceRefresh = false) => {
+    const cacheKey = "sales_management_sheet_all";
+    if (!forceRefresh) {
+      const cached = getCachedData(cacheKey);
+      if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
+        setSalesData(cached.data);
+        return;
+      }
+    }
+
     try {
-      const res = await getAllLeadsApi();
+      const res = await getAllLeadsApi({ limit: 1000, isLoss: false });
       if (res && res.success && res.data && res.data.leads) {
         const interestedLeads = res.data.leads.filter(
-          (item) => item.status === "INTERESTED" || item.leadStatus === "INTERESTED" || item.isInterested === true
+          (item) =>
+            !item.isLoss &&
+            !["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(item.leadStatus || "").toUpperCase()) &&
+            !["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(item.status || "").toUpperCase()) &&
+            (item.status === "INTERESTED" || item.leadStatus === "INTERESTED" || item.isInterested === true)
         );
         setSalesData(interestedLeads);
+        setCachedData(cacheKey, interestedLeads);
       }
     } catch (err) {
       console.error("Error fetching sales management sheet leads:", err);
     }
-  }, []);
+  }, [getCachedData, setCachedData]);
 
   useEffect(() => {
     fetchSalesLeads();
     const unsubscribe = subscribeToLeadUpdates(() => {
-      fetchSalesLeads();
+      fetchSalesLeads(true);
     });
     return () => unsubscribe();
   }, [fetchSalesLeads]);

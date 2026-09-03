@@ -24,12 +24,22 @@ const teamMembers = [
 ];
 
 import { subscribeToLeadUpdates, getStoredLeads } from "../../utils/leadStorageUtils";
-import { getLossLeadsApi, getAllLossLeadsApi } from "../../../../services/api";
+import { getLossLeadsApi, getAllLossLeadsApi } from "../../../../services/lostLeads.api";
+import { useLeadContext } from "../../../../context/LeadContext";
 
 const Lostlead = () => {
   const [leads, setLeads] = useState([]);
+  const { getCachedData, setCachedData } = useLeadContext();
 
-  const fetchBackendLossLeads = React.useCallback(async () => {
+  const fetchBackendLossLeads = React.useCallback(async (forceRefresh = false) => {
+    const cacheKey = "lostLeads_all";
+    if (!forceRefresh) {
+      const cached = getCachedData(cacheKey);
+      if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
+        setLeads(cached.data);
+        return;
+      }
+    }
     try {
       let combinedRaw = [];
 
@@ -101,17 +111,21 @@ const Lostlead = () => {
           assignTo: assignee,
           leadMode: item.leadMode || item.leadSource || "Business networking",
           leadSource: item.leadSource || item.leadMode || "Business networking",
-          leadType: item.leadType || "FRESH"
+          leadType: item.leadType || "FRESH",
+          leadStatus: (item.leadStatus === "CLOSED_LOST" || item.status === "CLOSED_LOST" || !item.leadStatus) ? "LOST" : item.leadStatus,
+          status: (item.status === "CLOSED_LOST" || !item.status) ? "LOST" : item.status
         };
 
         map.set(idKey, { ...map.get(idKey), ...processed });
       });
 
-      setLeads(Array.from(map.values()));
+      const finalLost = Array.from(map.values());
+      setLeads(finalLost);
+      setCachedData(cacheKey, finalLost);
     } catch (err) {
       console.error("Error fetching loss leads from API:", err);
     }
-  }, []);
+  }, [getCachedData, setCachedData]);
 
   React.useEffect(() => {
     fetchBackendLossLeads();
@@ -318,9 +332,16 @@ const Lostlead = () => {
     leadStatus: {
       label: "LEAD STATUS",
       render: (val, row) => {
-        const status = (row.leadStatus || row.status || "Lost").toUpperCase();
+        const rawStatus = row.leadStatus || row.status || "Lost";
+        const status = (rawStatus.toUpperCase() === "CLOSED_LOST" ? "LOST" : rawStatus).toUpperCase();
+        const colors = {
+          HOT: "bg-rose-100 text-rose-800 border-rose-200",
+          WARM: "bg-amber-100 text-amber-800 border-amber-200",
+          COLD: "bg-sky-100 text-sky-800 border-sky-200",
+          LOST: "bg-rose-100 text-rose-800 border-rose-200"
+        };
         return (
-          <span className="px-2 py-0.5 rounded-full text-[11px] font-extrabold uppercase border bg-rose-100 text-rose-800 border-rose-200">
+          <span className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold uppercase border ${colors[status] || "bg-rose-100 text-rose-800 border-rose-200"}`}>
             {status}
           </span>
         );
@@ -474,7 +495,11 @@ const Lostlead = () => {
       if (filterLeadType !== "ALL" && item.leadType !== filterLeadType) return false;
       if (filterWorkCategory !== "ALL" && (item.workCategory || item.leadLabel) !== filterWorkCategory) return false;
       if (filterWorkType !== "ALL" && (item.workType || item.jobType) !== filterWorkType) return false;
-      if (filterStatus !== "ALL" && item.leadStatus !== filterStatus) return false;
+      if (
+        filterStatus !== "ALL" &&
+        (item.leadStatus || "").toUpperCase() !== filterStatus.toUpperCase() &&
+        (item.status || "").toUpperCase() !== filterStatus.toUpperCase()
+      ) return false;
 
       // 3. Date Filter
       if (filterDateFrom && !(item.createdDate || item.date || item.lostDate || "").includes(filterDateFrom)) return false;
@@ -582,30 +607,57 @@ const Lostlead = () => {
         <div className="w-full bg-white rounded-3xl border border-slate-200/90 shadow-md p-5 space-y-4 animate-in fade-in duration-150">
           {/* Search & Quick Status Tabs */}
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            {/* Search Input */}
-            <div className="relative w-full md:w-96">
-              <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-                placeholder="Search Client Name, Project Details, City..."
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold text-slate-800 bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:border-slate-900 transition-all shadow-2xs"
-              />
-              {searchTerm && (
-                <button
-                  type="button"
-                  onClick={() => setSearchTerm("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 text-xs font-bold"
-                >
-                  ✕
-                </button>
-              )}
+            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto flex-1">
+              {/* Rows Per Page Dropdown */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs sm:text-sm font-bold text-slate-600">Show:</span>
+                <div className="relative w-20">
+                  <select
+                    value={rowsPerPage}
+                    onChange={(e) => {
+                      setRowsPerPage(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="w-full appearance-none px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-bold text-slate-800 focus:outline-hidden focus:border-black cursor-pointer pr-6 shadow-2xs"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              {/* Search Input */}
+              <div className="relative flex-1 min-w-[220px] max-w-md">
+                <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                  placeholder="Search Client Name, Project Details, City..."
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold text-slate-800 bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:border-slate-900 transition-all shadow-2xs"
+                />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchTerm("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 text-xs font-bold"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
             </div>
 
-            {/* Quick Status Tabs (ALL, HOT, WARM, COLD) */}
+            {/* Quick Status Tabs (ALL, LOST, HOT, WARM, COLD) */}
             <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
-              {["ALL", "HOT", "WARM", "COLD"].map((st) => (
+              {["ALL", "LOST", "HOT", "WARM", "COLD"].map((st) => (
                 <button
                   key={st}
                   type="button"
@@ -651,6 +703,7 @@ const Lostlead = () => {
               className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:border-slate-900 cursor-pointer shadow-2xs"
             >
               <option value="ALL">Lead Status</option>
+              <option value="LOST">Lost</option>
               <option value="Hot">Hot</option>
               <option value="Warm">Warm</option>
               <option value="Cold">Cold</option>
@@ -703,9 +756,15 @@ const Lostlead = () => {
       <Table
         columnConfig={columnConfig}
         data={paginatedLeads}
+        currentPage={currentPage}
         totalItems={filteredLeads.length}
         itemsPerPage={rowsPerPage}
         onPageChange={(page) => setCurrentPage(page)}
+        onItemsPerPageChange={(limit) => {
+          setRowsPerPage(limit);
+          setCurrentPage(1);
+        }}
+        itemsPerPageOptions={[10, 25, 50, 100]}
       />
 
       {/* 5. REVIVE MODAL */}

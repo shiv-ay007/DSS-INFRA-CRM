@@ -20,7 +20,10 @@ import {
 } from "../../data/followUpData";
 
 import { subscribeToLeadUpdates, updateLeadInStorage, getScheduledLeadsFromCache } from "../../utils/leadStorageUtils";
-import { addFollowupApi, getFollowupLeadsApi, getAllFollowupsApi, getAllLeadsApi, markLeadAsLossApi, createLossLeadApi } from "../../../../services/api";
+import { addFollowupApi, getFollowupLeadsApi, getAllFollowupsApi } from "../../../../services/followup.api";
+import { getAllLeadsApi, updateLeadApi } from "../../../../services/totalLeads.api";
+import { markLeadAsLossApi, createLossLeadApi } from "../../../../services/lostLeads.api";
+import { useLeadContext } from "../../../../context/LeadContext";
 
 const leadModesList = [
   "ALL",
@@ -43,197 +46,213 @@ const Follow = () => {
 
   // State for all scheduled leads fetched directly from backend API
   const [leads, setLeads] = useState([]);
+  const [totalLeadsCount, setTotalLeadsCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const fetchBackendFollowups = React.useCallback(async () => {
+  // Filter States
+  const [showFilters, setShowFilters] = useState(false);
+  const [filterScope, setFilterScope] = useState("ALL"); // "ALL", "SELF", "TEAM"
+  const [filterExecutive, setFilterExecutive] = useState("ALL");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [filterLeadMode, setFilterLeadMode] = useState("ALL");
+  const [filterLeadType, setFilterLeadType] = useState("ALL");
+  const [filterWorkCategory, setFilterWorkCategory] = useState("ALL");
+  const [filterWorkType, setFilterWorkType] = useState("ALL");
+  const [filterStatus, setFilterStatus] = useState("ALL");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  const { getCachedData, setCachedData, invalidateCache } = useLeadContext();
+
+  const fetchBackendFollowups = useCallback(async (forceRefresh = false) => {
+    const cacheKey = `followupLeads_${currentPage}_${rowsPerPage}_${debouncedSearch}_${filterStatus}_${filterLeadMode}_${filterLeadType}_${filterWorkCategory}_${filterDateFrom}_${filterScope}_${filterExecutive}`;
+
+    if (!forceRefresh) {
+      const cached = getCachedData(cacheKey);
+      if (cached && Array.isArray(cached.data)) {
+        setLeads(cached.data);
+        if (typeof cached.pagination?.total === "number") {
+          setTotalLeadsCount(cached.pagination.total);
+        }
+        setIsLoading(false);
+        return;
+      }
+    }
+
     try {
-      let combinedRaw = [];
-
-      // 1. Fetch from getFollowupLeadsApi
-      try {
-        const res = await getFollowupLeadsApi();
-        if (res && res.success && res.data) {
-          const list = Array.isArray(res.data)
-            ? res.data
-            : (res.data.leads || res.data.followups || res.data.data || []);
-          if (Array.isArray(list)) combinedRaw.push(...list);
-        }
-      } catch (err) {
-        console.warn("getFollowupLeadsApi warning:", err);
-      }
-
-      // 2. Fetch from getAllFollowupsApi
-      try {
-        const resAll = await getAllFollowupsApi();
-        if (resAll && resAll.success && resAll.data) {
-          const listAll = Array.isArray(resAll.data)
-            ? resAll.data
-            : (resAll.data.leads || resAll.data.followups || resAll.data.data || []);
-          if (Array.isArray(listAll)) combinedRaw.push(...listAll);
-        }
-      } catch (err) {
-        console.warn("getAllFollowupsApi warning:", err);
-      }
-
-      // 3. Fetch from getAllLeadsApi to capture any scheduled leads
-      try {
-        const resLeads = await getAllLeadsApi();
-        if (resLeads && resLeads.success && resLeads.data) {
-          const listLeads = Array.isArray(resLeads.data)
-            ? resLeads.data
-            : (resLeads.data.leads || resLeads.data.data || []);
-          if (Array.isArray(listLeads)) combinedRaw.push(...listLeads);
-        }
-      } catch (err) {
-        console.warn("getAllLeadsApi warning:", err);
-      }
-
-      // 4. Merge live in-memory scheduled leads cache
-      const cachedScheduledList = getScheduledLeadsFromCache();
-      cachedScheduledList.forEach((cachedLead) => {
-        if (cachedLead) combinedRaw.push(cachedLead);
-      });
-
-      const map = new Map();
-      combinedRaw.forEach((rawBackendLead) => {
-        const idKey = String(rawBackendLead.leadId || rawBackendLead._id || rawBackendLead.id);
-        if (!idKey) return;
-
-        const cachedScheduled = cachedScheduledList.find(c => String(c._id || c.id || c.leadId) === idKey);
-
-        const backendLead = cachedScheduled
-          ? {
-              ...rawBackendLead,
-              ...cachedScheduled,
-              followupHistory: (cachedScheduled.followupHistory && cachedScheduled.followupHistory.length > 0)
-                ? cachedScheduled.followupHistory
-                : (Array.isArray(rawBackendLead.followupHistory) ? rawBackendLead.followupHistory : []),
-              followupRemarksCount: Math.max(
-                cachedScheduled.followupRemarksCount || 1,
-                Number(rawBackendLead.followupRemarksCount) || 0
-              ),
-              nextFollowupDate: cachedScheduled.nextFollowupDate || rawBackendLead.nextFollowupDate,
-              nextFollowupDateRaw: cachedScheduled.nextFollowupDateRaw || rawBackendLead.nextFollowupDateRaw,
-              nextFollowupTime: cachedScheduled.nextFollowupTime || rawBackendLead.nextFollowupTime,
-              isFollowupScheduled: true
-            }
-          : rawBackendLead;
-
-        const historyCount = Array.isArray(backendLead.followupHistory) ? backendLead.followupHistory.length : 0;
-        const remarksCount = Number(backendLead.followupRemarksCount) || Number(backendLead.followupCount) || 0;
-        const rawNext = backendLead.nextFollowupDate || backendLead.nextFollowup || "";
-        const hasNextDate = !!(rawNext && rawNext !== "--" && rawNext !== "Completed" && rawNext !== "Invalid Date");
-        const isExplicitScheduled = backendLead.isFollowupScheduled === true || backendLead.followupScheduled === true;
-
-        const hasValidFollowup = historyCount > 0 || remarksCount > 0 || (isExplicitScheduled && hasNextDate);
-        if (!hasValidFollowup) return;
-
-        const dateObj = new Date(backendLead.createdAt || Date.now());
-        const formattedDate = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
-        const formattedTime = backendLead.createdTime || dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
-        const assignee = backendLead.salesPerson || (typeof backendLead.assignedTo === 'object' ? backendLead.assignedTo?.name : backendLead.assignedTo) || "Sales TL";
-
-        let formattedNextDate = "";
-        if (backendLead.nextFollowupDate) {
-          try {
-            const d = new Date(backendLead.nextFollowupDate);
-            if (!isNaN(d.getTime())) {
-              formattedNextDate = d.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
-            } else {
-              formattedNextDate = String(backendLead.nextFollowupDate);
-            }
-          } catch (e) {
-            formattedNextDate = String(backendLead.nextFollowupDate);
-          }
-        }
-
-        const count = Math.max(
-          Array.isArray(backendLead.followupHistory) ? backendLead.followupHistory.length : 0,
-          Number(backendLead.followupRemarksCount) || 0,
-          Number(backendLead.followupCount) || 0,
-          (isExplicitScheduled && formattedNextDate && formattedNextDate !== "--") ? 1 : 0
-        );
-
-        const nextTime = backendLead.nextFollowupTime || backendLead.followupTime || "10:00 am";
-
-        const processed = {
-          ...backendLead,
-          id: backendLead.leadId || backendLead._id || backendLead.id,
-          leadId: backendLead.leadId || backendLead._id || backendLead.id,
-          _id: backendLead._id,
-          clientName: backendLead.clientName || backendLead.concernPersonName || "Client",
-          concernPersonName: backendLead.clientName || backendLead.concernPersonName || "Client",
-          phoneNumber: backendLead.phoneNumber || backendLead.phone || backendLead.contact || "--",
-          contact: backendLead.phoneNumber || backendLead.phone || backendLead.contact || "--",
-          alternateNumber: backendLead.alternateNumber || "--",
-          emailAddress: backendLead.emailAddress || backendLead.email || "--",
-          email: backendLead.emailAddress || backendLead.email || "--",
-          status: backendLead.leadStatus || backendLead.status || "Warm",
-          leadStatus: backendLead.leadStatus || backendLead.status || "Warm",
-          leadType: backendLead.leadType || "FRESH",
-          leadMode: backendLead.leadMode || backendLead.leadSource || "Business networking",
-          leadSource: backendLead.leadSource || backendLead.leadMode || "Business networking",
-          workCategory: backendLead.workCategory || "Design",
-          workType: Array.isArray(backendLead.workType) ? backendLead.workType : (backendLead.workType ? [backendLead.workType] : ["Concept Drawing"]),
-          address: backendLead.address || backendLead.siteAddress || "--",
-          city: backendLead.city || "--",
-          pincode: backendLead.pincode || "--",
-          state: backendLead.state || "--",
-          projectDetail: backendLead.projectDetail || backendLead.projectDetails || backendLead.notes || "--",
-          expectedBusiness: String(backendLead.expectedBusiness || backendLead.budget || 0),
-          salesPerson: assignee,
-          assignedTo: assignee,
-          assignTo: assignee,
-          createdDate: formattedDate,
-          createdTime: formattedTime,
-          nextFollowupDate: formattedNextDate || backendLead.nextFollowupDate || "--",
-          nextFollowupDateRaw: backendLead.nextFollowupDateRaw || backendLead.nextFollowupDate || "",
-          nextFollowupTime: nextTime,
-          followupTime: nextTime,
-          followupCount: count,
-          followupRemarksCount: count,
-          followupHistory: Array.isArray(backendLead.followupHistory) ? backendLead.followupHistory : [],
-          isFollowupScheduled: count > 0,
-          isFollowup: count > 0,
-          remark: backendLead.remark || backendLead.requirement || backendLead.followupRemark || backendLead.notes || "--",
-          followupRemark: backendLead.followupRemark || backendLead.remark || backendLead.requirement || backendLead.notes || "--"
-        };
-
-        map.set(idKey, { ...map.get(idKey), ...processed });
-      });
-
-      const getLeadTime = (lead) => {
-        if (lead.createdAt) {
-          const t = new Date(lead.createdAt).getTime();
-          if (!isNaN(t)) return t;
-        }
-        if (lead.updatedAt) {
-          const t = new Date(lead.updatedAt).getTime();
-          if (!isNaN(t)) return t;
-        }
-        if (lead._id && String(lead._id).length === 24) {
-          const t = parseInt(String(lead._id).substring(0, 8), 16) * 1000;
-          if (!isNaN(t)) return t;
-        }
-        if (lead.createdDate) {
-          const t = new Date(lead.createdDate).getTime();
-          if (!isNaN(t)) return t;
-        }
-        if (lead.date) {
-          const t = new Date(lead.date).getTime();
-          if (!isNaN(t)) return t;
-        }
-        return 0;
+      setIsLoading(true);
+      const queryParams = {
+        page: currentPage,
+        limit: rowsPerPage,
+        isLoss: false
       };
 
-      const sortedLeads = Array.from(map.values()).sort((a, b) => getLeadTime(b) - getLeadTime(a));
-      setLeads(sortedLeads);
+      if (debouncedSearch && debouncedSearch.trim()) queryParams.search = debouncedSearch.trim();
+      if (filterStatus && filterStatus !== "ALL") queryParams.status = filterStatus;
+      if (filterLeadMode && filterLeadMode !== "ALL") queryParams.leadMode = filterLeadMode;
+      if (filterLeadType && filterLeadType !== "ALL") queryParams.leadType = filterLeadType;
+      if (filterWorkCategory && filterWorkCategory !== "ALL") queryParams.workCategory = filterWorkCategory;
+      if (filterDateFrom) queryParams.dateFrom = filterDateFrom;
+      if (filterScope === "SELF") queryParams.scope = "SELF";
+      if (filterScope === "TEAM") {
+        queryParams.scope = "TEAM";
+        if (filterExecutive && filterExecutive !== "ALL") queryParams.salesPerson = filterExecutive;
+      }
+
+      const res = await getFollowupLeadsApi(queryParams);
+      if (res && res.success && res.data && res.data.leads) {
+        const activeLeads = res.data.leads.filter((backendLead) => {
+          const isLost =
+            backendLead.isLoss === true ||
+            ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(backendLead.leadStatus || "").toUpperCase()) ||
+            ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(backendLead.status || "").toUpperCase());
+          return !isLost;
+        });
+
+        const cachedScheduledList = getScheduledLeadsFromCache();
+
+        const mappedLeads = activeLeads.map((rawBackendLead) => {
+          const idKey = String(rawBackendLead.leadId || rawBackendLead._id || rawBackendLead.id);
+          const cachedScheduled = cachedScheduledList.find(c => String(c._id || c.id || c.leadId) === idKey);
+
+          const backendLead = cachedScheduled
+            ? {
+                ...rawBackendLead,
+                ...cachedScheduled,
+                followupHistory: (cachedScheduled.followupHistory && cachedScheduled.followupHistory.length > 0)
+                  ? cachedScheduled.followupHistory
+                  : (Array.isArray(rawBackendLead.followupHistory) ? rawBackendLead.followupHistory : []),
+                followupRemarksCount: Math.max(
+                  cachedScheduled.followupRemarksCount || 1,
+                  Number(rawBackendLead.followupRemarksCount) || 0
+                ),
+                nextFollowupDate: cachedScheduled.nextFollowupDate || rawBackendLead.nextFollowupDate,
+                nextFollowupDateRaw: cachedScheduled.nextFollowupDateRaw || rawBackendLead.nextFollowupDateRaw,
+                nextFollowupTime: cachedScheduled.nextFollowupTime || rawBackendLead.nextFollowupTime,
+                isFollowupScheduled: true
+              }
+            : rawBackendLead;
+
+          const dateObj = new Date(backendLead.createdAt || Date.now());
+          const formattedDate = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+          const formattedTime = backendLead.createdTime || dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+          const assignee = backendLead.salesPerson || (typeof backendLead.assignedTo === 'object' ? backendLead.assignedTo?.name : backendLead.assignedTo) || "Sales TL";
+
+          let formattedNextDate = "";
+          if (backendLead.nextFollowupDate) {
+            try {
+              const d = new Date(backendLead.nextFollowupDate);
+              if (!isNaN(d.getTime())) {
+                formattedNextDate = d.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+              } else {
+                formattedNextDate = String(backendLead.nextFollowupDate);
+              }
+            } catch (e) {
+              formattedNextDate = String(backendLead.nextFollowupDate);
+            }
+          }
+
+          const count = Math.max(
+            Array.isArray(backendLead.followupHistory) ? backendLead.followupHistory.length : 0,
+            Number(backendLead.followupRemarksCount) || 0,
+            Number(backendLead.followupCount) || 0,
+            (formattedNextDate && formattedNextDate !== "--") ? 1 : 0
+          );
+
+          const nextTime = backendLead.nextFollowupTime || backendLead.followupTime || "10:00 am";
+
+          return {
+            ...backendLead,
+            id: backendLead.leadId || backendLead._id || backendLead.id,
+            leadId: backendLead.leadId || backendLead._id || backendLead.id,
+            _id: backendLead._id,
+            clientName: backendLead.clientName || backendLead.concernPersonName || "Client",
+            concernPersonName: backendLead.clientName || backendLead.concernPersonName || "Client",
+            phoneNumber: backendLead.phoneNumber || backendLead.phone || backendLead.contact || "--",
+            contact: backendLead.phoneNumber || backendLead.phone || backendLead.contact || "--",
+            alternateNumber: backendLead.alternateNumber || "--",
+            emailAddress: backendLead.emailAddress || backendLead.email || "--",
+            email: backendLead.emailAddress || backendLead.email || "--",
+            status: backendLead.leadStatus || backendLead.status || "Warm",
+            leadStatus: backendLead.leadStatus || backendLead.status || "Warm",
+            leadType: backendLead.leadType || "FRESH",
+            leadMode: backendLead.leadMode || backendLead.leadSource || "Business networking",
+            leadSource: backendLead.leadSource || backendLead.leadMode || "Business networking",
+            workCategory: backendLead.workCategory || "Design",
+            workType: Array.isArray(backendLead.workType) ? backendLead.workType : (backendLead.workType ? [backendLead.workType] : ["Concept Drawing"]),
+            address: backendLead.address || backendLead.siteAddress || "--",
+            city: backendLead.city || "--",
+            pincode: backendLead.pincode || "--",
+            state: backendLead.state || "--",
+            projectDetail: backendLead.projectDetail || backendLead.projectDetails || backendLead.notes || "--",
+            expectedBusiness: String(backendLead.expectedBusiness || backendLead.budget || 0),
+            salesPerson: assignee,
+            assignedTo: assignee,
+            assignTo: assignee,
+            createdDate: formattedDate,
+            createdTime: formattedTime,
+            nextFollowupDate: formattedNextDate || backendLead.nextFollowupDate || "--",
+            nextFollowupDateRaw: backendLead.nextFollowupDateRaw || backendLead.nextFollowupDate || "",
+            nextFollowupTime: nextTime,
+            followupTime: nextTime,
+            followupCount: count,
+            followupRemarksCount: count,
+            followupHistory: Array.isArray(backendLead.followupHistory) ? backendLead.followupHistory : [],
+            isFollowupScheduled: count > 0,
+            isFollowup: count > 0,
+            remark: backendLead.remark || backendLead.requirement || backendLead.followupRemark || backendLead.notes || "--",
+            followupRemark: backendLead.followupRemark || backendLead.remark || backendLead.requirement || backendLead.notes || "--"
+          };
+        });
+
+        setLeads(mappedLeads);
+        const total = (res.data.pagination && typeof res.data.pagination.total === "number")
+          ? res.data.pagination.total
+          : activeLeads.length;
+        setTotalLeadsCount(total);
+        setCachedData(cacheKey, mappedLeads, { total, page: currentPage, limit: rowsPerPage });
+      } else {
+        setLeads([]);
+        setTotalLeadsCount(0);
+      }
     } catch (err) {
       console.error("Error fetching followup leads from API:", err);
+      setLeads([]);
+      setTotalLeadsCount(0);
+    } finally {
+      setIsLoading(false);
     }
-  }, []);
+  }, [
+    currentPage,
+    rowsPerPage,
+    debouncedSearch,
+    filterStatus,
+    filterLeadMode,
+    filterLeadType,
+    filterWorkCategory,
+    filterDateFrom,
+    filterScope,
+    filterExecutive,
+    getCachedData,
+    setCachedData
+  ]);
 
-  React.useEffect(() => {
+  useEffect(() => {
     fetchBackendFollowups();
+  }, [fetchBackendFollowups]);
+
+  useEffect(() => {
     const unsubscribe = subscribeToLeadUpdates(() => {
       fetchBackendFollowups();
     });
@@ -245,23 +264,9 @@ const Follow = () => {
     setLeads(newLeads);
   };
 
-  // Filter States
-  const [showFilters, setShowFilters] = useState(false);
-  const [filterScope, setFilterScope] = useState("ALL"); // "ALL", "SELF", "TEAM"
-  const [filterExecutive, setFilterExecutive] = useState("ALL");
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterLeadMode, setFilterLeadMode] = useState("ALL");
-  const [filterLeadType, setFilterLeadType] = useState("ALL");
-  const [filterWorkCategory, setFilterWorkCategory] = useState("ALL");
-  const [filterWorkType, setFilterWorkType] = useState("ALL");
-  const [filterStatus, setFilterStatus] = useState("ALL");
-  const [filterDateFrom, setFilterDateFrom] = useState("");
-
-  const [rowsPerPage, setRowsPerPage] = useState(20);
-  const [currentPage, setCurrentPage] = useState(1);
-
   const handleResetFilters = () => {
     setSearchTerm("");
+    setDebouncedSearch("");
     setFilterLeadMode("ALL");
     setFilterLeadType("ALL");
     setFilterWorkCategory("ALL");
@@ -944,92 +949,18 @@ const Follow = () => {
   // Filtered Leads
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
-      const historyCount = Array.isArray(lead.followupHistory) ? lead.followupHistory.length : 0;
-      const remarksCount = Number(lead.followupRemarksCount) || Number(lead.followupCount) || 0;
-      const rawNext = lead.nextFollowupDate || lead.nextFollowup || "";
-      const hasNextDate = !!(rawNext && rawNext !== "--" && rawNext !== "Completed" && rawNext !== "Invalid Date");
-      const isExplicitScheduled = lead.isFollowupScheduled === true || lead.followupScheduled === true;
-
-      const hasValidFollowup = historyCount > 0 || remarksCount > 0 || (isExplicitScheduled && hasNextDate);
-      if (!hasValidFollowup) return false;
-
-      // Search Box
-      if (searchTerm) {
-        const q = searchTerm.toLowerCase();
-        const matches =
-          (lead.concernPersonName || lead.clientName || "").toLowerCase().includes(q) ||
-          (lead.phoneNumber || "").includes(q) ||
-          (lead.emailAddress || "").toLowerCase().includes(q) ||
-          (lead.requirement || lead.projectDetail || "").toLowerCase().includes(q) ||
-          (lead.address || lead.city || "").toLowerCase().includes(q);
-        if (!matches) return false;
-      }
-
-      // Dropdowns
-      if (filterLeadMode !== "ALL" && (lead.leadMode || lead.leadSource) !== filterLeadMode) return false;
-      if (filterLeadType !== "ALL" && lead.leadType !== filterLeadType) return false;
-      if (filterWorkCategory !== "ALL" && (lead.workCategory || lead.leadLabel) !== filterWorkCategory) return false;
-      if (filterWorkType !== "ALL" && (lead.workType || lead.jobType) !== filterWorkType) return false;
-      if (filterStatus !== "ALL" && (lead.leadStatus || lead.status) !== filterStatus) return false;
-
-      // Date Filter
-      if (filterDateFrom && !(lead.createdDate || lead.date || lead.nextFollowupDate || "").includes(filterDateFrom)) return false;
-
-      // Scope Filter (ALL, SELF, TEAM)
-      if (filterScope === "SELF" && lead.assignedType !== "self") return false;
-      if (filterScope === "TEAM") {
-        if (lead.assignedType === "self") return false;
-        if (filterExecutive !== "ALL") {
-          const assignee = (lead.assignTo || lead.assignedTo || lead.salesPerson || "").toLowerCase();
-          if (!assignee.includes(filterExecutive.toLowerCase())) return false;
-        }
-      }
-
-      return true;
-    }).sort((a, b) => {
-      const getLeadTime = (lead) => {
-        if (lead.createdAt) {
-          const t = new Date(lead.createdAt).getTime();
-          if (!isNaN(t)) return t;
-        }
-        if (lead.updatedAt) {
-          const t = new Date(lead.updatedAt).getTime();
-          if (!isNaN(t)) return t;
-        }
-        if (lead._id && String(lead._id).length === 24) {
-          const t = parseInt(String(lead._id).substring(0, 8), 16) * 1000;
-          if (!isNaN(t)) return t;
-        }
-        if (lead.createdDate) {
-          const t = new Date(lead.createdDate).getTime();
-          if (!isNaN(t)) return t;
-        }
-        if (lead.date) {
-          const t = new Date(lead.date).getTime();
-          if (!isNaN(t)) return t;
-        }
-        return 0;
-      };
-      return getLeadTime(b) - getLeadTime(a);
+      const isLost =
+        lead.isLoss === true ||
+        ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(lead.leadStatus || "").toUpperCase()) ||
+        ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(lead.status || "").toUpperCase());
+      return !isLost;
     });
-  }, [
-    leads,
-    searchTerm,
-    filterLeadMode,
-    filterLeadType,
-    filterWorkCategory,
-    filterWorkType,
-    filterStatus,
-    filterDateFrom,
-    filterScope,
-    filterExecutive
-  ]);
+  }, [leads]);
 
   // Paginated Leads
   const paginatedLeads = useMemo(() => {
-    const start = (currentPage - 1) * rowsPerPage;
-    return filteredLeads.slice(start, start + rowsPerPage);
-  }, [filteredLeads, currentPage, rowsPerPage]);
+    return filteredLeads;
+  }, [filteredLeads]);
 
   // Open Schedule Modal for a lead
   const handleOpenScheduleModal = (lead) => {
@@ -1208,25 +1139,52 @@ const Follow = () => {
         <div className="w-full bg-white rounded-3xl border border-slate-200/90 shadow-md p-5 mb-5 space-y-4 animate-in fade-in duration-150">
           {/* Search & Quick Status Tabs */}
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            {/* Search Input */}
-            <div className="relative w-full md:w-96">
-              <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
-                placeholder="Search Client Name, Project Details, City..."
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold text-slate-800 bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:border-slate-900 transition-all shadow-2xs"
-              />
-              {searchTerm && (
-                <button
-                  type="button"
-                  onClick={() => setSearchTerm("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 text-xs font-bold"
-                >
-                  ✕
-                </button>
-              )}
+            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto flex-1">
+              {/* Rows Per Page Dropdown */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs sm:text-sm font-bold text-slate-600">Show:</span>
+                <div className="relative w-20">
+                  <select
+                    value={rowsPerPage}
+                    onChange={(e) => {
+                      setRowsPerPage(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="w-full appearance-none px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-bold text-slate-800 focus:outline-hidden focus:border-black cursor-pointer pr-6 shadow-2xs"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              {/* Search Input */}
+              <div className="relative flex-1 min-w-[220px] max-w-md">
+                <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
+                  placeholder="Search Client Name, Project Details, City..."
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold text-slate-800 bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:border-slate-900 transition-all shadow-2xs"
+                />
+                {searchTerm && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchTerm("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 text-xs font-bold"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Quick Status Tabs (ALL, HOT, WARM, COLD) */}
@@ -1329,9 +1287,15 @@ const Follow = () => {
         data={paginatedLeads}
         columnConfig={columnConfig}
         currentPage={currentPage}
-        totalItems={filteredLeads.length}
+        totalItems={totalLeadsCount}
         itemsPerPage={rowsPerPage}
+        isLoading={isLoading}
         onPageChange={(page) => setCurrentPage(page)}
+        onItemsPerPageChange={(limit) => {
+          setRowsPerPage(limit);
+          setCurrentPage(1);
+        }}
+        itemsPerPageOptions={[10, 25, 50, 100]}
       />
 
       {/* ========================================================================= */}

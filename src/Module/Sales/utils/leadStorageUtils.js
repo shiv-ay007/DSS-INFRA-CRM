@@ -17,7 +17,14 @@ export const notifyLeadChange = (updatedLead) => {
   try {
     if (updatedLead) {
       const idKey = String(updatedLead._id || updatedLead.id || updatedLead.leadId);
-      if (idKey && (updatedLead.isFollowupScheduled || (Array.isArray(updatedLead.followupHistory) && updatedLead.followupHistory.length > 0) || Number(updatedLead.followupRemarksCount) > 0)) {
+      const isLost =
+        updatedLead.isLoss === true ||
+        ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(updatedLead.leadStatus || "").toUpperCase()) ||
+        ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(updatedLead.status || "").toUpperCase());
+
+      if (idKey && isLost) {
+        scheduledLeadsCache.delete(idKey);
+      } else if (idKey && (updatedLead.isFollowupScheduled || (Array.isArray(updatedLead.followupHistory) && updatedLead.followupHistory.length > 0) || Number(updatedLead.followupRemarksCount) > 0)) {
         scheduledLeadsCache.set(idKey, updatedLead);
       }
     }

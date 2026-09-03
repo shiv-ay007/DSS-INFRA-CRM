@@ -12,7 +12,9 @@ import { FaUserPlus, FaUsers, FaUserCheck, FaImage, FaVideo, FaMicrophone, FaFil
 import { HiOutlineUsers } from "react-icons/hi";
 
 import { subscribeToLeadUpdates, updateLeadInStorage, getStoredLeads } from "../../utils/leadStorageUtils";
-import { getAllLeadsApi, updateLeadApi, createAssignedLeadApi } from "../../../../services/api";
+import { getAllLeadsApi, updateLeadApi } from "../../../../services/totalLeads.api";
+import { createAssignedLeadApi } from "../../../../services/assignedLeads.api";
+import { useLeadContext } from "../../../../context/LeadContext";
 
 const salesPersonsList = [
   "ALL",
@@ -90,12 +92,103 @@ const SalseTotalLeads = () => {
   const location = useLocation();
 
   const [leads, setLeads] = useState([]);
+  const [totalLeadsCount, setTotalLeadsCount] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
 
-  const fetchBackendLeads = useCallback(async () => {
+  // Search & Filter States
+  const [showFilters, setShowFilters] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [filterScope, setFilterScope] = useState("ALL");
+  const [filterLeadMode, setFilterLeadMode] = useState("ALL");
+  const [filterLeadType, setFilterLeadType] = useState("ALL");
+  const [filterWorkCategory, setFilterWorkCategory] = useState("ALL");
+  const [filterWorkType, setFilterWorkType] = useState("ALL");
+  const [filterStatus, setFilterStatus] = useState("ALL");
+  const [filterSalesPerson, setFilterSalesPerson] = useState("ALL");
+  const [filterCity, setFilterCity] = useState("ALL");
+  const [filterState, setFilterState] = useState("ALL");
+  const [filterDateFrom, setFilterDateFrom] = useState("");
+  const [filterDateTo, setFilterDateTo] = useState("");
+
+  // Pagination State - Default 10 leads per page
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+
+  // Sort State
+  const [sortConfig, setSortConfig] = useState({
+    key: null,
+    direction: "desc"
+  });
+
+  // Debounce search term to avoid redundant backend requests
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [searchTerm]);
+
+  const { getCachedData, setCachedData, invalidateCache } = useLeadContext();
+
+  const handleResetFilters = () => {
+    setSearchTerm("");
+    setDebouncedSearch("");
+    setFilterLeadMode("ALL");
+    setFilterLeadType("ALL");
+    setFilterWorkCategory("ALL");
+    setFilterWorkType("ALL");
+    setFilterStatus("ALL");
+    setFilterSalesPerson("ALL");
+    setFilterCity("ALL");
+    setFilterState("ALL");
+    setFilterDateFrom("");
+    setFilterDateTo("");
+    setCurrentPage(1);
+  };
+
+  const fetchBackendLeads = useCallback(async (forceRefresh = false) => {
+    const cacheKey = `totalLeads_${currentPage}_${rowsPerPage}_${debouncedSearch}_${filterStatus}_${filterLeadMode}_${filterLeadType}_${filterWorkCategory}_${filterCity}_${filterState}_${filterSalesPerson}`;
+
+    if (!forceRefresh) {
+      const cached = getCachedData(cacheKey);
+      if (cached && Array.isArray(cached.data)) {
+        setLeads(cached.data);
+        if (typeof cached.pagination?.total === "number") {
+          setTotalLeadsCount(cached.pagination.total);
+        }
+        setIsLoading(false);
+        return;
+      }
+    }
+
     try {
-      const res = await getAllLeadsApi();
+      setIsLoading(true);
+      const queryParams = {
+        page: currentPage,
+        limit: rowsPerPage,
+        isLoss: false
+      };
+
+      if (debouncedSearch && debouncedSearch.trim()) queryParams.search = debouncedSearch.trim();
+      if (filterStatus && filterStatus !== "ALL") queryParams.status = filterStatus;
+      if (filterLeadMode && filterLeadMode !== "ALL") queryParams.leadMode = filterLeadMode;
+      if (filterLeadType && filterLeadType !== "ALL") queryParams.leadType = filterLeadType;
+      if (filterWorkCategory && filterWorkCategory !== "ALL") queryParams.workCategory = filterWorkCategory;
+      if (filterCity && filterCity !== "ALL") queryParams.city = filterCity;
+      if (filterState && filterState !== "ALL") queryParams.state = filterState;
+      if (filterSalesPerson && filterSalesPerson !== "ALL") queryParams.salesPerson = filterSalesPerson;
+
+      const res = await getAllLeadsApi(queryParams);
       if (res && res.success && res.data && res.data.leads) {
-        const mappedLeads = res.data.leads.map((backendLead) => {
+        const activeLeads = res.data.leads.filter((backendLead) => {
+          const isLost =
+            backendLead.isLoss === true ||
+            ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(backendLead.leadStatus || "").toUpperCase()) ||
+            ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(backendLead.status || "").toUpperCase());
+          return !isLost;
+        });
+        const mappedLeads = activeLeads.map((backendLead) => {
           const dateObj = new Date(backendLead.createdAt || Date.now());
           const formattedDate = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
           const formattedTime = backendLead.createdTime || dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
@@ -144,11 +237,31 @@ const SalseTotalLeads = () => {
         });
 
         setLeads(mappedLeads);
+        const total = (res.data.pagination && typeof res.data.pagination.total === "number")
+          ? res.data.pagination.total
+          : mappedLeads.length;
+        setTotalLeadsCount(total);
+        setCachedData(cacheKey, mappedLeads, { total, page: currentPage, limit: rowsPerPage });
       }
     } catch (err) {
       console.warn("Backend API fetch leads warning:", err);
+    } finally {
+      setIsLoading(false);
     }
-  }, []);
+  }, [
+    currentPage,
+    rowsPerPage,
+    debouncedSearch,
+    filterStatus,
+    filterLeadMode,
+    filterLeadType,
+    filterWorkCategory,
+    filterCity,
+    filterState,
+    filterSalesPerson,
+    getCachedData,
+    setCachedData
+  ]);
 
   useEffect(() => {
     fetchBackendLeads();
@@ -157,51 +270,11 @@ const SalseTotalLeads = () => {
       fetchBackendLeads();
     });
     return () => unsubscribe();
-  }, [location, fetchBackendLeads]);
+  }, [fetchBackendLeads]);
 
   const saveLeadsToStorage = (newLeads) => {
     setLeads(newLeads);
   };
-
-  // Search & Filter States
-  const [showFilters, setShowFilters] = useState(false);
-  const [searchTerm, setSearchTerm] = useState("");
-  const [filterScope, setFilterScope] = useState("ALL");
-  const [filterLeadMode, setFilterLeadMode] = useState("ALL");
-  const [filterLeadType, setFilterLeadType] = useState("ALL");
-  const [filterWorkCategory, setFilterWorkCategory] = useState("ALL");
-  const [filterWorkType, setFilterWorkType] = useState("ALL");
-  const [filterStatus, setFilterStatus] = useState("ALL");
-  const [filterSalesPerson, setFilterSalesPerson] = useState("ALL");
-  const [filterCity, setFilterCity] = useState("ALL");
-  const [filterState, setFilterState] = useState("ALL");
-  const [filterDateFrom, setFilterDateFrom] = useState("");
-  const [filterDateTo, setFilterDateTo] = useState("");
-
-  const handleResetFilters = () => {
-    setSearchTerm("");
-    setFilterLeadMode("ALL");
-    setFilterLeadType("ALL");
-    setFilterWorkCategory("ALL");
-    setFilterWorkType("ALL");
-    setFilterStatus("ALL");
-    setFilterSalesPerson("ALL");
-    setFilterCity("ALL");
-    setFilterState("ALL");
-    setFilterDateFrom("");
-    setFilterDateTo("");
-    setCurrentPage(1);
-  };
-
-  // Pagination State
-  const [currentPage, setCurrentPage] = useState(1);
-  const [rowsPerPage, setRowsPerPage] = useState(20);
-
-  // Sort State
-  const [sortConfig, setSortConfig] = useState({
-    key: null,
-    direction: "desc"
-  });
 
   // Bulk Selection State
   const [selectedIds, setSelectedIds] = useState([]);
@@ -828,6 +901,12 @@ const SalseTotalLeads = () => {
   // Filter & Search Logic
   const filteredLeads = useMemo(() => {
     return leads.filter((item) => {
+      const isLost =
+        item.isLoss === true ||
+        ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(item.leadStatus || "").toUpperCase()) ||
+        ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(item.status || "").toUpperCase());
+      if (isLost) return false;
+
       const search = searchTerm.toLowerCase();
       const matchSearch =
         !searchTerm ||
@@ -919,8 +998,12 @@ const SalseTotalLeads = () => {
   }, [filteredLeads, sortConfig]);
 
   // Pagination Logic
-  const totalPages = Math.ceil(sortedLeads.length / rowsPerPage) || 1;
+  const totalItemsCount = totalLeadsCount > 0 ? totalLeadsCount : sortedLeads.length;
+  const totalPages = Math.ceil(totalItemsCount / rowsPerPage) || 1;
   const paginatedLeads = useMemo(() => {
+    if (sortedLeads.length <= rowsPerPage) {
+      return sortedLeads;
+    }
     const start = (currentPage - 1) * rowsPerPage;
     return sortedLeads.slice(start, start + rowsPerPage);
   }, [sortedLeads, currentPage, rowsPerPage]);
@@ -1055,7 +1138,6 @@ const SalseTotalLeads = () => {
         return "bg-slate-400";
     }
   };
-
   return (
     <div className="space-y-4 font-sans pb-16">
       
@@ -1065,7 +1147,7 @@ const SalseTotalLeads = () => {
           title="Total Leads Directory"
           badge="Master Directory"
           badgeColor="bg-blue-100 text-blue-800 border-blue-300"
-          description={`Showing ${filteredLeads.length} of ${leads.length} registered pipeline leads`}
+          description={`Showing ${paginatedLeads.length} of ${totalItemsCount} registered pipeline leads`}
           showBackButton={true}
           rightActions={
             <div className="flex items-center gap-2">
@@ -1081,22 +1163,23 @@ const SalseTotalLeads = () => {
                 <span>Export CSV</span>
               </button>
 
-              <Link
-                to="/sales/leads/add"
-                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs sm:text-sm font-bold shadow-md shadow-emerald-600/20 transition-all shrink-0 flex items-center gap-1.5 cursor-pointer"
+              <button
+                type="button"
+                onClick={() => navigate("/sales/leads/add")}
+                className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold shadow-sm transition-colors cursor-pointer flex items-center gap-1.5"
               >
-                <span>+</span> Add Lead
-              </Link>
+                <span>+ Add Lead</span>
+              </button>
 
               <button
                 type="button"
-                onClick={() => setShowFilters((prev) => !prev)}
-                className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-center shadow-2xs font-bold text-xs sm:text-sm ${
+                onClick={() => setShowFilters(!showFilters)}
+                className={`p-2.5 rounded-xl border transition-all cursor-pointer ${
                   showFilters
-                    ? "bg-white text-slate-800 border-slate-300 hover:bg-slate-50 shadow-2xs"
-                    : "bg-[#FF5722] text-white border-[#FF5722] hover:bg-[#e64a19]"
+                    ? "bg-slate-900 border-slate-900 text-white shadow-xs"
+                    : "bg-[#FF5722] hover:bg-[#F4511E] border-[#FF5722] text-white shadow-xs"
                 }`}
-                title={showFilters ? "Hide Filter Options" : "Show Filter Options"}
+                title="Toggle Filters"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
@@ -1127,31 +1210,58 @@ const SalseTotalLeads = () => {
       {/* COLLAPSIBLE FILTER PANEL (Opens on click) */}
       {showFilters && (
         <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 space-y-3.5 transition-all">
-          {/* Top Search & Status Tabs */}
+          {/* Top Search, Show Dropdown & Status Tabs */}
           <div className="flex flex-col lg:flex-row items-center justify-between gap-3.5">
-            {/* Real-time Search */}
-            <div className="relative w-full lg:w-96">
-              <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">
-                🔍
-              </span>
-              <input
-                type="text"
-                placeholder="Search Client Name, Project Details, City..."
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-hidden focus:border-black transition-all placeholder:text-slate-400 font-medium shadow-2xs"
-              />
-              {searchTerm && (
-                <button
-                  onClick={() => setSearchTerm("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-black text-xs cursor-pointer font-bold"
-                >
-                  ✕
-                </button>
-              )}
+            <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto flex-1">
+              {/* Rows Per Page Dropdown */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs sm:text-sm font-bold text-slate-600">Show:</span>
+                <div className="relative w-20">
+                  <select
+                    value={rowsPerPage}
+                    onChange={(e) => {
+                      setRowsPerPage(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="w-full appearance-none px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-bold text-slate-800 focus:outline-hidden focus:border-black cursor-pointer pr-6 shadow-2xs"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              {/* Real-time Search */}
+              <div className="relative flex-1 min-w-[220px] max-w-md">
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">
+                  🔍
+                </span>
+                <input
+                  type="text"
+                  placeholder="Search Client Name, Project Details, City..."
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-hidden focus:border-black transition-all placeholder:text-slate-400 font-medium shadow-2xs"
+                />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-black text-xs cursor-pointer font-bold"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Quick Status Tabs (Only ALL, HOT, WARM, COLD) */}
@@ -1319,9 +1429,14 @@ const SalseTotalLeads = () => {
         data={paginatedLeads}
         columnConfig={columnConfig}
         currentPage={currentPage}
-        totalItems={filteredLeads.length}
+        totalItems={totalItemsCount}
         itemsPerPage={rowsPerPage}
+        isLoading={isLoading}
         onPageChange={(page) => setCurrentPage(page)}
+        onItemsPerPageChange={(limit) => {
+          setRowsPerPage(limit);
+          setCurrentPage(1);
+        }}
       />
 
       {/* ================= 5. VIEW DETAIL MODAL ================= */}

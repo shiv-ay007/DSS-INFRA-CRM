@@ -7,7 +7,7 @@ import RequirementAddressCard from "./RequirementAddressCard";
 import FollowupTimelineCard from "./FollowupTimelineCard";
 import EditLeadModal from "./EditLeadModal";
 import { updateLeadInStorage, subscribeToLeadUpdates } from "../../utils/leadStorageUtils";
-import { getLeadByIdApi } from "../../../../services/api";
+import { getLeadByIdApi } from "../../../../services/totalLeads.api";
 
 const LeadDetails = () => {
   const { id } = useParams();

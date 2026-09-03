@@ -8,7 +8,10 @@ import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
 import { initialLeadsData } from "../../data/leadManagementData";
 import { FaUserPlus, FaUsers, FaUser } from "react-icons/fa";
 import { subscribeToLeadUpdates, updateLeadInStorage } from "../../utils/leadStorageUtils";
-import { markLeadAsLossApi, createLossLeadApi, getAllLeadsApi, updateLeadApi, getAllFollowupsApi, addFollowupApi } from "../../../../services/api";
+import { getAllLeadsApi, updateLeadApi } from "../../../../services/totalLeads.api";
+import { markLeadAsLossApi, createLossLeadApi } from "../../../../services/lostLeads.api";
+import { getAllFollowupsApi, addFollowupApi } from "../../../../services/followup.api";
+import { useLeadContext } from "../../../../context/LeadContext";
 import LeadKpiSlider from "./LeadKpiSlider";
 import SalesTransferModal from "./SalesTransferModal";
 
@@ -52,11 +55,21 @@ const Lead = () => {
   // Leads state fetched directly from backend API
   const [leads, setLeads] = useState([]);
   const scheduledFollowupCacheRef = useRef(new Map());
+  const { getCachedData, setCachedData } = useLeadContext();
 
-  const fetchBackendLeads = async () => {
+  const fetchBackendLeads = async (forceRefresh = false) => {
+    const cacheKey = "leadManagement_sheet_all";
+    if (!forceRefresh) {
+      const cached = getCachedData(cacheKey);
+      if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
+        setLeads(cached.data);
+        return;
+      }
+    }
+
     try {
       const [resLeads, resFollowups] = await Promise.allSettled([
-        getAllLeadsApi(),
+        getAllLeadsApi({ limit: 1000 }),
         getAllFollowupsApi()
       ]);
 
@@ -78,7 +91,13 @@ const Lead = () => {
 
       if (leadsList.length > 0) {
         const activeBackendLeads = leadsList
-          .filter((l) => !l.isLoss && l.leadStatus !== "CLOSED_LOST" && l.status !== "CLOSED_LOST")
+          .filter((l) => {
+            const isLost =
+              l.isLoss === true ||
+              ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(l.leadStatus || "").toUpperCase()) ||
+              ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(l.status || "").toUpperCase());
+            return !isLost;
+          })
           .map((backendLead) => {
             const idKey = String(backendLead._id || backendLead.leadId || backendLead.id);
             const extraFollowups = followupMap.get(idKey) || [];
@@ -176,7 +195,9 @@ const Lead = () => {
           return 0;
         };
 
-        setLeads(activeBackendLeads.sort((a, b) => getLeadTime(b) - getLeadTime(a)));
+        const sortedLeads = activeBackendLeads.sort((a, b) => getLeadTime(b) - getLeadTime(a));
+        setLeads(sortedLeads);
+        setCachedData(cacheKey, sortedLeads);
       }
     } catch (err) {
       console.error("Error fetching leads for Lead Management Sheet:", err);
@@ -185,7 +206,7 @@ const Lead = () => {
 
   useEffect(() => {
     const handleRefresh = () => {
-      fetchBackendLeads();
+      fetchBackendLeads(true);
     };
     const unsubscribe = subscribeToLeadUpdates(handleRefresh);
     fetchBackendLeads();
@@ -913,6 +934,12 @@ const Lead = () => {
   // 2. Filtered Leads
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
+      const isLost =
+        lead.isLoss === true ||
+        ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(lead.leadStatus || "").toUpperCase()) ||
+        ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(lead.status || "").toUpperCase());
+      if (isLost) return false;
+
       const sp = (lead.assignTo || lead.salesPerson || "").toLowerCase();
       const isSelfLead = sp.includes("sales tl") || sp.includes("current") || sp.includes("self") || sp.includes("john") || sp.includes("rahul");
       if (filterScope === "SELF" && !isSelfLead) return false;

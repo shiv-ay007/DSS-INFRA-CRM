@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { FaUser, FaLock, FaArrowLeft, FaSignInAlt } from "react-icons/fa";
 import { toast } from "react-toastify";
-import { loginApi } from "../../../services/api";
+import { loginApi } from "../../../services/auth.api";
 
 const Login = () => {
   const navigate = useNavigate();

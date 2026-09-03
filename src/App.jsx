@@ -5,23 +5,27 @@ import ScrollToTop from './Common/Components/ScrollToTop'
 import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 
+import { LeadProvider } from './context/LeadContext'
+
 const App = () => {
   return (
     <Router>
-      <ScrollToTop />
-      <ToastContainer
-        position="top-right"
-        autoClose={3000}
-        hideProgressBar={false}
-        newestOnTop={true}
-        closeOnClick
-        rtl={false}
-        pauseOnFocusLoss
-        draggable
-        pauseOnHover
-        theme="colored"
-      />
-      <MainRoute />
+      <LeadProvider>
+        <ScrollToTop />
+        <ToastContainer
+          position="top-right"
+          autoClose={3000}
+          hideProgressBar={false}
+          newestOnTop={true}
+          closeOnClick
+          rtl={false}
+          pauseOnFocusLoss
+          draggable
+          pauseOnHover
+          theme="colored"
+        />
+        <MainRoute />
+      </LeadProvider>
     </Router>
   )
 }

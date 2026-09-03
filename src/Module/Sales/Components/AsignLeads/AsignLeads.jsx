@@ -11,7 +11,10 @@ import { FaUserPlus, FaSearch, FaFilter, FaUserCheck, FaUser, FaRegCheckCircle }
 import { HiOutlineUsers } from "react-icons/hi";
 
 import { subscribeToLeadUpdates, getStoredLeads, updateLeadInStorage } from "../../utils/leadStorageUtils";
-import { updateLeadApi, getAllLeadsApi, markLeadAsLossApi, createLossLeadApi, getAllAssignedLeadsApi, createAssignedLeadApi, updateAssignedLeadApi } from "../../../../services/api";
+import { getAllAssignedLeadsApi, createAssignedLeadApi, updateAssignedLeadApi } from "../../../../services/assignedLeads.api";
+import { updateLeadApi, getAllLeadsApi } from "../../../../services/totalLeads.api";
+import { markLeadAsLossApi, createLossLeadApi } from "../../../../services/lostLeads.api";
+import { useLeadContext } from "../../../../context/LeadContext";
 
 const leadModesList = [
   "ALL",
@@ -41,7 +44,18 @@ const AsignLeads = () => {
     return [];
   });
 
-  const fetchBackendAssignedLeads = useCallback(async () => {
+  const { getCachedData, setCachedData } = useLeadContext();
+
+  const fetchBackendAssignedLeads = useCallback(async (forceRefresh = false) => {
+    const cacheKey = "assignedLeads_all";
+    if (!forceRefresh) {
+      const cached = getCachedData(cacheKey);
+      if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
+        setLeads(cached.data);
+        return;
+      }
+    }
+
     try {
       let combinedRaw = [];
 
@@ -52,7 +66,16 @@ const AsignLeads = () => {
           const list = Array.isArray(resAssigned.data)
             ? resAssigned.data
             : (resAssigned.data.assignedLeads || resAssigned.data.leads || resAssigned.data.data || []);
-          if (Array.isArray(list)) combinedRaw.push(...list);
+          if (Array.isArray(list)) {
+            const activeAssigned = list.filter((item) => {
+              const isLost =
+                item.isLoss === true ||
+                ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(item.leadStatus || "").toUpperCase()) ||
+                ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(item.status || "").toUpperCase());
+              return !isLost;
+            });
+            combinedRaw.push(...activeAssigned);
+          }
         }
       } catch (e) {
         console.warn("getAllAssignedLeadsApi warning:", e);
@@ -60,13 +83,18 @@ const AsignLeads = () => {
 
       // 2. Fetch from All Leads API endpoint for leads with assignment
       try {
-        const resAll = await getAllLeadsApi();
+        const resAll = await getAllLeadsApi({ limit: 1000, isLoss: false });
         if (resAll && resAll.success && resAll.data) {
           const rawAll = Array.isArray(resAll.data)
             ? resAll.data
             : (resAll.data.leads || resAll.data.data || []);
           if (Array.isArray(rawAll)) {
             const list = rawAll.filter((l) => {
+              const isLost =
+                l.isLoss === true ||
+                ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(l.leadStatus || "").toUpperCase()) ||
+                ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(l.status || "").toUpperCase());
+              if (isLost) return false;
               const assignee = (l.salesPerson || (typeof l.assignedTo === 'object' ? l.assignedTo?.name : l.assignedTo) || l.assignTo || "").trim();
               return l.isAssigned === true || (!!assignee && assignee !== "Unassigned" && assignee !== "");
             });
@@ -79,6 +107,12 @@ const AsignLeads = () => {
 
       const map = new Map();
       combinedRaw.forEach((backendLead) => {
+        const isLost =
+          backendLead.isLoss === true ||
+          ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(backendLead.leadStatus || "").toUpperCase()) ||
+          ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(backendLead.status || "").toUpperCase());
+        if (isLost) return;
+
         const idKey = String(backendLead.leadId || backendLead._id || backendLead.id);
         if (!idKey) return;
 
@@ -148,12 +182,14 @@ const AsignLeads = () => {
           const key = String(item.id || item._id);
           if (key) mergedMap.set(key, { ...mergedMap.get(key), ...item });
         });
-        return Array.from(mergedMap.values());
+        const result = Array.from(mergedMap.values());
+        setCachedData(cacheKey, result);
+        return result;
       });
     } catch (e) {
       console.error("Error fetching backend assigned leads:", e);
     }
-  }, []);
+  }, [getCachedData, setCachedData]);
 
   useEffect(() => {
     if (location.state?.assignedLead) {
@@ -204,7 +240,7 @@ const AsignLeads = () => {
   const [filterDateFrom, setFilterDateFrom] = useState("");
 
   // Pagination States
-  const [rowsPerPage, setRowsPerPage] = useState(20);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
 
   // Modal States
@@ -726,6 +762,12 @@ const AsignLeads = () => {
   // Filtering Logic
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
+      const isLost =
+        lead.isLoss === true ||
+        ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(lead.leadStatus || "").toUpperCase()) ||
+        ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(lead.status || "").toUpperCase());
+      if (isLost) return false;
+
       const normTab = (assignmentTab || "").toLowerCase();
       // Scope Filter (All / Self / Team)
       if (normTab === "self") {
@@ -932,26 +974,54 @@ const AsignLeads = () => {
           
           {/* Top Row: Search Input + Status Tabs */}
           <div className="flex flex-col lg:flex-row items-center justify-between gap-4">
-            <div className="relative w-full lg:w-96">
-              <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-3.5 h-3.5" />
-              <input
-                type="text"
-                placeholder="Search Client Name, Project Details, City..."
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-hidden focus:border-black transition-all placeholder:text-slate-400 font-medium shadow-2xs"
-              />
-              {searchTerm && (
-                <button
-                  onClick={() => setSearchTerm("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-black text-xs cursor-pointer font-bold"
-                >
-                  ✕
-                </button>
-              )}
+            <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto flex-1">
+              {/* Rows Per Page Dropdown */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs sm:text-sm font-bold text-slate-600">Show:</span>
+                <div className="relative w-20">
+                  <select
+                    value={rowsPerPage}
+                    onChange={(e) => {
+                      setRowsPerPage(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="w-full appearance-none px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs sm:text-sm font-bold text-slate-800 focus:outline-hidden focus:border-black cursor-pointer pr-6 shadow-2xs"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
+                    <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              {/* Search Input */}
+              <div className="relative flex-1 min-w-[220px] max-w-md">
+                <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-3.5 h-3.5" />
+                <input
+                  type="text"
+                  placeholder="Search Client Name, Project Details, City..."
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-hidden focus:border-black transition-all placeholder:text-slate-400 font-medium shadow-2xs"
+                />
+                {searchTerm && (
+                  <button
+                    onClick={() => setSearchTerm("")}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-black text-xs cursor-pointer font-bold"
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Quick Status Tabs */}
@@ -1075,6 +1145,11 @@ const AsignLeads = () => {
         totalItems={filteredLeads.length}
         itemsPerPage={rowsPerPage}
         onPageChange={(page) => setCurrentPage(page)}
+        onItemsPerPageChange={(limit) => {
+          setRowsPerPage(limit);
+          setCurrentPage(1);
+        }}
+        itemsPerPageOptions={[10, 25, 50, 100]}
       />
 
       {/* 5. RE-ASSIGN LEAD MODAL (MATCHING EXACT ORANGE BANNER DESIGN) */}

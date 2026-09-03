@@ -7,9 +7,12 @@ import LeadStatusBreakdown from "./LeadStatusBreakdown";
 import RecentLeadsTable from "./RecentLeadsTable";
 import { metricsData as defaultMetrics, initialFollowups, statusBreakdownData as defaultStatus, recentLeadsData as defaultRecent } from "../../data/dashboardData";
 import { subscribeToLeadUpdates, getStoredLeads } from "../../utils/leadStorageUtils";
-import { getAllLeadsApi, getDashboardStatsApi } from "../../../../services/api";
+import { getAllLeadsApi } from "../../../../services/totalLeads.api";
+import { getDashboardStatsApi } from "../../../../services/dashboard.api";
+import { useLeadContext } from "../../../../context/LeadContext";
 
 const Salesdash = () => {
+  const { getCachedData, setCachedData } = useLeadContext();
   const [leads, setLeads] = useState(() => {
     return getStoredLeads("dss_leads");
   });
@@ -21,15 +24,28 @@ const Salesdash = () => {
     const unsubscribe = subscribeToLeadUpdates(handleRefresh);
 
     const fetchBackendData = async () => {
+      const cacheKey = "dashboard_leads_all";
+      const cached = getCachedData(cacheKey);
+      if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
+        setLeads(cached.data);
+        return;
+      }
+
       try {
-        const leadsRes = await getAllLeadsApi();
+        const leadsRes = await getAllLeadsApi({ limit: 1000, isLoss: false });
         if (leadsRes && leadsRes.success && leadsRes.data && leadsRes.data.leads) {
-          const apiLeads = leadsRes.data.leads.map((backendLead) => {
+          const apiLeads = leadsRes.data.leads
+            .filter((l) => !l.isLoss && !["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(l.leadStatus || l.status || "").toUpperCase()))
+            .map((backendLead) => {
             const dateObj = new Date(backendLead.createdAt || Date.now());
             const formattedDate = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
 
+            const cleanLeadId = backendLead.leadId || (backendLead._id && !String(backendLead._id).match(/^[0-9a-fA-F]{24}$/) ? backendLead._id : `LD-${String(backendLead._id).slice(-4).toUpperCase()}`);
+
             return {
-              id: backendLead._id,
+              id: cleanLeadId,
+              leadId: cleanLeadId,
+              _id: backendLead._id,
               clientName: backendLead.clientName || "Client",
               concernPersonName: backendLead.clientName || "Client",
               phoneNumber: backendLead.phoneNumber || backendLead.phone || "--",
@@ -54,6 +70,7 @@ const Salesdash = () => {
             }
           });
           setLeads(merged);
+          setCachedData(cacheKey, merged);
         }
       } catch (e) {
         console.error("Dashboard fetch error:", e);
@@ -62,7 +79,7 @@ const Salesdash = () => {
 
     fetchBackendData();
     return () => unsubscribe();
-  }, []);
+  }, [getCachedData, setCachedData]);
 
   // 1. Dynamic Top 4 Metrics Cards
   const dynamicMetrics = useMemo(() => {
@@ -134,8 +151,12 @@ const Salesdash = () => {
       const statusRaw = l.leadStatus || l.status || "Warm";
       const formattedStatus = statusRaw.charAt(0).toUpperCase() + statusRaw.slice(1).toLowerCase();
 
+      const leadIdStr = l.leadId || (l.id && !String(l.id).match(/^[0-9a-fA-F]{24}$/) ? l.id : null) || `LD-${901 + index}`;
+
       return {
-        id: l.id || `LD-${901 + index}`,
+        id: leadIdStr,
+        leadId: leadIdStr,
+        _id: l._id || l.id,
         date: l.createdDate || l.date || "25/08/2026",
         name: l.clientName || l.concernPersonName || "Client Name",
         company: l.projectDetail || l.companyName || l.workCategory || "Project Inquiry",

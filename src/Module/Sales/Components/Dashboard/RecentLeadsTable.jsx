@@ -35,11 +35,17 @@ const RecentLeadsTable = ({ recentLeads = recentLeadsData }) => {
       id: {
         label: "Lead ID",
         align: "left",
-        render: (val) => (
-          <span className="px-2 py-1 rounded bg-slate-100 border border-slate-200 text-xs font-mono font-bold text-slate-800">
-            {val}
-          </span>
-        ),
+        render: (val, row) => {
+          const rawId = row.leadId || row.id || val;
+          const displayId = (rawId && String(rawId).match(/^[0-9a-fA-F]{24}$/))
+            ? `LD-${String(rawId).slice(-4).toUpperCase()}`
+            : rawId;
+          return (
+            <span className="px-2 py-1 rounded bg-slate-100 border border-slate-200 text-xs font-mono font-bold text-slate-800">
+              {displayId}
+            </span>
+          );
+        },
       },
       date: {
         label: "Date",
