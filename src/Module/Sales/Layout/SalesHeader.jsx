@@ -68,7 +68,7 @@ const SalesHeader = ({
   };
 
   return (
-    <header className="w-full bg-white font-sans antialiased h-13 px-3 sm:px-4 flex items-center justify-between border-b border-slate-100 sticky top-0 z-40">
+    <header className="w-full bg-white font-sans antialiased h-14 px-3 sm:px-4 flex items-center justify-between border-b border-slate-100 sticky top-0 z-40">
       
       {/* Left Space: Mobile Menu Toggle */}
       <div className="flex items-center gap-2">

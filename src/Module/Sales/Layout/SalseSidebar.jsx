@@ -99,13 +99,13 @@ const SalseSidebar = ({ isOpen = true, setIsOpen }) => {
     >
       {/* ================= TOP HEADER (LOGO & HAMBURGER) ================= */}
       <div
-        className={`h-13 flex items-center border-b border-slate-800/80 shrink-0 px-3 bg-slate-950/60 backdrop-blur-xs ${
+        className={`h-14 flex items-center border-b border-slate-800/80 shrink-0 px-3 bg-slate-950/60 backdrop-blur-xs ${
           isSidebarOpen ? "justify-between" : "justify-center"
         }`}
       >
         {/* LOGO (Only when expanded) */}
         {isSidebarOpen && (
-          <div className="bg-white px-2 py-0.5 rounded-lg flex items-center justify-center shrink-0 border border-white shadow-xs max-w-[150px] h-8">
+          <div className="bg-white px-3 py-1 flex items-center justify-center shrink-0 border border-white shadow-xs max-w-[165px] h-10">
             <img
               src={salesLogo}
               alt="DSS Logo"
