@@ -35,7 +35,7 @@ const Salse = () => {
     }
 
     try {
-      const res = await getAllLeadsApi({ limit: 1000, isLoss: false });
+      const res = await getAllLeadsApi({ limit: 100, isLoss: false });
       if (res && res.success && res.data && res.data.leads) {
         const interestedLeads = res.data.leads.filter(
           (item) =>

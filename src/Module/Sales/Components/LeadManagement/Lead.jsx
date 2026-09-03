@@ -69,8 +69,8 @@ const Lead = () => {
 
     try {
       const [resLeads, resFollowups] = await Promise.allSettled([
-        getAllLeadsApi({ limit: 1000 }),
-        getAllFollowupsApi()
+        getAllLeadsApi({ limit: 100 }),
+        getAllFollowupsApi({ limit: 50 })
       ]);
 
       const leadsList = (resLeads.status === "fulfilled" && resLeads.value?.success && resLeads.value?.data?.leads)

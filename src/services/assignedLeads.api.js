@@ -3,7 +3,7 @@ import apiClient from "./axiosInstance";
 // ================= ASSIGNED LEADS APIs =================
 export const getAllAssignedLeadsApi = async (params = {}) => {
   try {
-    const finalParams = { limit: 1000, ...params };
+    const finalParams = { limit: 100, ...params };
     return await apiClient.get("/assigned-leads", { params: finalParams });
   } catch (error) {
     console.error("API getAllAssignedLeadsApi error:", error);

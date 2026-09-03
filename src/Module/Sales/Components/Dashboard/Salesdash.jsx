@@ -32,7 +32,7 @@ const Salesdash = () => {
       }
 
       try {
-        const leadsRes = await getAllLeadsApi({ limit: 1000, isLoss: false });
+        const leadsRes = await getAllLeadsApi({ limit: 100, isLoss: false });
         if (leadsRes && leadsRes.success && leadsRes.data && leadsRes.data.leads) {
           const apiLeads = leadsRes.data.leads
             .filter((l) => !l.isLoss && !["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(l.leadStatus || l.status || "").toUpperCase()))

@@ -83,7 +83,7 @@ const AsignLeads = () => {
 
       // 2. Fetch from All Leads API endpoint for leads with assignment
       try {
-        const resAll = await getAllLeadsApi({ limit: 1000, isLoss: false });
+        const resAll = await getAllLeadsApi({ limit: 100, isLoss: false });
         if (resAll && resAll.success && resAll.data) {
           const rawAll = Array.isArray(resAll.data)
             ? resAll.data

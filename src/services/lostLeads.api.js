@@ -3,7 +3,7 @@ import apiClient from "./axiosInstance";
 // ================= LOST LEADS APIs =================
 export const getLossLeadsApi = async (params = {}) => {
   try {
-    const finalParams = { limit: 1000, ...params };
+    const finalParams = { limit: 100, ...params };
     return await apiClient.get("/leads/loss", { params: finalParams });
   } catch (error) {
     console.error("API getLossLeadsApi error:", error);
@@ -13,7 +13,7 @@ export const getLossLeadsApi = async (params = {}) => {
 
 export const getAllLossLeadsApi = async (params = {}) => {
   try {
-    const finalParams = { limit: 1000, ...params };
+    const finalParams = { limit: 100, ...params };
     return await apiClient.get("/loss-leads", { params: finalParams });
   } catch (error) {
     console.error("API getAllLossLeadsApi error:", error);
