@@ -6,8 +6,9 @@ import FollowupsDueToday from "./FollowupsDueToday";
 import LeadStatusBreakdown from "./LeadStatusBreakdown";
 import RecentLeadsTable from "./RecentLeadsTable";
 import { metricsData as defaultMetrics, initialFollowups, statusBreakdownData as defaultStatus, recentLeadsData as defaultRecent } from "../../data/dashboardData";
-import { subscribeToLeadUpdates, getStoredLeads } from "../../utils/leadStorageUtils";
+import { subscribeToLeadUpdates, getStoredLeads, getScheduledLeadsFromCache } from "../../utils/leadStorageUtils";
 import { getAllLeadsApi } from "../../../../services/totalLeads.api";
+import { getFollowupLeadsApi } from "../../../../services/followup.api";
 import { getDashboardStatsApi } from "../../../../services/dashboard.api";
 import { useLeadContext } from "../../../../context/LeadContext";
 
@@ -16,6 +17,7 @@ const Salesdash = () => {
   const [leads, setLeads] = useState(() => {
     return getStoredLeads("dss_leads");
   });
+  const [scheduledFollowups, setScheduledFollowups] = useState([]);
 
   useEffect(() => {
     const handleRefresh = () => {
@@ -28,13 +30,16 @@ const Salesdash = () => {
       const cached = getCachedData(cacheKey);
       if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
         setLeads(cached.data);
-        return;
       }
 
       try {
-        const leadsRes = await getAllLeadsApi({ limit: 100, isLoss: false });
-        if (leadsRes && leadsRes.success && leadsRes.data && leadsRes.data.leads) {
-          const apiLeads = leadsRes.data.leads
+        const [leadsRes, followupRes] = await Promise.allSettled([
+          getAllLeadsApi({ limit: 100, isLoss: false }),
+          getFollowupLeadsApi({ limit: 20, isLoss: false })
+        ]);
+
+        if (leadsRes.status === "fulfilled" && leadsRes.value && leadsRes.value.success && leadsRes.value.data?.leads) {
+          const apiLeads = leadsRes.value.data.leads
             .filter((l) => !l.isLoss && !["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(l.leadStatus || l.status || "").toUpperCase()))
             .map((backendLead) => {
             const dateObj = new Date(backendLead.createdAt || Date.now());
@@ -43,6 +48,7 @@ const Salesdash = () => {
             const cleanLeadId = backendLead.leadId || (backendLead._id && !String(backendLead._id).match(/^[0-9a-fA-F]{24}$/) ? backendLead._id : `LD-${String(backendLead._id).slice(-4).toUpperCase()}`);
 
             return {
+              ...backendLead,
               id: cleanLeadId,
               leadId: cleanLeadId,
               _id: backendLead._id,
@@ -58,7 +64,11 @@ const Salesdash = () => {
               createdDate: formattedDate,
               date: formattedDate,
               address: backendLead.address || backendLead.city || "--",
-              projectDetail: backendLead.projectDetail || backendLead.requirement || "Project Inquiry"
+              projectDetail: backendLead.projectDetail || backendLead.requirement || "Project Inquiry",
+              nextFollowupDate: backendLead.nextFollowupDate || backendLead.nextFollowupDateRaw || "",
+              nextFollowupTime: backendLead.nextFollowupTime || backendLead.followupTime || "",
+              workType: Array.isArray(backendLead.workType) ? backendLead.workType : (backendLead.workType ? [backendLead.workType] : []),
+              workCategory: backendLead.workCategory || "Design"
             };
           });
 
@@ -71,6 +81,10 @@ const Salesdash = () => {
           });
           setLeads(merged);
           setCachedData(cacheKey, merged);
+        }
+
+        if (followupRes.status === "fulfilled" && followupRes.value && followupRes.value.success && followupRes.value.data?.leads) {
+          setScheduledFollowups(followupRes.value.data.leads);
         }
       } catch (e) {
         console.error("Dashboard fetch error:", e);
@@ -99,20 +113,41 @@ const Salesdash = () => {
 
   // 2. Dynamic Follow-ups Due Today
   const dynamicFollowups = useMemo(() => {
-    const mapped = leads
-      .filter((l) => l.nextFollowupDate || l.clientName)
-      .slice(0, 4)
-      .map((l, index) => ({
-        id: l.id || index + 1,
-        name: l.clientName || l.concernPersonName || "Client",
-        company: l.projectDetail || l.address || l.workCategory || "Project Inquiry",
-        time: l.nextFollowupTime || "10:00 AM",
-        phone: l.phoneNumber || l.contact || "--",
-        tag: l.workType?.[0] || l.workCategory || "Followup Call"
-      }));
+    const cachedScheduled = getScheduledLeadsFromCache();
+    const combinedFollowups = [...scheduledFollowups];
+    cachedScheduled.forEach((item) => {
+      const id = String(item._id || item.id || item.leadId);
+      if (!combinedFollowups.some((f) => String(f._id || f.id || f.leadId) === id)) {
+        combinedFollowups.unshift(item);
+      }
+    });
 
-    return mapped;
-  }, [leads]);
+    let listToUse = combinedFollowups;
+    if (listToUse.length === 0) {
+      listToUse = leads.filter(
+        (l) => l.isFollowupScheduled || l.nextFollowupDate || (Array.isArray(l.followupHistory) && l.followupHistory.length > 0)
+      );
+    }
+    if (listToUse.length === 0) {
+      listToUse = leads.slice(0, 4);
+    }
+
+    return listToUse.slice(0, 5).map((l, index) => {
+      const timeVal = l.nextFollowupTime || l.followupTime || (l.createdTime ? l.createdTime : "10:00 AM");
+      const tagVal = Array.isArray(l.workType)
+        ? (l.workType[0] || l.workCategory || "Followup Call")
+        : (l.workType || l.workCategory || "Followup Call");
+
+      return {
+        id: l.leadId || l._id || l.id || index + 1,
+        name: l.clientName || l.concernPersonName || "Client",
+        company: l.projectDetail || l.companyName || l.address || l.workCategory || "Project Inquiry",
+        time: timeVal,
+        phone: l.phoneNumber || l.contact || l.phone || "--",
+        tag: tagVal
+      };
+    });
+  }, [scheduledFollowups, leads]);
 
   // 3. Dynamic Lead Status Breakdown (Donut Data)
   const { statusBreakdown, totalLeadsCount, conversionRate } = useMemo(() => {

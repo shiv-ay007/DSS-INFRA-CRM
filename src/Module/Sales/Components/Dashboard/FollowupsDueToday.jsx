@@ -1,10 +1,9 @@
-import React, { useState } from "react";
+import React from "react";
 import { Link } from "react-router-dom";
 import { toast } from "react-toastify";
-import { initialFollowups } from "../../data/dashboardData";
 
-const FollowupsDueToday = ({ data = initialFollowups }) => {
-  const [followups] = useState(data);
+const FollowupsDueToday = ({ data = [] }) => {
+  const followups = Array.isArray(data) ? data : [];
 
   return (
     <div className="lg:col-span-7 bg-white rounded-xl border border-slate-200/90 shadow-2xs p-3.5 sm:p-4 flex flex-col justify-between">
@@ -26,7 +25,16 @@ const FollowupsDueToday = ({ data = initialFollowups }) => {
 
         {/* List */}
         <div className="space-y-2.5">
-          {followups.map((item, index) => (
+          {followups.length === 0 ? (
+            <div className="py-8 flex flex-col items-center justify-center text-center bg-slate-50/60 rounded-xl border border-dashed border-slate-200 p-4">
+              <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mb-2 shadow-xs text-base">
+                ✓
+              </div>
+              <p className="text-xs sm:text-sm font-bold text-slate-800">No Calls Due Today</p>
+              <p className="text-[11px] text-slate-500 mt-0.5">All scheduled client follow-ups are up to date.</p>
+            </div>
+          ) : (
+            followups.map((item, index) => (
             <div
               key={item.id}
               className="p-3 rounded-lg bg-slate-50/90 border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5"
@@ -68,7 +76,7 @@ const FollowupsDueToday = ({ data = initialFollowups }) => {
                 </a>
               </div>
             </div>
-          ))}
+          )))}
         </div>
       </div>
 
