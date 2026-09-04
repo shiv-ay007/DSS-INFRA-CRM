@@ -463,11 +463,23 @@ const SalseTotalLeads = () => {
 
     // 3. Sync assignment to MongoDB backend DB assignedleads collection
     try {
+      let currentUser = null;
+      try {
+        currentUser = JSON.parse(localStorage.getItem("dss_user"));
+      } catch (e) {
+        currentUser = null;
+      }
+
       const targetId = assignModalLead._id || assignModalLead.id || assignModalLead.leadId;
       await updateLeadApi(targetId, {
         salesPerson: assignedPerson,
         assignTo: assignedPerson,
+        assignedTo: assignedPerson,
         isAssigned: true,
+        assignedBy: currentUser?._id || currentUser?.name || "Admin",
+        assignedByName: currentUser?.name || "Admin",
+        assignedDate: formattedDate,
+        assignedTime: formattedTime,
         leadStatus: assignModalLead.status || assignModalLead.leadStatus || "Warm",
         requirement: assignmentRemark || assignModalLead.remark || ""
       });
@@ -488,6 +500,10 @@ const SalseTotalLeads = () => {
         expectedBusiness: assignModalLead.expectedBusiness,
         salesPerson: assignedPerson,
         assignTo: assignedPerson,
+        assignedTo: assignedPerson,
+        assignedBy: currentUser?._id || null,
+        assignedByName: currentUser?.name || "Admin",
+        assignedDate: new Date(),
         isAssigned: true,
         status: assignModalLead.status || assignModalLead.leadStatus || "Warm",
         leadStatus: assignModalLead.status || assignModalLead.leadStatus || "Warm",

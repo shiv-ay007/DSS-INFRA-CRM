@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import Table from "../../../../Common/Components/Table";
 import ScopeTabs from "../../../../Common/Components/ScopeTabs";
@@ -20,8 +20,33 @@ const teamMembers = [
 
 const Salse = () => {
   const navigate = useNavigate();
+  const location = useLocation();
 
-  const [salesData, setSalesData] = useState([]);
+  const [salesData, setSalesData] = useState(() => {
+    if (location.state?.lead) {
+      const incomingLead = location.state.lead;
+      const cleanId = incomingLead.leadId || incomingLead.clientId || incomingLead.id || incomingLead._id;
+      const dateObj = new Date(incomingLead.createdAt || incomingLead.date || Date.now());
+      const formattedDate = !isNaN(dateObj.getTime())
+        ? dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' })
+        : (incomingLead.createdDate || incomingLead.date || "--");
+      const formattedTime = incomingLead.createdTime || (!isNaN(dateObj.getTime())
+        ? dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })
+        : "11:00 am");
+
+      return [{
+        ...incomingLead,
+        id: cleanId,
+        leadId: cleanId,
+        clientId: cleanId,
+        createdDate: formattedDate,
+        createdTime: formattedTime,
+        date: formattedDate
+      }];
+    }
+    return [];
+  });
+
   const { getCachedData, setCachedData } = useLeadContext();
 
   const fetchSalesLeads = useCallback(async (forceRefresh = false) => {
@@ -35,30 +60,89 @@ const Salse = () => {
     }
 
     try {
-      const res = await getAllLeadsApi({ limit: 100, isLoss: false });
+      const res = await getAllLeadsApi({ limit: 200, isLoss: false });
       if (res && res.success && res.data && res.data.leads) {
-        const interestedLeads = res.data.leads.filter(
-          (item) =>
-            !item.isLoss &&
-            !["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(item.leadStatus || "").toUpperCase()) &&
-            !["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(item.status || "").toUpperCase()) &&
-            (item.status === "INTERESTED" || item.leadStatus === "INTERESTED" || item.isInterested === true)
-        );
+        const interestedLeads = res.data.leads
+          .filter(
+            (item) =>
+              !item.isLoss &&
+              !["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(item.leadStatus || "").toUpperCase()) &&
+              !["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(item.status || "").toUpperCase()) &&
+              (item.status === "INTERESTED" || item.leadStatus === "INTERESTED" || item.isInterested === true)
+          )
+          .map((item) => {
+            const dateObj = new Date(item.createdAt || item.date || Date.now());
+            const formattedDate = !isNaN(dateObj.getTime())
+              ? dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' })
+              : (item.createdDate || item.date || "--");
+            const formattedTime = item.createdTime || (!isNaN(dateObj.getTime())
+              ? dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })
+              : "11:00 am");
+
+            const cleanId = item.leadId || item.clientId || item.id || (item._id && !String(item._id).match(/^[0-9a-fA-F]{24}$/) ? item._id : `LD-${String(item._id || '').slice(-4).toUpperCase()}`);
+
+            return {
+              ...item,
+              id: cleanId,
+              leadId: cleanId,
+              clientId: cleanId,
+              createdDate: formattedDate,
+              createdTime: formattedTime,
+              date: formattedDate
+            };
+          });
+
+        // Ensure newly transferred lead is prepended if not yet synced in this batch
+        if (location.state?.lead) {
+          const incomingLead = location.state.lead;
+          const incId = incomingLead.leadId || incomingLead.clientId || incomingLead.id || incomingLead._id;
+          const exists = interestedLeads.some(l => (l.leadId || l.clientId || l.id || l._id) === incId);
+          if (!exists) {
+            const dateObj = new Date(incomingLead.createdAt || incomingLead.date || Date.now());
+            const formattedDate = !isNaN(dateObj.getTime())
+              ? dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' })
+              : (incomingLead.createdDate || incomingLead.date || "--");
+            const formattedTime = incomingLead.createdTime || (!isNaN(dateObj.getTime())
+              ? dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })
+              : "11:00 am");
+            const cleanId = incId || `LD-${String(incomingLead._id || '').slice(-4).toUpperCase()}`;
+
+            interestedLeads.unshift({
+              ...incomingLead,
+              id: cleanId,
+              leadId: cleanId,
+              clientId: cleanId,
+              createdDate: formattedDate,
+              createdTime: formattedTime,
+              date: formattedDate
+            });
+          }
+        }
+
+        // Sort descending: newest / most recently updated lead always appears at the top!
+        interestedLeads.sort((a, b) => {
+          const timeA = new Date(a.updatedAt || a.movedToSalesManagementDate || a.createdAt || a.date || 0).getTime();
+          const timeB = new Date(b.updatedAt || b.movedToSalesManagementDate || b.createdAt || b.date || 0).getTime();
+          return timeB - timeA;
+        });
+
         setSalesData(interestedLeads);
         setCachedData(cacheKey, interestedLeads);
       }
     } catch (err) {
       console.error("Error fetching sales management sheet leads:", err);
     }
-  }, [getCachedData, setCachedData]);
+  }, [getCachedData, setCachedData, location.state]);
 
   useEffect(() => {
-    fetchSalesLeads();
+    // If arriving from transfer form, force refresh to fetch latest from DB
+    const force = Boolean(location.state?.lead);
+    fetchSalesLeads(force);
     const unsubscribe = subscribeToLeadUpdates(() => {
       fetchSalesLeads(true);
     });
     return () => unsubscribe();
-  }, [fetchSalesLeads]);
+  }, [fetchSalesLeads, location.state]);
 
   // Filter States
   const [filterScope, setFilterScope] = useState("ALL");
@@ -116,9 +200,12 @@ const Salse = () => {
       clientId: {
         label: "CLIENT ID",
         align: "center",
-        render: (val, row) => (
-          <span className="font-mono font-bold text-slate-700 text-xs">{row.clientId || row.id || "--"}</span>
-        )
+        render: (val, row) => {
+          const cid = row.clientId || row.leadId || row.id || (row._id && !String(row._id).match(/^[0-9a-fA-F]{24}$/) ? row._id : `LD-${String(row._id || '').slice(-4).toUpperCase()}`);
+          return (
+            <span className="font-mono font-bold text-slate-700 text-xs">{cid || "--"}</span>
+          );
+        }
       },
       clientName: {
         label: "CLIENT",
@@ -176,7 +263,13 @@ const Salse = () => {
         label: "CREATED AT",
         align: "center",
         render: (val, row) => {
-          const dateStr = row.createdAt || row.createdDate || row.date || "2026-08-18";
+          let dateStr = row.createdDate || row.date;
+          if (!dateStr || dateStr.includes("T") || dateStr.includes("Z")) {
+            const dateObj = new Date(row.createdAt || row.createdDate || row.date || Date.now());
+            dateStr = !isNaN(dateObj.getTime())
+              ? dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' })
+              : "03 Sept 2026";
+          }
           const timeStr = row.createdTime || "11:00 am";
           return (
             <div className="inline-flex flex-col items-center px-2.5 py-1 rounded-lg bg-blue-50 text-blue-900 border border-blue-200/90 shadow-2xs">
@@ -186,24 +279,29 @@ const Salse = () => {
           );
         }
       },
-      companyName: {
-        label: "COMPANY NAME",
-        align: "center",
-        render: (val, row) => <span className="text-xs text-slate-600 font-medium">{row.companyName || "--"}</span>
-      },
       businessType: {
         label: "BUSINESS TYPE",
         align: "center",
         render: (val, row) => <span className="text-xs font-medium text-slate-700">{row.businessType || row.workCategory || "--"}</span>
       },
-      jobType: {
-        label: "JOB TYPE",
+      leadType: {
+        label: "LEAD TYPE",
         align: "center",
-        render: (val, row) => (
-          <span className="px-2 py-0.5 rounded text-xs font-bold uppercase bg-emerald-50 text-emerald-800 border border-emerald-200">
-            {row.jobType || "NEW"}
-          </span>
-        )
+        render: (val, row) => {
+          const type = (row.leadType || row.jobType || "FRESH").toUpperCase();
+          const isRepeat = type.includes("REPEAT");
+          return (
+            <span
+              className={`px-2 py-0.5 rounded text-xs font-bold uppercase border ${
+                isRepeat
+                  ? "bg-purple-50 text-purple-700 border-purple-200"
+                  : "bg-emerald-50 text-emerald-800 border-emerald-200"
+              }`}
+            >
+              {type}
+            </span>
+          );
+        }
       },
       city: {
         label: "CITY",

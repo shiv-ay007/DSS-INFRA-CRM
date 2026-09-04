@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import { useLocation } from "react-router-dom";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import Table from "../../../../Common/Components/Table";
 import ScopeTabs from "../../../../Common/Components/ScopeTabs";
@@ -28,8 +29,14 @@ import { getLossLeadsApi, getAllLossLeadsApi } from "../../../../services/lostLe
 import { useLeadContext } from "../../../../context/LeadContext";
 
 const Lostlead = () => {
-  const [leads, setLeads] = useState([]);
-  const { getCachedData, setCachedData } = useLeadContext();
+  const location = useLocation();
+  const [leads, setLeads] = useState(() => {
+    if (location.state?.lostLead) {
+      return [location.state.lostLead];
+    }
+    return [];
+  });
+  const { getCachedData, setCachedData, invalidateCache } = useLeadContext();
 
   const fetchBackendLossLeads = React.useCallback(async (forceRefresh = false) => {
     const cacheKey = "lostLeads_all";
@@ -41,100 +48,137 @@ const Lostlead = () => {
       }
     }
     try {
-      let combinedRaw = [];
+      let rawData = [];
 
-      // 1. Fetch from /leads/loss endpoint
+      // 1. Fetch authoritative loss leads
       try {
-        const res = await getLossLeadsApi();
-        if (res && res.success && res.data) {
-          const rawLossLeads = Array.isArray(res.data)
-            ? res.data
-            : (res.data.leads || res.data.lossLeads || res.data.data || []);
-          if (Array.isArray(rawLossLeads)) combinedRaw.push(...rawLossLeads);
-        }
-      } catch (err) {
-        console.warn("getLossLeadsApi warning:", err);
-      }
-
-      // 2. Fetch from /loss-leads endpoint
-      try {
-        const resDirect = await getAllLossLeadsApi();
+        const resDirect = await getAllLossLeadsApi({ limit: 200 });
         if (resDirect && resDirect.success && resDirect.data) {
-          const rawDirect = Array.isArray(resDirect.data)
+          rawData = Array.isArray(resDirect.data)
             ? resDirect.data
             : (resDirect.data.leads || resDirect.data.lossLeads || resDirect.data.data || []);
-          if (Array.isArray(rawDirect)) combinedRaw.push(...rawDirect);
         }
       } catch (err) {
         console.warn("getAllLossLeadsApi warning:", err);
       }
 
-      const map = new Map();
-      combinedRaw.forEach((item) => {
-        const idKey = String(item.leadId || item._id || item.id);
-        if (!idKey) return;
+      // Fallback to getLossLeadsApi only if direct endpoint returned empty or failed
+      if (!rawData || rawData.length === 0) {
+        try {
+          const res = await getLossLeadsApi({ limit: 200 });
+          if (res && res.success && res.data) {
+            rawData = Array.isArray(res.data)
+              ? res.data
+              : (res.data.leads || res.data.lossLeads || res.data.data || []);
+          }
+        } catch (err) {
+          console.warn("getLossLeadsApi fallback warning:", err);
+        }
+      }
+
+      const seen = new Set();
+      const uniqueProcessed = [];
+
+      (rawData || []).forEach((item) => {
+        const leadRefId = item.lead?._id ? String(item.lead._id) : (typeof item.lead === "string" ? item.lead : "");
+        const leadId = item.leadId ? String(item.leadId).trim() : "";
+        const phone = (item.phoneNumber || item.phone) ? String(item.phoneNumber || item.phone).trim() : "";
+        const id = item._id ? String(item._id) : "";
+
+        const isDup =
+          (id && seen.has("id:" + id)) ||
+          (leadRefId && seen.has("id:" + leadRefId)) ||
+          (leadId && seen.has("code:" + leadId)) ||
+          (phone && phone !== "--" && seen.has("phone:" + phone));
+
+        if (isDup) return;
+
+        if (id) seen.add("id:" + id);
+        if (leadRefId) seen.add("id:" + leadRefId);
+        if (leadId) seen.add("code:" + leadId);
+        if (phone && phone !== "--") seen.add("phone:" + phone);
 
         const dateObj = new Date(item.lossDate || item.createdAt || Date.now());
         const formattedDate = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
         const formattedTime = item.createdTime || dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
-        const assignee = item.salesPerson || (typeof item.assignedTo === 'object' ? item.assignedTo?.name : item.assignedTo) || "Sales TL";
+        const leadObj = (item.lead && typeof item.lead === "object") ? item.lead : {};
+        const assignee = item.salesPerson || (typeof item.assignedTo === 'object' ? item.assignedTo?.name : item.assignedTo) || leadObj.salesPerson || (typeof leadObj.assignedTo === 'object' ? leadObj.assignedTo?.name : leadObj.assignedTo) || "Sales TL";
 
         const processed = {
+          ...leadObj,
           ...item,
-          id: item.leadId || item._id || item.id,
-          leadId: item.leadId || item._id || item.id,
-          _id: item._id,
-          clientName: item.clientName || item.concernPersonName || "Client",
-          concernPersonName: item.clientName || item.concernPersonName || "Client",
-          phoneNumber: item.phoneNumber || item.phone || item.contact || "--",
-          contact: item.phoneNumber || item.phone || item.contact || "--",
-          alternateNumber: item.alternateNumber || "--",
-          emailAddress: item.emailAddress || item.email || "--",
-          email: item.emailAddress || item.email || "--",
-          workCategory: item.workCategory || "Design",
-          workType: Array.isArray(item.workType) ? item.workType : (item.workType ? [item.workType] : ["Concept Drawing"]),
-          address: item.address || item.siteAddress || "--",
-          city: item.city || "--",
-          pincode: item.pincode || "--",
-          state: item.state || "--",
-          projectDetail: item.projectDetail || item.projectDetails || item.notes || "--",
-          expectedBusiness: String(item.expectedBusiness || item.budget || 0),
-          reason: item.lossReason || item.reason || "Closed Lost",
-          lostReason: item.lossReason || item.reason || "Closed Lost",
-          remark: item.lossRemark || item.remark || item.requirement || item.notes || "--",
+          id: item.leadId || item._id || item.id || leadObj.leadId || leadObj._id,
+          leadId: item.leadId || leadObj.leadId || item._id || item.id,
+          _id: item._id || leadObj._id,
+          clientName: item.clientName || item.concernPersonName || leadObj.clientName || leadObj.concernPersonName || "Client",
+          concernPersonName: item.clientName || item.concernPersonName || leadObj.clientName || leadObj.concernPersonName || "Client",
+          phoneNumber: item.phoneNumber || item.phone || item.contact || leadObj.phoneNumber || leadObj.phone || leadObj.contact || "--",
+          contact: item.phoneNumber || item.phone || item.contact || leadObj.phoneNumber || leadObj.phone || leadObj.contact || "--",
+          alternateNumber: item.alternateNumber || leadObj.alternateNumber || "--",
+          emailAddress: item.emailAddress || item.email || leadObj.emailAddress || leadObj.email || "--",
+          email: item.emailAddress || item.email || leadObj.emailAddress || leadObj.email || "--",
+          workCategory: item.workCategory || leadObj.workCategory || "Design",
+          workType: (Array.isArray(item.workType) && item.workType.length > 0)
+            ? item.workType
+            : (item.workType ? [item.workType] : ((Array.isArray(leadObj.workType) && leadObj.workType.length > 0) ? leadObj.workType : (leadObj.workType ? [leadObj.workType] : ["Concept Drawing"]))),
+          address: item.address || leadObj.address || item.siteAddress || leadObj.siteAddress || "--",
+          city: item.city || leadObj.city || "--",
+          pincode: item.pincode || leadObj.pincode || "--",
+          state: item.state || leadObj.state || "--",
+          projectDetail: item.projectDetail || leadObj.projectDetail || item.projectDetails || leadObj.projectDetails || item.notes || leadObj.notes || "--",
+          expectedBusiness: String(item.expectedBusiness || item.budget || leadObj.expectedBusiness || leadObj.budget || 0),
+          reason: item.lossReason || item.reason || leadObj.lossReason || leadObj.reason || "Closed Lost",
+          lostReason: item.lossReason || item.reason || leadObj.lossReason || leadObj.reason || "Closed Lost",
+          remark: item.lossRemark || item.remark || item.requirement || leadObj.lossRemark || leadObj.remark || leadObj.requirement || item.notes || leadObj.notes || "--",
           lossDate: formattedDate,
           createdDate: formattedDate,
           createdTime: formattedTime,
-          date: item.date || formattedDate,
+          date: item.date || leadObj.date || formattedDate,
           salesPerson: assignee,
           assignedTo: assignee,
           assignTo: assignee,
-          leadMode: item.leadMode || item.leadSource || "Business networking",
-          leadSource: item.leadSource || item.leadMode || "Business networking",
-          leadType: item.leadType || "FRESH",
+          leadMode: item.leadMode || item.leadSource || leadObj.leadMode || leadObj.leadSource || "Business networking",
+          leadSource: item.leadSource || item.leadMode || leadObj.leadSource || leadObj.leadMode || "Business networking",
+          leadType: item.leadType || leadObj.leadType || "FRESH",
           leadStatus: (item.leadStatus === "CLOSED_LOST" || item.status === "CLOSED_LOST" || !item.leadStatus) ? "LOST" : item.leadStatus,
           status: (item.status === "CLOSED_LOST" || !item.status) ? "LOST" : item.status
         };
 
-        map.set(idKey, { ...map.get(idKey), ...processed });
+        uniqueProcessed.push(processed);
       });
 
-      const finalLost = Array.from(map.values());
-      setLeads(finalLost);
-      setCachedData(cacheKey, finalLost);
+      setLeads(uniqueProcessed);
+      setCachedData(cacheKey, uniqueProcessed);
     } catch (err) {
       console.error("Error fetching loss leads from API:", err);
     }
   }, [getCachedData, setCachedData]);
 
   React.useEffect(() => {
-    fetchBackendLossLeads();
-    const unsubscribe = subscribeToLeadUpdates(() => {
-      fetchBackendLossLeads();
+    if (location.state?.lostLead) {
+      const incoming = location.state.lostLead;
+      setLeads((prev) => {
+        const exists = prev.some((l) => String(l.id || l._id || l.leadId) === String(incoming.id || incoming._id || incoming.leadId));
+        if (exists) return prev;
+        return [incoming, ...prev];
+      });
+    }
+    fetchBackendLossLeads(Boolean(location.state?.lostLead));
+    const unsubscribe = subscribeToLeadUpdates((updatedData) => {
+      if (updatedData?.lead && (updatedData.lead.isLoss || updatedData.lead.status === "CLOSED_LOST" || updatedData.lead.status === "NOT INTERESTED")) {
+        setLeads((prev) => {
+          const exists = prev.some((l) => String(l.id || l._id || l.leadId) === String(updatedData.lead.id || updatedData.lead._id || updatedData.lead.leadId));
+          if (exists) {
+            return prev.map((l) => String(l.id || l._id || l.leadId) === String(updatedData.lead.id || updatedData.lead._id || updatedData.lead.leadId) ? { ...l, ...updatedData.lead } : l);
+          }
+          return [updatedData.lead, ...prev];
+        });
+      }
+      fetchBackendLossLeads(true);
     });
 
     return () => unsubscribe();
-  }, [fetchBackendLossLeads]);
+  }, [fetchBackendLossLeads, location.state]);
 
   const saveLeads = (newLeads) => {
     setLeads(newLeads);

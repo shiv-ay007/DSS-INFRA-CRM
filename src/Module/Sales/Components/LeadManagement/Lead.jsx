@@ -7,7 +7,7 @@ import ScopeTabs from "../../../../Common/Components/ScopeTabs";
 import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
 import { initialLeadsData } from "../../data/leadManagementData";
 import { FaUserPlus, FaUsers, FaUser } from "react-icons/fa";
-import { subscribeToLeadUpdates, updateLeadInStorage } from "../../utils/leadStorageUtils";
+import { subscribeToLeadUpdates, updateLeadInStorage, notifyLeadChange } from "../../utils/leadStorageUtils";
 import { getAllLeadsApi, updateLeadApi } from "../../../../services/totalLeads.api";
 import { markLeadAsLossApi, createLossLeadApi } from "../../../../services/lostLeads.api";
 import { getAllFollowupsApi, addFollowupApi } from "../../../../services/followup.api";
@@ -56,7 +56,7 @@ const Lead = () => {
   // Leads state fetched directly from backend API
   const [leads, setLeads] = useState([]);
   const scheduledFollowupCacheRef = useRef(new Map());
-  const { getCachedData, setCachedData } = useLeadContext();
+  const { getCachedData, setCachedData, invalidateCache } = useLeadContext();
 
   const fetchBackendLeads = async (forceRefresh = false) => {
     const cacheKey = "leadManagement_sheet_all";
@@ -685,16 +685,26 @@ const Lead = () => {
       // Move to Lost Leads (dss_lost_leads) and remove from current list
       const lostLeadData = {
         ...statusModalLead,
-        leadStatus: "Cold",
-        status: "NOT INTERESTED",
+        leadStatus: "CLOSED_LOST",
+        status: "CLOSED_LOST",
+        isLoss: true,
         isInterested: false,
+        isAssigned: false,
         lostReason: finalReason,
+        lossReason: finalReason,
         remark: statusRemark || statusModalLead.remark || "",
+        lossRemark: statusRemark || statusModalLead.remark || "",
         remarkAttachments: processedAttachments.length > 0 ? processedAttachments : (statusModalLead.remarkAttachments || []),
         attachments: processedAttachments.length > 0 ? processedAttachments : (statusModalLead.attachments || []),
         lostDate: formattedDate,
+        lossDate: new Date(),
         lostTime: formattedTime
       };
+
+      updateLeadInStorage(lostLeadData);
+      notifyLeadChange(lostLeadData);
+      invalidateCache("lostLeads");
+      invalidateCache("leadManagement");
 
       try {
         // Sync with MongoDB backend LossLead collection
@@ -712,7 +722,10 @@ const Lead = () => {
           lossReason: finalReason,
           reason: finalReason,
           lossRemark: statusRemark || statusModalLead.remark || "",
-          remark: statusRemark || statusModalLead.remark || ""
+          remark: statusRemark || statusModalLead.remark || "",
+          salesPerson: statusModalLead.salesPerson || statusModalLead.assignTo || "",
+          assignTo: statusModalLead.salesPerson || statusModalLead.assignTo || "",
+          assignedTo: statusModalLead.assignedTo || statusModalLead.salesPerson || null
         };
 
         if (targetId) {
@@ -729,22 +742,20 @@ const Lead = () => {
       saveLeads(filtered);
 
       toast.success(`Lead ${statusModalLead.clientName || statusModalLead.concernPersonName} marked as NOT INTERESTED (${finalReason}) and moved to Lost Leads! 📌`);
-    }
 
-    setStatusModalLead(null);
-    setSelectedClientStatus("");
-    setNotInterestedReason("");
-    setCustomNotInterestedReason("");
-    setStatusRemark("");
-    setStatusRemarkAttachments([]);
-
-    if (selectedClientStatus === "NOT INTERESTED") {
-      navigate("/sales/leads/lost");
+      setStatusModalLead(null);
+      setSelectedClientStatus("");
+      setNotInterestedReason("");
+      setCustomNotInterestedReason("");
+      setStatusRemark("");
+      setStatusRemarkAttachments([]);
+      navigate("/sales/leads/lost", { state: { lostLead: lostLeadData } });
+      return;
     }
   };
 
   // Handler on confirming pre-filled Sales Management Transfer Form
-  const handleConfirmSalesTransfer = (formData) => {
+  const handleConfirmSalesTransfer = async (formData) => {
     if (!transferModalLead) return;
 
     const formattedDate = new Date().toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
@@ -755,18 +766,22 @@ const Lead = () => {
       clientName: formData.clientName,
       concernPersonName: formData.clientName,
       phoneNumber: formData.phoneNumber,
+      phone: formData.phoneNumber,
       alternateNumber: formData.alternateNumber,
       whatsappNumber: formData.whatsappNumber,
       emailAddress: formData.emailAddress,
+      email: formData.emailAddress,
       companyName: formData.companyName,
       businessType: formData.businessType,
       clientDesignation: formData.clientDesignation,
       amount: Number(formData.expectedBusiness) || 0,
       expectedBusiness: Number(formData.expectedBusiness) || 0,
+      budget: Number(formData.expectedBusiness) || 0,
       priority: formData.priority,
       status: "INTERESTED",
-      leadStatus: "Hot",
+      leadStatus: "INTERESTED",
       isInterested: true,
+      isLoss: false,
       jobType: formData.jobType,
       city: formData.city,
       state: formData.state,
@@ -777,21 +792,79 @@ const Lead = () => {
       clientRating: Number(formData.clientRating) || 4.5,
       assignTo: formData.assignedTo,
       salesPerson: formData.assignedTo,
-      createdAt: transferModalLead.createdDate || formattedDate,
+      createdAt: transferModalLead.createdDate || transferModalLead.createdAt || formattedDate,
       createdTime: transferModalLead.createdTime || formattedTime,
-      clientId: transferModalLead.clientId || `DSS${Math.floor(10000 + Math.random() * 90000)}`
+      clientId: transferModalLead.clientId || transferModalLead.leadId || `DSS${Math.floor(10000 + Math.random() * 90000)}`,
+      leadId: transferModalLead.leadId || transferModalLead.clientId || `DSS${Math.floor(10000 + Math.random() * 90000)}`,
+      updatedAt: new Date().toISOString()
     };
 
-    // Update across all localStorage keys including dss_sales_management_sheet_v1
+    // 1. Sync to backend MongoDB
+    try {
+      const targetId = transferModalLead._id || transferModalLead.id || transferModalLead.leadId;
+      if (targetId) {
+        await updateLeadApi(targetId, {
+          status: "INTERESTED",
+          leadStatus: "INTERESTED",
+          isInterested: true,
+          isLoss: false,
+          clientName: formData.clientName,
+          concernPersonName: formData.clientName,
+          phoneNumber: formData.phoneNumber,
+          phone: formData.phoneNumber,
+          alternateNumber: formData.alternateNumber,
+          whatsappNumber: formData.whatsappNumber,
+          emailAddress: formData.emailAddress,
+          email: formData.emailAddress,
+          companyName: formData.companyName,
+          businessType: formData.businessType,
+          clientDesignation: formData.clientDesignation,
+          amount: Number(formData.expectedBusiness) || 0,
+          expectedBusiness: Number(formData.expectedBusiness) || 0,
+          budget: Number(formData.expectedBusiness) || 0,
+          priority: formData.priority,
+          jobType: formData.jobType,
+          city: formData.city,
+          state: formData.state,
+          pincode: formData.pincode,
+          address: formData.address,
+          requirement: formData.requirement,
+          remark: formData.transferRemark || transferModalLead.remark || "",
+          clientRating: Number(formData.clientRating) || 4.5,
+          assignTo: formData.assignedTo,
+          salesPerson: formData.assignedTo,
+          movedToSalesManagementDate: new Date()
+        });
+      }
+    } catch (apiErr) {
+      console.error("Error updating lead status in MongoDB:", apiErr);
+    }
+
+    // 2. Invalidate cache across all scopes
+    invalidateCache("sales_management_sheet");
+    invalidateCache("sales_management_sheet_all");
+    invalidateCache("leadManagement");
+
+    // 3. Update active in-memory list in Lead Management Sheet
+    setLeads((prev) =>
+      prev.map((l) =>
+        (l._id === transferModalLead._id || l.id === transferModalLead.id || l.leadId === transferModalLead.leadId)
+          ? { ...l, ...finalLeadData }
+          : l
+      )
+    );
+
+    // 4. Update storage & broadcast event to all listeners
     updateLeadInStorage(finalLeadData);
+    notifyLeadChange(finalLeadData);
 
     toast.success(`Lead "${finalLeadData.clientName}" successfully submitted & transferred to Sales Management Sheet! 🚀`);
 
     setTransferModalLead(null);
     setTransferInitialRemark("");
 
-    // Navigate directly to Sales Management Sheet page
-    navigate("/sales/management-sheet");
+    // 5. Navigate directly to Sales Management Sheet page with the new lead data
+    navigate("/sales/management-sheet", { state: { lead: finalLeadData } });
   };
 
   // Media Attachments and Audio Recording State

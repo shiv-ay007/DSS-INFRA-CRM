@@ -630,6 +630,13 @@ const Addlead = () => {
         return result;
       };
 
+      let currentUser = null;
+      try {
+        currentUser = JSON.parse(localStorage.getItem("dss_user"));
+      } catch (e) {
+        currentUser = null;
+      }
+
       const generatedId = generate4DigitAlphaId();
       const newLead = {
         id: generatedId,
@@ -661,7 +668,12 @@ const Addlead = () => {
         leadBy: formData.salesPerson || "",
         salesPerson: formData.salesPerson || "",
         assignTo: formData.salesPerson || "",
+        assignedTo: formData.salesPerson || "",
         isAssigned: !!formData.salesPerson,
+        assignedBy: formData.salesPerson ? (currentUser?._id || currentUser?.name || "Admin") : null,
+        assignedByName: formData.salesPerson ? (currentUser?.name || "Admin") : "",
+        createdBy: currentUser?._id || null,
+        createdByName: currentUser?.name || "",
         address: formData.address,
         siteAddress: formData.address,
         clientDesignation: formData.clientDesignation || "",

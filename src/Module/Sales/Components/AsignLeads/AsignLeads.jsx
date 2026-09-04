@@ -10,9 +10,9 @@ import { availableWorkTypes, workCategoryList, leadTypesList } from "../../data/
 import { FaUserPlus, FaSearch, FaFilter, FaUserCheck, FaUser, FaRegCheckCircle } from "react-icons/fa";
 import { HiOutlineUsers } from "react-icons/hi";
 
-import { subscribeToLeadUpdates, getStoredLeads, updateLeadInStorage } from "../../utils/leadStorageUtils";
+import { subscribeToLeadUpdates, getStoredLeads, updateLeadInStorage, notifyLeadChange } from "../../utils/leadStorageUtils";
 import { getAllAssignedLeadsApi, createAssignedLeadApi, updateAssignedLeadApi } from "../../../../services/assignedLeads.api";
-import { updateLeadApi, getAllLeadsApi } from "../../../../services/totalLeads.api";
+import { updateLeadApi } from "../../../../services/totalLeads.api";
 import { markLeadAsLossApi, createLossLeadApi } from "../../../../services/lostLeads.api";
 import { useLeadContext } from "../../../../context/LeadContext";
 
@@ -44,7 +44,7 @@ const AsignLeads = () => {
     return [];
   });
 
-  const { getCachedData, setCachedData } = useLeadContext();
+  const { getCachedData, setCachedData, invalidateCache } = useLeadContext();
 
   const fetchBackendAssignedLeads = useCallback(async (forceRefresh = false) => {
     const cacheKey = "assignedLeads_all";
@@ -59,9 +59,9 @@ const AsignLeads = () => {
     try {
       let combinedRaw = [];
 
-      // 1. Fetch from Assigned Leads API endpoint
+      // Fetch from Assigned Leads API endpoint (authoritative)
       try {
-        const resAssigned = await getAllAssignedLeadsApi();
+        const resAssigned = await getAllAssignedLeadsApi({ limit: 1000 });
         if (resAssigned && resAssigned.success && resAssigned.data) {
           const list = Array.isArray(resAssigned.data)
             ? resAssigned.data
@@ -79,38 +79,6 @@ const AsignLeads = () => {
         }
       } catch (e) {
         console.warn("getAllAssignedLeadsApi warning:", e);
-      }
-
-      // 2. Fetch from All Leads API endpoint for leads with assignment
-      try {
-        const resAll = await getAllLeadsApi({ limit: 100, isLoss: false });
-        if (resAll && resAll.success && resAll.data) {
-          const rawAll = Array.isArray(resAll.data)
-            ? resAll.data
-            : (resAll.data.leads || resAll.data.data || []);
-          if (Array.isArray(rawAll)) {
-            const list = rawAll.filter((l) => {
-              const isLost =
-                l.isLoss === true ||
-                ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(l.leadStatus || "").toUpperCase()) ||
-                ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(l.status || "").toUpperCase());
-              if (isLost) return false;
-
-              // If already marked INTERESTED, lead has moved to Lead Management Sheet!
-              const isInterested =
-                l.isInterested === true ||
-                String(l.status || "").toUpperCase() === "INTERESTED" ||
-                String(l.leadStatus || "").toUpperCase() === "INTERESTED";
-              if (isInterested) return false;
-
-              const assignee = (l.salesPerson || (typeof l.assignedTo === 'object' ? l.assignedTo?.name : l.assignedTo) || l.assignTo || "").trim();
-              return l.isAssigned === true && !!assignee && assignee !== "Unassigned" && assignee !== "";
-            });
-            combinedRaw.push(...list);
-          }
-        }
-      } catch (e) {
-        console.warn("getAllLeadsApi warning in AsignLeads:", e);
       }
 
       const map = new Map();
@@ -146,30 +114,35 @@ const AsignLeads = () => {
         if (!rawAssignTo || rawAssignTo === "Unassigned") return;
         const assignee = rawAssignTo;
 
+        const leadObj = (backendLead.lead && typeof backendLead.lead === "object") ? backendLead.lead : {};
+        const rawAlt = backendLead.alternateNumber || leadObj.alternateNumber || "";
+        const finalAlt = (rawAlt && String(rawAlt).trim() && String(rawAlt).trim() !== "--") ? String(rawAlt).trim() : "--";
+
         const processedLead = {
+          ...leadObj,
           ...backendLead,
-          id: backendLead.leadId || backendLead._id || backendLead.id,
-          leadId: backendLead.leadId || backendLead._id || backendLead.id,
-          _id: backendLead._id,
-          clientName: backendLead.clientName || "Client",
-          concernPersonName: backendLead.clientName || "Client",
-          phoneNumber: backendLead.phoneNumber || backendLead.phone || "--",
-          contact: backendLead.phoneNumber || backendLead.phone || "--",
-          alternateNumber: backendLead.alternateNumber || "--",
-          emailAddress: backendLead.emailAddress || backendLead.email || "--",
-          email: backendLead.emailAddress || backendLead.email || "--",
-          status: backendLead.leadStatus || backendLead.status || "Warm",
-          leadStatus: backendLead.leadStatus || backendLead.status || "Warm",
-          leadType: backendLead.leadType || "FRESH",
-          leadMode: backendLead.leadMode || backendLead.leadSource || "DIRECT",
-          leadSource: backendLead.leadSource || backendLead.leadMode || "DIRECT",
-          workCategory: backendLead.workCategory || "Design",
-          workType: Array.isArray(backendLead.workType) ? backendLead.workType : (backendLead.workType ? [backendLead.workType] : []),
-          address: backendLead.address || backendLead.siteAddress || "--",
-          city: backendLead.city || "--",
-          pincode: backendLead.pincode || "--",
-          state: backendLead.state || "--",
-          expectedBusiness: String(backendLead.expectedBusiness || backendLead.budget || 0),
+          id: backendLead.leadId || backendLead._id || backendLead.id || leadObj.leadId || leadObj._id,
+          leadId: backendLead.leadId || leadObj.leadId || backendLead._id || backendLead.id,
+          _id: backendLead._id || leadObj._id,
+          clientName: backendLead.clientName || leadObj.clientName || "Client",
+          concernPersonName: backendLead.clientName || leadObj.clientName || "Client",
+          phoneNumber: backendLead.phoneNumber || backendLead.phone || leadObj.phoneNumber || leadObj.phone || "--",
+          contact: backendLead.phoneNumber || backendLead.phone || leadObj.phoneNumber || leadObj.phone || "--",
+          alternateNumber: finalAlt,
+          emailAddress: backendLead.emailAddress || backendLead.email || leadObj.emailAddress || leadObj.email || "--",
+          email: backendLead.emailAddress || backendLead.email || leadObj.emailAddress || leadObj.email || "--",
+          status: backendLead.leadStatus || backendLead.status || leadObj.leadStatus || leadObj.status || "Warm",
+          leadStatus: backendLead.leadStatus || backendLead.status || leadObj.leadStatus || leadObj.status || "Warm",
+          leadType: backendLead.leadType || leadObj.leadType || "FRESH",
+          leadMode: backendLead.leadMode || backendLead.leadSource || leadObj.leadMode || leadObj.leadSource || "DIRECT",
+          leadSource: backendLead.leadSource || backendLead.leadMode || leadObj.leadSource || leadObj.leadMode || "DIRECT",
+          workCategory: backendLead.workCategory || leadObj.workCategory || "Design",
+          workType: Array.isArray(backendLead.workType) && backendLead.workType.length > 0 ? backendLead.workType : (Array.isArray(leadObj.workType) ? leadObj.workType : []),
+          address: backendLead.address || leadObj.address || backendLead.siteAddress || leadObj.siteAddress || "--",
+          city: backendLead.city || leadObj.city || "--",
+          pincode: backendLead.pincode || leadObj.pincode || "--",
+          state: backendLead.state || leadObj.state || "--",
+          expectedBusiness: String(backendLead.expectedBusiness || backendLead.budget || leadObj.expectedBusiness || leadObj.budget || 0),
           isAssigned: true,
           assignTo: assignee,
           salesPerson: assignee,
@@ -178,8 +151,9 @@ const AsignLeads = () => {
           createdDate: formattedDate,
           assignedTime: formattedTime,
           createdTime: formattedTime,
-          remark: backendLead.remark || backendLead.requirement || backendLead.notes || "--",
-          projectDetail: backendLead.projectDetail || backendLead.notes || "--"
+          assignmentRemark: backendLead.assignmentRemark || leadObj.assignmentRemark || backendLead.remark || leadObj.requirement || backendLead.notes || "--",
+          remark: leadObj.remark || backendLead.remark || leadObj.notes || backendLead.notes || "--",
+          projectDetail: backendLead.projectDetail || leadObj.projectDetail || backendLead.notes || leadObj.notes || "--"
         };
 
         map.set(idKey, { ...map.get(idKey), ...processedLead });
@@ -384,16 +358,26 @@ const AsignLeads = () => {
       // 2. Move to Lost Leads
       const lostLeadData = {
         ...statusModalLead,
-        leadStatus: "Cold",
-        status: "NOT INTERESTED",
+        leadStatus: "CLOSED_LOST",
+        status: "CLOSED_LOST",
+        isLoss: true,
         isInterested: false,
+        isAssigned: false,
         lostReason: finalReason,
+        lossReason: finalReason,
         remark: statusRemark || statusModalLead.remark || "",
+        lossRemark: statusRemark || statusModalLead.remark || "",
         remarkAttachments: processedAttachments.length > 0 ? processedAttachments : (statusModalLead.remarkAttachments || []),
         attachments: processedAttachments.length > 0 ? processedAttachments : (statusModalLead.attachments || []),
         lostDate: formattedDate,
+        lossDate: new Date(),
         lostTime: formattedTime
       };
+
+      updateLeadInStorage(lostLeadData);
+      notifyLeadChange(lostLeadData);
+      invalidateCache("lostLeads");
+      invalidateCache("assignedLeads");
 
       try {
         // Sync with MongoDB backend LossLead collection
@@ -411,7 +395,10 @@ const AsignLeads = () => {
           lossReason: finalReason,
           reason: finalReason,
           lossRemark: statusRemark || statusModalLead.remark || "",
-          remark: statusRemark || statusModalLead.remark || ""
+          remark: statusRemark || statusModalLead.remark || "",
+          salesPerson: statusModalLead.salesPerson || statusModalLead.assignTo || "",
+          assignTo: statusModalLead.salesPerson || statusModalLead.assignTo || "",
+          assignedTo: statusModalLead.assignedTo || statusModalLead.salesPerson || null
         };
 
         if (targetId) {
@@ -423,12 +410,24 @@ const AsignLeads = () => {
         console.error("Error saving to lost leads:", e);
       }
 
-      toast.success(`Lead ${statusModalLead.clientName || statusModalLead.concernPersonName} marked as NOT INTERESTED (${finalReason}) and moved to Lost Leads! 📌`);
-    }
+      // Remove from dss_assigned_leads list
+      const updatedAssigned = leads.filter(l => l.id !== statusModalLead.id);
+      saveLeads(updatedAssigned);
 
-    // Remove from dss_assigned_leads list
-    const updatedAssigned = leads.filter(l => l.id !== statusModalLead.id);
-    saveLeads(updatedAssigned);
+      toast.success(`Lead ${statusModalLead.clientName || statusModalLead.concernPersonName} marked as NOT INTERESTED (${finalReason}) and moved to Lost Leads! 📌`);
+
+      setStatusModalLead(null);
+      setSelectedClientStatus("");
+      setNotInterestedReason("");
+      setCustomNotInterestedReason("");
+      setStatusRemark("");
+      setStatusRemarkAttachments([]);
+
+      if (targetPath) {
+        navigate(targetPath, { state: { lostLead: lostLeadData } });
+      }
+      return;
+    }
 
     setStatusModalLead(null);
     setSelectedClientStatus("");
@@ -674,7 +673,8 @@ const AsignLeads = () => {
       label: "ALTERNATE NUMBER",
       align: "center",
       render: (val, row) => {
-        const alt = row.alternateNumber || "--";
+        const rawAlt = row.alternateNumber || row.lead?.alternateNumber;
+        const alt = (rawAlt && String(rawAlt).trim() && String(rawAlt).trim() !== "--") ? String(rawAlt).trim() : "--";
         return alt !== "--" ? (
           <a
             href={`tel:${alt}`}
@@ -742,7 +742,14 @@ const AsignLeads = () => {
       label: "ASSIGNMENT REMARK",
       align: "center",
       render: (val, row) => {
-        const remark = row.assignmentRemark || "--";
+        const rawRemark =
+          row.assignmentRemark ||
+          row.lead?.assignmentRemark ||
+          row.remark ||
+          row.lead?.requirement ||
+          row.notes ||
+          "--";
+        const remark = (rawRemark && String(rawRemark).trim() && String(rawRemark).trim() !== "--") ? String(rawRemark).trim() : "--";
         return (
           <div className="max-w-[150px] truncate text-xs text-slate-700 font-medium mx-auto text-center" title={remark}>
             {remark}
@@ -754,7 +761,8 @@ const AsignLeads = () => {
       label: "PROJECT DETAIL",
       align: "center",
       render: (val, row) => {
-        const pd = row.projectDetail || row.projectDetails || "--";
+        const rawPd = row.projectDetail || row.projectDetails || row.lead?.projectDetail || row.lead?.projectDetails || "--";
+        const pd = (rawPd && String(rawPd).trim() && String(rawPd).trim() !== "--") ? String(rawPd).trim() : "--";
         return (
           <div className="max-w-[150px] truncate text-xs text-slate-700 font-medium mx-auto text-center" title={pd}>
             {pd}
@@ -766,7 +774,8 @@ const AsignLeads = () => {
       label: "REMARK",
       align: "center",
       render: (val, row) => {
-        const rem = row.remark || row.requirement || "--";
+        const rawRem = row.lead?.remark || row.lead?.notes || row.remark || row.requirement || "--";
+        const rem = (rawRem && String(rawRem).trim() && String(rawRem).trim() !== "--") ? String(rawRem).trim() : "--";
         return (
           <div className="max-w-[150px] truncate text-xs text-slate-700 font-medium mx-auto text-center" title={rem}>
             {rem}
@@ -897,9 +906,26 @@ const AsignLeads = () => {
     updateLeadInStorage(updatedLeadData);
 
     try {
+      let currentUser = null;
+      try {
+        currentUser = JSON.parse(localStorage.getItem("dss_user"));
+      } catch (e) {
+        currentUser = null;
+      }
+
       const targetId = reassignModalLead._id || reassignModalLead.id || reassignModalLead.leadId;
       await updateLeadApi(targetId, {
-        salesPerson: assignedPerson
+        salesPerson: assignedPerson,
+        assignTo: assignedPerson,
+        assignedTo: assignedPerson,
+        isAssigned: true,
+        assignedBy: currentUser?._id || currentUser?.name || "Admin",
+        assignedByName: currentUser?.name || "Admin",
+        assignedDate: formattedDate,
+        assignedTime: formattedTime,
+        status: reassignModalLead.status || reassignModalLead.leadStatus || "Warm",
+        leadStatus: reassignModalLead.status || reassignModalLead.leadStatus || "Warm",
+        remark: reassignmentRemark || reassignModalLead.remark || ""
       });
 
       await createAssignedLeadApi({
@@ -919,6 +945,9 @@ const AsignLeads = () => {
         salesPerson: assignedPerson,
         assignTo: assignedPerson,
         assignedTo: assignedPerson,
+        assignedBy: currentUser?._id || null,
+        assignedByName: currentUser?.name || "Admin",
+        assignedDate: new Date(),
         isAssigned: true,
         status: reassignModalLead.status || reassignModalLead.leadStatus || "Warm",
         leadStatus: reassignModalLead.status || reassignModalLead.leadStatus || "Warm",
@@ -929,9 +958,12 @@ const AsignLeads = () => {
     }
 
     toast.success(`Lead ${reassignModalLead.clientName || reassignModalLead.concernPersonName} reassigned to ${assignedPerson} successfully! 🎯`);
+    invalidateCache("assignedLeads");
+    notifyLeadChange(updatedLeadData);
     setReassignModalLead(null);
     setReassignmentRemark("");
     setReassignmentFiles([]);
+    fetchBackendAssignedLeads(true);
   };
 
   return (
