@@ -1,8 +1,6 @@
 const STORAGE_KEYS = [
   "dss_leads",
   "dss_lead_management_sheet_v1",
-  "dss_assigned_leads",
-  "dss_followup_leads",
   "dss_scheduled_leads_sheet",
   "dss_lost_leads",
   "dss_sales_management_sheet_v1"

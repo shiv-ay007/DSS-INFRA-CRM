@@ -5,9 +5,7 @@ import Login from '../Pages/Login'
 import Dashboard from '../Pages/Dashboard'
 import AddLead from '../Pages/AddLead'
 import TotalLeads from '../Pages/TotalLeads'
-import Asign from '../Pages/Asign'
 import Loss from '../Pages/Loss'
-import Followup from '../Pages/Followup'
 import LeadManagement from '../Pages/LeadManagement'
 import SalseManagment from '../Pages/SalseManagment'
 import LeadDetails from '../Pages/LeadDetails'
@@ -24,9 +22,7 @@ const SalesRoutes = () => {
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="leads/add" element={<AddLead />} />
         <Route path="leads/total" element={<TotalLeads />} />
-        <Route path="leads/assigned" element={<Asign />} />
         <Route path="leads/lost" element={<Loss />} />
-        <Route path="leads/followup" element={<Followup />} />
         <Route path="leads/all" element={<LeadManagement />} />
         <Route path="leads/details" element={<LeadDetails />} />
         <Route path="leads/details/:id" element={<LeadDetails />} />

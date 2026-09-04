@@ -1,13 +1,4 @@
 // Predefined dropdown lists for Add Lead Form
-export const salesPersonsList = [
-  "Sales TL",
-  "Rahul Sharma",
-  "Pooja Verma",
-  "Vikram Malhotra",
-  "Ankit Patel",
-  "Sanjay Gupta"
-];
-
 export const leadSourcesList = [
   "JUSTDIAL",
   "WHATSAPP",

@@ -2,21 +2,11 @@ import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import Table from "../../../../Common/Components/Table";
-import ScopeTabs from "../../../../Common/Components/ScopeTabs";
 import { subscribeToLeadUpdates } from "../../utils/leadStorageUtils";
 import { getAllLeadsApi } from "../../../../services/totalLeads.api";
 import { useLeadContext } from "../../../../context/LeadContext";
 import { workCategoryList } from "../../data/addLeadData";
 import { FaFilter, FaSearch } from "react-icons/fa";
-
-const teamMembers = [
-  "Sales TL",
-  "Rahul Sharma",
-  "Pooja Verma",
-  "Vikram Malhotra",
-  "Ankit Patel",
-  "Sanjay Gupta"
-];
 
 const Salse = () => {
   const navigate = useNavigate();
@@ -145,7 +135,6 @@ const Salse = () => {
   }, [fetchSalesLeads, location.state]);
 
   // Filter States
-  const [filterScope, setFilterScope] = useState("ALL");
   const [filterSalesPerson, setFilterSalesPerson] = useState("ALL");
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilters, setShowFilters] = useState(false);
@@ -354,14 +343,6 @@ const Salse = () => {
   // Filtered Data
   const filteredData = useMemo(() => {
     return salesData.filter((item) => {
-      const sp = (item.assignTo || item.salesPerson || "").toLowerCase();
-      const isSelfLead = sp.includes("sales tl") || sp.includes("current") || sp.includes("self") || sp.includes("john") || sp.includes("rahul");
-      if (filterScope === "SELF" && !isSelfLead) return false;
-      if (filterScope === "TEAM") {
-        if (isSelfLead) return false;
-        if (filterSalesPerson !== "ALL" && !sp.includes(filterSalesPerson.toLowerCase())) return false;
-      }
-
       if (selectedPriority !== "all") {
         const p = (item.priority || item.leadLabel || "").toLowerCase();
         if (selectedPriority === "high" && p !== "high" && p !== "hot") return false;
@@ -386,7 +367,7 @@ const Salse = () => {
       }
       return true;
     });
-  }, [salesData, filterScope, filterSalesPerson, selectedPriority, selectedCity, filterCategory, filterJobType, searchTerm]);
+  }, [salesData, selectedPriority, selectedCity, filterCategory, filterJobType, searchTerm]);
 
   // Paginated Data
   const paginatedData = useMemo(() => {
@@ -400,8 +381,6 @@ const Salse = () => {
     setSelectedCity("all");
     setFilterCategory("All");
     setFilterJobType("All");
-    setFilterScope("ALL");
-    setFilterSalesPerson("ALL");
     setCurrentPage(1);
   };
 
@@ -414,35 +393,27 @@ const Salse = () => {
           title="Sales Management Sheet"
           badge="Executive Overview"
           badgeColor="bg-purple-100 text-purple-800 border-purple-300"
-          description="Real-time sales deal tracking, client requirement log, priority matrix, and revenue valuation."
+          description="Track active pipeline health, expected vs achieved target revenues and incentive structures."
           showBackButton={true}
           rightActions={
-            <div className="flex items-center gap-2">
-              <Link
-                to="/sales/leads/add"
-                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs sm:text-sm font-bold shadow-md shadow-emerald-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                <span>+</span> Add Lead
-              </Link>
-
-              <button
-                type="button"
-                onClick={() => setShowFilters((prev) => !prev)}
-                className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-center shadow-2xs font-bold text-xs sm:text-sm ${
-                  showFilters
-                    ? "bg-white text-slate-800 border-slate-300 hover:bg-slate-50 shadow-2xs"
-                    : "bg-[#FF5722] text-white border-[#FF5722] hover:bg-[#e64a19]"
-                }`}
-                title={showFilters ? "Hide Filter Options" : "Show Filter Options"}
-              >
-                <FaFilter className="w-4 h-4" />
-              </button>
-            </div>
+            <button
+              type="button"
+              onClick={() => setShowFilters((prev) => !prev)}
+              className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-center shadow-2xs font-bold text-xs sm:text-sm ${
+                showFilters
+                  ? "bg-white text-slate-800 border-slate-300 hover:bg-slate-50 shadow-2xs"
+                  : "bg-[#FF5722] text-white border-[#FF5722] hover:bg-[#e64a19]"
+              }`}
+              title={showFilters ? "Hide Filter Options" : "Show Filter Options"}
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+              </svg>
+            </button>
           }
         />
       </div>
 
-      {/* ================= 2. TOP 3 COLORFUL KPI METRIC CARDS ================= */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         
         {/* Card 1: Total Amount (Light Green Card) */}
@@ -476,22 +447,6 @@ const Salse = () => {
         </div>
 
       </div>
-
-      {/* ================= 3. SCOPE TABS ================= */}
-      <ScopeTabs
-        currentScope={filterScope}
-        onScopeChange={(scope) => {
-          setFilterScope(scope);
-          setFilterSalesPerson("ALL");
-          setCurrentPage(1);
-        }}
-        salesPersonList={teamMembers}
-        selectedSalesPerson={filterSalesPerson}
-        onSalesPersonChange={(sp) => {
-          setFilterSalesPerson(sp);
-          setCurrentPage(1);
-        }}
-      />
 
       {/* COLLAPSIBLE ADVANCED FILTER BAR */}
       {showFilters && (

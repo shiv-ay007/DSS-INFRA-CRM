@@ -44,9 +44,7 @@ const menuItems = [
     ),
     subItems: [
       { id: "total_leads", label: "Total Leads", path: "/sales/leads/total", badge: "All" },
-      { id: "assigned_leads", label: "Assigned Leads", path: "/sales/leads/assigned", badge: "Active" },
       { id: "lost_leads", label: "Lost Leads", path: "/sales/leads/lost", badge: "Lost" },
-      { id: "followup", label: "Followup", path: "/sales/leads/followup", badge: "Calls" },
       { id: "lead_management_all", label: "Lead Management", path: "/sales/leads/all", badge: "Sheet" }
     ]
   },
@@ -74,9 +72,7 @@ const SalseSidebar = ({ isOpen = true, setIsOpen }) => {
   // Active check only for Lead Management sub-items
   const isLeadSubActive = [
     "/sales/leads/total",
-    "/sales/leads/assigned",
     "/sales/leads/lost",
-    "/sales/leads/followup",
     "/sales/leads/all"
   ].includes(location.pathname);
 

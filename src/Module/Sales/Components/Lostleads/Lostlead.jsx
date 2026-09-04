@@ -1,9 +1,7 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import Table from "../../../../Common/Components/Table";
-import ScopeTabs from "../../../../Common/Components/ScopeTabs";
-import { initialLostLeads } from "../../data/lostLeadsData";
 import { availableWorkTypes, workCategoryList, leadTypesList } from "../../data/addLeadData";
 import { FaFilter, FaSearch, FaUserPlus } from "react-icons/fa";
 
@@ -15,20 +13,12 @@ const leadModesList = [
   "Customer to customer"
 ];
 
-const teamMembers = [
-  "Sales TL",
-  "Rahul Sharma",
-  "Pooja Verma",
-  "Vikram Malhotra",
-  "Ankit Patel",
-  "Sanjay Gupta"
-];
-
 import { subscribeToLeadUpdates, getStoredLeads } from "../../utils/leadStorageUtils";
 import { getLossLeadsApi, getAllLossLeadsApi } from "../../../../services/lostLeads.api";
 import { useLeadContext } from "../../../../context/LeadContext";
 
 const Lostlead = () => {
+  const navigate = useNavigate();
   const location = useLocation();
   const [leads, setLeads] = useState(() => {
     if (location.state?.lostLead) {
@@ -102,7 +92,7 @@ const Lostlead = () => {
         const formattedDate = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
         const formattedTime = item.createdTime || dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
         const leadObj = (item.lead && typeof item.lead === "object") ? item.lead : {};
-        const assignee = item.salesPerson || (typeof item.assignedTo === 'object' ? item.assignedTo?.name : item.assignedTo) || leadObj.salesPerson || (typeof leadObj.assignedTo === 'object' ? leadObj.assignedTo?.name : leadObj.assignedTo) || "Sales TL";
+        const assignee = item.salesPerson || (typeof item.assignedTo === 'object' ? item.assignedTo?.name : item.assignedTo) || leadObj.salesPerson || (typeof leadObj.assignedTo === 'object' ? leadObj.assignedTo?.name : leadObj.assignedTo) || "Admin";
 
         const processed = {
           ...leadObj,
@@ -186,7 +176,6 @@ const Lostlead = () => {
 
   // Filter States
   const [showFilters, setShowFilters] = useState(false);
-  const [filterScope, setFilterScope] = useState("ALL"); // "ALL", "SELF", "TEAM"
   const [filterSalesPerson, setFilterSalesPerson] = useState("ALL");
   const [searchTerm, setSearchTerm] = useState("");
   const [filterLeadMode, setFilterLeadMode] = useState("ALL");
@@ -214,11 +203,57 @@ const Lostlead = () => {
     setFilterWorkType("ALL");
     setFilterStatus("ALL");
     setFilterDateFrom("");
-    setFilterScope("ALL");
     setCurrentPage(1);
   };
 
-  // Table Column Configuration - Original Lost Leads Columns restored as requested
+  const handleExportCSV = () => {
+    const exportData = filteredLeads;
+    const headers = [
+      "Lead ID",
+      "Lost Date",
+      "Client Name",
+      "Contact",
+      "Email",
+      "Lost Reason",
+      "Lead Type",
+      "Lead Status",
+      "Lead Mode",
+      "Work Category",
+      "Work Type",
+      "Expected Business",
+      "City",
+      "State",
+      "Remark"
+    ];
+    const rows = exportData.map((l) => [
+      l.id || l.leadId || "",
+      l.lostDate || l.date || "",
+      `"${l.clientName || l.concernPersonName || ""}"`,
+      l.phoneNumber || l.contact || "",
+      l.emailAddress || l.email || "",
+      `"${l.lostReason || l.reason || ""}"`,
+      l.leadType || "",
+      l.leadStatus || "",
+      l.leadMode || "",
+      l.workCategory || "",
+      Array.isArray(l.workType) ? `"${l.workType.join(" | ")}"` : `"${l.workType || ""}"`,
+      l.expectedBusiness || 0,
+      `"${l.city || ""}"`,
+      `"${l.state || ""}"`,
+      `"${(l.remark || l.lossRemark || "").replace(/"/g, '""')}"`
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((e) => e.join(","))].join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Lost_Leads_Export_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Table Column Configuration - Standardized across the application
   const columnConfig = useMemo(() => ({
     srNo: {
       label: "SR. NO.",
@@ -357,6 +392,7 @@ const Lostlead = () => {
     },
     leadType: {
       label: "LEAD TYPE",
+      align: "center",
       render: (val, row) => {
         const type = (row.leadType || val || "FRESH").toUpperCase();
         const isFresh = type === "FRESH";
@@ -375,6 +411,7 @@ const Lostlead = () => {
     },
     leadStatus: {
       label: "LEAD STATUS",
+      align: "center",
       render: (val, row) => {
         const rawStatus = row.leadStatus || row.status || "Lost";
         const status = (rawStatus.toUpperCase() === "CLOSED_LOST" ? "LOST" : rawStatus).toUpperCase();
@@ -393,6 +430,7 @@ const Lostlead = () => {
     },
     leadMode: {
       label: "LEAD MODE",
+      align: "center",
       render: (val, row) => (
         <span className="text-xs font-semibold text-slate-700">
           {row.leadMode || row.leadSource || "Business networking"}
@@ -401,6 +439,7 @@ const Lostlead = () => {
     },
     workCategory: {
       label: "WORK CATEGORY",
+      align: "center",
       render: (val, row) => (
         <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
           {row.workCategory || "Design"}
@@ -409,12 +448,13 @@ const Lostlead = () => {
     },
     workType: {
       label: "WORK TYPE",
+      align: "center",
       render: (val, row) => {
         const wt = Array.isArray(row.workType)
           ? row.workType.join(", ")
           : (row.workType || "Concept Drawing");
         return (
-          <div className="max-w-[140px] truncate text-xs font-medium text-slate-700" title={wt}>
+          <div className="max-w-[140px] truncate text-xs font-medium text-slate-700 mx-auto text-center" title={wt}>
             {wt}
           </div>
         );
@@ -422,6 +462,7 @@ const Lostlead = () => {
     },
     alternateNumber: {
       label: "ALTERNATE NUMBER",
+      align: "center",
       render: (val, row) => {
         const alt = row.alternateNumber || "--";
         return alt !== "--" ? (
@@ -438,10 +479,11 @@ const Lostlead = () => {
     },
     address: {
       label: "ADDRESS",
+      align: "center",
       render: (val, row) => {
         const addr = row.address || row.siteAddress || "--";
         return (
-          <div className="max-w-[140px] truncate text-xs text-slate-700 font-medium" title={addr}>
+          <div className="max-w-[140px] truncate text-xs text-slate-700 font-medium mx-auto text-center" title={addr}>
             {addr}
           </div>
         );
@@ -449,6 +491,7 @@ const Lostlead = () => {
     },
     pincode: {
       label: "PINCODE",
+      align: "center",
       render: (val, row) => (
         <span className="font-mono text-xs text-slate-700 font-bold">
           {row.pincode || "--"}
@@ -457,6 +500,7 @@ const Lostlead = () => {
     },
     city: {
       label: "CITY",
+      align: "center",
       render: (val, row) => (
         <span className="text-xs font-semibold text-slate-700">
           {row.city || "--"}
@@ -465,6 +509,7 @@ const Lostlead = () => {
     },
     state: {
       label: "STATE",
+      align: "center",
       render: (val, row) => (
         <span className="text-xs font-semibold text-slate-700">
           {row.state || "--"}
@@ -473,6 +518,7 @@ const Lostlead = () => {
     },
     expectedBusiness: {
       label: "EXPECTED BUSINESS (₹)",
+      align: "center",
       render: (val, row) => {
         const amt = Number(row.expectedBusinessAmount || row.expectedBusiness || row.expectedRevenue || 0);
         return (
@@ -482,24 +528,13 @@ const Lostlead = () => {
         );
       }
     },
-    assignedTo: {
-      label: "ASSIGNED TO",
-      render: (val, row) => {
-        const assignee = row.salesPerson || row.assignTo || row.assignedTo || "Sales TL";
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-            {assignee}
-          </span>
-        );
-      }
-    },
     projectDetail: {
       label: "PROJECT DETAIL",
+      align: "center",
       render: (val, row) => {
         const pd = row.projectDetail || row.projectDetails || "--";
         return (
-          <div className="max-w-[150px] truncate text-xs text-slate-700 font-medium" title={pd}>
+          <div className="max-w-[150px] truncate text-xs text-slate-700 font-medium mx-auto text-center" title={pd}>
             {pd}
           </div>
         );
@@ -507,10 +542,11 @@ const Lostlead = () => {
     },
     remark: {
       label: "REMARK",
+      align: "center",
       render: (val, row) => {
         const rem = row.remark || row.requirement || "--";
         return (
-          <div className="max-w-[150px] truncate text-xs text-slate-700 font-medium" title={rem}>
+          <div className="max-w-[150px] truncate text-xs text-slate-700 font-medium mx-auto text-center" title={rem}>
             {rem}
           </div>
         );
@@ -548,16 +584,6 @@ const Lostlead = () => {
       // 3. Date Filter
       if (filterDateFrom && !(item.createdDate || item.date || item.lostDate || "").includes(filterDateFrom)) return false;
 
-      // 4. Scope Filter (ALL, SELF, TEAM)
-      if (filterScope === "SELF" && item.assignedType !== "self") return false;
-      if (filterScope === "TEAM") {
-        if (item.assignedType === "self") return false;
-        if (filterSalesPerson !== "ALL") {
-          const assignee = (item.salesPerson || item.assignTo || item.assignedTo || "").toLowerCase();
-          if (!assignee.includes(filterSalesPerson.toLowerCase())) return false;
-        }
-      }
-
       return true;
     });
   }, [
@@ -568,9 +594,7 @@ const Lostlead = () => {
     filterWorkCategory,
     filterWorkType,
     filterStatus,
-    filterDateFrom,
-    filterScope,
-    filterSalesPerson
+    filterDateFrom
   ]);
 
   const totalLostAmount = useMemo(() => {
@@ -602,56 +626,63 @@ const Lostlead = () => {
   };
 
   return (
-    <div className="space-y-5 font-sans pb-12 w-full min-h-screen bg-[#F8FAFC]">
+    <div className="space-y-4 font-sans pb-16">
       
-      {/* 1. SUB-HEADER BAR */}
+      {/* ================= 1. SUB-HEADER / ACTIONS ================= */}
       <div className="sticky top-0 z-30 bg-[#F8FAFC] pt-1 pb-2">
         <PageHeader
           title="Lost Leads Directory"
-          badge="Closed / Lost"
+          badge="Lost Leads"
           badgeColor="bg-rose-100 text-rose-800 border-rose-300"
-          description="Analyze lost deal reasons and revive opportunities back into the active pipeline."
+          description={`Showing ${paginatedLeads.length} of ${filteredLeads.length} closed lost leads`}
           showBackButton={true}
           rightActions={
-            <button
-              type="button"
-              onClick={() => setShowFilters((prev) => !prev)}
-              className={`p-2.5 rounded-xl border transition-all cursor-pointer flex items-center justify-center shadow-2xs font-bold text-xs sm:text-sm ${
-                showFilters
-                  ? "bg-white text-slate-800 border-slate-300 hover:bg-slate-50 shadow-2xs"
-                  : "bg-[#FF5722] text-white border-[#FF5722] hover:bg-[#e64a19]"
-              }`}
-              title={showFilters ? "Hide Filter Options" : "Show Filter Options"}
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-              </svg>
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleExportCSV}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-bold shadow-2xs transition-colors cursor-pointer flex items-center gap-1.5"
+                title="Export CSV"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+                <span>Export CSV</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => navigate("/sales/leads/add")}
+                className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold shadow-sm transition-colors cursor-pointer flex items-center gap-1.5"
+              >
+                <span>+ Add Lead</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowFilters(!showFilters)}
+                className={`p-2.5 rounded-xl border transition-all cursor-pointer ${
+                  showFilters
+                    ? "bg-slate-900 border-slate-900 text-white shadow-xs"
+                    : "bg-[#FF5722] hover:bg-[#F4511E] border-[#FF5722] text-white shadow-xs"
+                }`}
+                title="Toggle Filters"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                </svg>
+              </button>
+            </div>
           }
         />
       </div>
 
-      {/* 2. SCOPE TABS WITH EXECUTIVE DROPDOWN */}
-      <ScopeTabs
-        activeTab={filterScope}
-        onTabChange={(tab) => {
-          setFilterScope(tab);
-          setCurrentPage(1);
-        }}
-        selectedExecutive={filterSalesPerson}
-        onExecutiveChange={(exec) => {
-          setFilterSalesPerson(exec);
-          setCurrentPage(1);
-        }}
-        executives={teamMembers}
-      />
-
-      {/* 3. COLLAPSIBLE FILTER PANEL */}
+      {/* ================= 2. COLLAPSIBLE FILTER PANEL ================= */}
       {showFilters && (
-        <div className="w-full bg-white rounded-3xl border border-slate-200/90 shadow-md p-5 space-y-4 animate-in fade-in duration-150">
-          {/* Search & Quick Status Tabs */}
-          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto flex-1">
+        <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 space-y-3.5 transition-all">
+          {/* Top Search, Show Dropdown & Status Tabs */}
+          <div className="flex flex-col lg:flex-row items-center justify-between gap-3.5">
+            <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto flex-1">
               {/* Rows Per Page Dropdown */}
               <div className="flex items-center gap-2">
                 <span className="text-xs sm:text-sm font-bold text-slate-600">Show:</span>
@@ -677,21 +708,25 @@ const Lostlead = () => {
                 </div>
               </div>
 
-              {/* Search Input */}
+              {/* Real-time Search */}
               <div className="relative flex-1 min-w-[220px] max-w-md">
-                <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm">
+                  🔍
+                </span>
                 <input
                   type="text"
-                  value={searchTerm}
-                  onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
                   placeholder="Search Client Name, Project Details, City..."
-                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-semibold text-slate-800 bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-none focus:border-slate-900 transition-all shadow-2xs"
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-800 bg-slate-50/50 hover:bg-white focus:bg-white focus:outline-hidden focus:border-black transition-all placeholder:text-slate-400 font-medium shadow-2xs"
                 />
                 {searchTerm && (
                   <button
-                    type="button"
                     onClick={() => setSearchTerm("")}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 text-xs font-bold"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-black text-xs cursor-pointer font-bold"
                   >
                     ✕
                   </button>
@@ -700,103 +735,133 @@ const Lostlead = () => {
             </div>
 
             {/* Quick Status Tabs (ALL, LOST, HOT, WARM, COLD) */}
-            <div className="flex items-center gap-1.5 overflow-x-auto w-full md:w-auto pb-1 md:pb-0">
+            <div className="flex items-center gap-2 overflow-x-auto w-full lg:w-auto pb-1 lg:pb-0">
               {["ALL", "LOST", "HOT", "WARM", "COLD"].map((st) => (
                 <button
                   key={st}
                   type="button"
-                  onClick={() => { setFilterStatus(st); setCurrentPage(1); }}
-                  className={`px-4 py-1.5 rounded-xl text-xs font-extrabold transition-all cursor-pointer ${
+                  onClick={() => {
+                    setFilterStatus(st);
+                    setCurrentPage(1);
+                  }}
+                  className={`px-3.5 py-2 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
                     filterStatus === st
-                      ? "bg-slate-900 text-white shadow-xs"
-                      : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                      ? "bg-slate-900 text-white shadow-md"
+                      : "bg-slate-100 text-slate-700 hover:bg-slate-200"
                   }`}
                 >
-                  {st}
+                  <span>{st}</span>
                 </button>
               ))}
             </div>
           </div>
 
-          {/* 5 Filter Dropdowns + Date Picker + Reset Button */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-2 border-t border-slate-100">
-            {/* 1. Lead Mode Dropdown */}
-            <select
-              value={filterLeadMode}
-              onChange={(e) => { setFilterLeadMode(e.target.value); setCurrentPage(1); }}
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:border-slate-900 cursor-pointer shadow-2xs"
-            >
-              <option value="ALL">Lead Mode</option>
-              {leadModesList.filter(m => m !== "ALL").map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
+          {/* Secondary Filters */}
+          <div className="pt-3 border-t border-slate-100 space-y-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3 text-xs sm:text-sm">
+              {/* 1. Lead Type */}
+              <select
+                value={filterLeadType}
+                onChange={(e) => {
+                  setFilterLeadType(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-700 bg-white focus:outline-none focus:border-slate-400 cursor-pointer font-medium shadow-2xs"
+              >
+                <option value="ALL">Lead Type</option>
+                {leadTypesList.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
 
-            {/* 2. Lead Type Dropdown */}
-            <select
-              value={filterLeadType}
-              onChange={(e) => { setFilterLeadType(e.target.value); setCurrentPage(1); }}
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:border-slate-900 cursor-pointer shadow-2xs"
-            >
-              <option value="ALL">Lead Type</option>
-              {leadTypesList.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
+              {/* 2. Lead Mode */}
+              <select
+                value={filterLeadMode}
+                onChange={(e) => {
+                  setFilterLeadMode(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-700 bg-white focus:outline-none focus:border-slate-400 cursor-pointer font-medium shadow-2xs"
+              >
+                <option value="ALL">Lead Mode</option>
+                {leadModesList.filter((m) => m !== "ALL").map((m) => (
+                  <option key={m} value={m}>{m}</option>
+                ))}
+              </select>
 
-            {/* 3. Lead Status Dropdown */}
-            <select
-              value={filterStatus}
-              onChange={(e) => { setFilterStatus(e.target.value); setCurrentPage(1); }}
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:border-slate-900 cursor-pointer shadow-2xs"
-            >
-              <option value="ALL">Lead Status</option>
-              <option value="LOST">Lost</option>
-              <option value="Hot">Hot</option>
-              <option value="Warm">Warm</option>
-              <option value="Cold">Cold</option>
-            </select>
+              {/* 3. Lead Status */}
+              <select
+                value={filterStatus}
+                onChange={(e) => {
+                  setFilterStatus(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-700 bg-white focus:outline-none focus:border-slate-400 cursor-pointer font-medium shadow-2xs"
+              >
+                <option value="ALL">Lead Status</option>
+                {["LOST", "Hot", "Warm", "Cold"].map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
 
-            {/* 4. Work Category Dropdown */}
-            <select
-              value={filterWorkCategory}
-              onChange={(e) => { setFilterWorkCategory(e.target.value); setCurrentPage(1); }}
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:border-slate-900 cursor-pointer shadow-2xs"
-            >
-              <option value="ALL">Work Category</option>
-              {workCategoryList.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
+              {/* 4. Work Category */}
+              <select
+                value={filterWorkCategory}
+                onChange={(e) => {
+                  setFilterWorkCategory(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-700 bg-white focus:outline-none focus:border-slate-400 cursor-pointer font-medium shadow-2xs"
+              >
+                <option value="ALL">Work Category</option>
+                {workCategoryList.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
 
-            {/* 5. Work Type Dropdown */}
-            <select
-              value={filterWorkType}
-              onChange={(e) => { setFilterWorkType(e.target.value); setCurrentPage(1); }}
-              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:border-slate-900 cursor-pointer shadow-2xs"
-            >
-              <option value="ALL">Work Type</option>
-              {availableWorkTypes.map(w => <option key={w} value={w}>{w}</option>)}
-            </select>
+              {/* 5. Work Type */}
+              <select
+                value={filterWorkType}
+                onChange={(e) => {
+                  setFilterWorkType(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-700 bg-white focus:outline-none focus:border-slate-400 cursor-pointer font-medium shadow-2xs"
+              >
+                <option value="ALL">Work Type</option>
+                {availableWorkTypes.map((w) => (
+                  <option key={w} value={w}>{w}</option>
+                ))}
+              </select>
+            </div>
 
-            {/* Date Picker & Reset Button */}
-            <div className="flex items-center gap-2 col-span-2 sm:col-span-1">
-              <input
-                type="date"
-                value={filterDateFrom}
-                onChange={(e) => { setFilterDateFrom(e.target.value); setCurrentPage(1); }}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 bg-white focus:outline-none focus:border-slate-900 shadow-2xs"
-              />
+            {/* Row 2: Date Picker & Orange Reset Button */}
+            <div className="flex items-center gap-3">
+              <div className="relative w-48">
+                <input
+                  type="date"
+                  value={filterDateFrom}
+                  onChange={(e) => setFilterDateFrom(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs sm:text-sm text-slate-700 bg-white focus:outline-none focus:border-slate-400 font-medium shadow-2xs cursor-pointer"
+                />
+              </div>
 
-              {/* Orange Reset Button */}
               <button
                 type="button"
                 onClick={handleResetFilters}
-                className="bg-[#ff5722] hover:bg-[#e64a19] text-white p-2.5 rounded-xl shadow-xs transition-colors shrink-0 cursor-pointer"
-                title="Reset All Filters"
+                className="w-9 h-9 rounded-xl bg-[#ff5722] hover:bg-[#e64a19] text-white shadow-xs transition-colors cursor-pointer flex items-center justify-center font-bold text-sm shrink-0"
+                title="Reset Filters"
               >
-                🔄
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 4. TABLE COMPONENT */}
+      {/* ================= 3. TABLE COMPONENT ================= */}
       <Table
         columnConfig={columnConfig}
         data={paginatedLeads}
@@ -811,7 +876,7 @@ const Lostlead = () => {
         itemsPerPageOptions={[10, 25, 50, 100]}
       />
 
-      {/* 5. REVIVE MODAL */}
+      {/* ================= 4. REVIVE MODAL ================= */}
       {reviveModalLead && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 space-y-4">
@@ -845,13 +910,13 @@ const Lostlead = () => {
         </div>
       )}
 
-      {/* 6. DETAIL VIEW MODAL */}
+      {/* ================= 5. DETAIL VIEW MODAL ================= */}
       {selectedLead && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-100 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="text-base font-extrabold text-slate-900">Lost Lead Details</h3>
-              <button type="button" onClick={() => setSelectedLead(null)} className="w-7 h-7 rounded-full bg-slate-100 text-slate-500 font-bold hover:bg-slate-200 text-xs">✕</button>
+              <button type="button" onClick={() => setSelectedLead(null)} className="w-7 h-7 rounded-full bg-slate-100 text-slate-500 font-bold hover:bg-slate-200 text-xs cursor-pointer">✕</button>
             </div>
             <div className="space-y-2 text-xs text-slate-700">
               <p><strong>Client Name:</strong> {selectedLead.clientName || selectedLead.concernPersonName}</p>
@@ -859,11 +924,10 @@ const Lostlead = () => {
               <p><strong>Email:</strong> {selectedLead.emailAddress || selectedLead.email || "--"}</p>
               <p><strong>Lost Reason:</strong> <span className="text-rose-700 font-bold">{selectedLead.lostReason || "Client Not Interested"}</span></p>
               <p><strong>Expected Business:</strong> ₹{Number(selectedLead.expectedBusiness || selectedLead.expectedBusinessAmount || 0).toLocaleString("en-IN")}</p>
-              <p><strong>Assigned To:</strong> {selectedLead.assignedTo || selectedLead.salesPerson || "Sales TL"}</p>
               <p><strong>Remarks:</strong> {selectedLead.remark || selectedLead.remarks || "--"}</p>
             </div>
             <div className="pt-2 flex justify-end">
-              <button type="button" onClick={() => setSelectedLead(null)} className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800">Close</button>
+              <button type="button" onClick={() => setSelectedLead(null)} className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 cursor-pointer">Close</button>
             </div>
           </div>
         </div>

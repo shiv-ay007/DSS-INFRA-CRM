@@ -4,7 +4,7 @@ import { toast } from "react-toastify";
 
 const SalesHeader = ({
   department = "Sales Department",
-  role = "Sales TL",
+  role = "Admin",
   unreadNotification = true,
   onLogout,
   toggleSidebar
@@ -37,11 +37,7 @@ const SalesHeader = ({
 
   // Format user role display
   const getFormattedRole = (userRole) => {
-    if (!userRole) return role;
-    if (userRole === "ADMIN") return "Admin";
-    if (userRole === "MANAGER") return "Sales TL";
-    if (userRole === "SALES_EXECUTIVE") return "Sales Executive";
-    return userRole;
+    return "Admin";
   };
 
   const userName = user?.name || user?.username || department;

@@ -4,7 +4,6 @@ export { default as apiClient, getAuthHeaders, API_BASE_URL } from "./axiosInsta
 // Export modular page APIs
 export * from "./auth.api";
 export * from "./totalLeads.api";
-export * from "./assignedLeads.api";
 export * from "./followup.api";
 export * from "./lostLeads.api";
 export * from "./dashboard.api";

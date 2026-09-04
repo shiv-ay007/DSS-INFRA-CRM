@@ -47,15 +47,6 @@ export const updateLeadStatusApi = async (leadId, status) => {
   }
 };
 
-export const assignLeadApi = async (leadId, assignData) => {
-  try {
-    return await apiClient.patch(`/leads/${leadId}/assign`, assignData);
-  } catch (error) {
-    console.error("API assignLeadApi error:", error);
-    return { success: false, message: error.message };
-  }
-};
-
 export const deleteLeadApi = async (leadId) => {
   try {
     return await apiClient.delete(`/leads/${leadId}`);

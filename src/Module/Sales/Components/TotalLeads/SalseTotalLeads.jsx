@@ -3,27 +3,22 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import Table from "../../../../Common/Components/Table";
-import ScopeTabs from "../../../../Common/Components/ScopeTabs";
 import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
-import { initialTotalLeads } from "../../data/totalLeadsData";
-import { initialAssignedLeads } from "../../data/assignedLeadsData";
 import { availableWorkTypes, workCategoryList, indianStatesList } from "../../data/addLeadData";
-import { FaUserPlus, FaUsers, FaUserCheck, FaImage, FaVideo, FaMicrophone, FaFileAlt, FaPaperclip, FaTimes, FaDownload, FaPlay, FaPause } from "react-icons/fa";
+import { FaUser, FaRegCheckCircle, FaUsers, FaUserCheck, FaImage, FaVideo, FaMicrophone, FaFileAlt, FaPaperclip, FaTimes, FaDownload, FaPlay, FaPause } from "react-icons/fa";
 import { HiOutlineUsers } from "react-icons/hi";
 
 import { subscribeToLeadUpdates, updateLeadInStorage, getStoredLeads } from "../../utils/leadStorageUtils";
 import { getAllLeadsApi, updateLeadApi } from "../../../../services/totalLeads.api";
-import { createAssignedLeadApi } from "../../../../services/assignedLeads.api";
+import { markLeadAsLossApi, createLossLeadApi } from "../../../../services/lostLeads.api";
 import { useLeadContext } from "../../../../context/LeadContext";
 
-const salesPersonsList = [
-  "ALL",
-  "Sales TL",
-  "Rahul Sharma",
-  "Pooja Verma",
-  "Vikram Malhotra",
-  "Ankit Patel",
-  "Sanjay Gupta"
+const notInterestedReasonsList = [
+  "High Price / Budget Out",
+  "Already Purchased / Competitor Chosen",
+  "Location / Distance Issue",
+  "Requirements Mismatch / Not Feasible",
+  "Other"
 ];
 
 const leadModesList = [
@@ -99,7 +94,6 @@ const SalseTotalLeads = () => {
   const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [filterScope, setFilterScope] = useState("ALL");
   const [filterLeadMode, setFilterLeadMode] = useState("ALL");
   const [filterLeadType, setFilterLeadType] = useState("ALL");
   const [filterWorkCategory, setFilterWorkCategory] = useState("ALL");
@@ -394,135 +388,169 @@ const SalseTotalLeads = () => {
   const [bulkStatusModal, setBulkStatusModal] = useState(false);
   const [bulkNewStatus, setBulkNewStatus] = useState("Warm");
 
-  // Assign Lead Modal States (Matching User Screenshot Design)
-  const [assignModalLead, setAssignModalLead] = useState(null);
-  const [assignType, setAssignType] = useState("executive"); // "executive" or "self"
-  const [selectedExecutive, setSelectedExecutive] = useState("Rahul Sharma");
-  const [executiveBranch, setExecutiveBranch] = useState("Noida Branch");
-  const [leadPriority, setLeadPriority] = useState("Medium");
-  const [assignmentRemark, setAssignmentRemark] = useState("");
-  const [assignmentFiles, setAssignmentFiles] = useState([]);
+  // Client Status Modal States (Interested / Not Interested)
+  const [statusModalLead, setStatusModalLead] = useState(null);
+  const [selectedClientStatus, setSelectedClientStatus] = useState("");
+  const [notInterestedReason, setNotInterestedReason] = useState("");
+  const [customNotInterestedReason, setCustomNotInterestedReason] = useState("");
+  const [statusRemark, setStatusRemark] = useState("");
+  const [statusRemarkAttachments, setStatusRemarkAttachments] = useState([]);
 
-  const executiveBranchMap = useMemo(() => ({
-    "Rahul Sharma": "Noida Branch",
-    "Pooja Verma": "Delhi NCR Branch",
-    "Vikram Malhotra": "Gurugram Branch",
-    "Ankit Patel": "Mumbai Branch",
-    "Sanjay Gupta": "Bengaluru Branch",
-    "Sales TL": "Head Office Main"
-  }), []);
+  // Handler to move lead to Lead Management or Lost Leads based on Client Status
+  const handleClientStatusSubmit = async () => {
+    if (!statusModalLead) return;
 
-  const handleExecutiveChange = (execName) => {
-    setSelectedExecutive(execName);
-    setExecutiveBranch(executiveBranchMap[execName] || "Noida Branch");
-  };
+    if (!selectedClientStatus) {
+      toast.error("Please select Client Status (INTERESTED or NOT INTERESTED)!");
+      return;
+    }
 
-  const handleAssignLeadSubmit = async () => {
-    if (!assignModalLead) return;
-
-    const assignedPerson =
-      assignType === "self"
-        ? "Sales TL"
-        : selectedExecutive || "Rahul Sharma";
-
-    const assignedBranch =
-      assignType === "self"
-        ? "Head Office Main"
-        : executiveBranchMap[assignedPerson] || "Noida Branch";
+    if (selectedClientStatus === "NOT INTERESTED") {
+      if (!notInterestedReason) {
+        toast.error("Please select a reason why the client is not interested!");
+        return;
+      }
+      if (notInterestedReason === "Other" && !customNotInterestedReason.trim()) {
+        toast.error("Please specify the reason in the text input box!");
+        return;
+      }
+    }
 
     const today = new Date();
     const formattedDate = today.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
     const formattedTime = today.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
 
-    const updatedLeadData = {
-      ...assignModalLead,
-      assignTo: assignedPerson,
-      salesPerson: assignedPerson,
-      assignedTo: assignedPerson,
-      leadBy: assignedPerson,
-      assignedType: assignType,
-      assignedBranch: assignedBranch,
-      priority: leadPriority,
-      leadPriority: leadPriority,
-      isAssigned: true,
-      assignedDate: formattedDate,
-      assignedTime: formattedTime,
-      assignmentRemark: assignmentRemark,
-      assignmentFiles: assignmentFiles.map((f) => ({
-        name: f.name,
-        type: f.type,
-        size: f.size
-      }))
-    };
+    const finalReason = notInterestedReason === "Other" ? customNotInterestedReason.trim() : notInterestedReason;
 
-    // 1. Centralized update & dispatch update event
-    updateLeadInStorage(updatedLeadData);
-    setLeads((prevLeads) =>
-      prevLeads.map((l) => (String(l.id) === String(updatedLeadData.id) ? updatedLeadData : l))
-    );
+    const processedAttachments = (statusRemarkAttachments || []).map((item) => ({
+      id: item.id || `att-${Date.now()}-${Math.random()}`,
+      name: item.name || item.file?.name || "Attachment",
+      type: item.type || "file",
+      url: item.preview || item.url || ""
+    }));
 
-    // 3. Sync assignment to MongoDB backend DB assignedleads collection
-    try {
-      let currentUser = null;
+    if (selectedClientStatus === "INTERESTED") {
+      // 1. Move to Lead Management
+      const leadData = {
+        ...statusModalLead,
+        leadStatus: "Hot",
+        status: "INTERESTED",
+        isInterested: true,
+        followupCount: 0,
+        followupRemarksCount: 0,
+        followupHistory: [],
+        remark: statusRemark || statusModalLead.remark || "",
+        remarkAttachments: processedAttachments.length > 0 ? processedAttachments : (statusModalLead.remarkAttachments || []),
+        attachments: processedAttachments.length > 0 ? processedAttachments : (statusModalLead.attachments || []),
+        movedToLeadManagementDate: formattedDate,
+        movedToLeadManagementTime: formattedTime,
+        nextFollowupDate: "",
+        nextFollowupTime: "",
+        isFollowupScheduled: false,
+        isFollowup: false
+      };
+
       try {
-        currentUser = JSON.parse(localStorage.getItem("dss_user"));
-      } catch (e) {
-        currentUser = null;
+        const targetId = statusModalLead._id || statusModalLead.id || statusModalLead.leadId;
+        await updateLeadApi(targetId, {
+          leadStatus: "Hot",
+          status: "INTERESTED",
+          isInterested: true,
+          followupCount: 0,
+          followupRemarksCount: 0,
+          followupHistory: [],
+          isFollowupScheduled: false,
+          isFollowup: false,
+          nextFollowupDate: null,
+          nextFollowupTime: "",
+          remark: statusRemark || statusModalLead.remark || ""
+        });
+      } catch (err) {
+        console.error("Error syncing INTERESTED lead to backend:", err);
       }
 
-      const targetId = assignModalLead._id || assignModalLead.id || assignModalLead.leadId;
-      await updateLeadApi(targetId, {
-        salesPerson: assignedPerson,
-        assignTo: assignedPerson,
-        assignedTo: assignedPerson,
-        isAssigned: true,
-        assignedBy: currentUser?._id || currentUser?.name || "Admin",
-        assignedByName: currentUser?.name || "Admin",
-        assignedDate: formattedDate,
-        assignedTime: formattedTime,
-        leadStatus: assignModalLead.status || assignModalLead.leadStatus || "Warm",
-        requirement: assignmentRemark || assignModalLead.remark || ""
-      });
+      updateLeadInStorage(leadData);
+      setLeads((prevLeads) =>
+        prevLeads.map((l) => (String(l.id) === String(leadData.id) ? leadData : l))
+      );
+      invalidateCache("totalLeads");
+      invalidateCache("leadManagement");
 
-      await createAssignedLeadApi({
-        leadId: targetId,
-        clientName: assignModalLead.clientName || assignModalLead.concernPersonName,
-        phoneNumber: assignModalLead.phoneNumber || assignModalLead.contact,
-        phone: assignModalLead.phoneNumber || assignModalLead.contact,
-        emailAddress: assignModalLead.emailAddress || assignModalLead.email,
-        email: assignModalLead.emailAddress || assignModalLead.email,
-        workCategory: assignModalLead.workCategory,
-        workType: assignModalLead.workType,
-        address: assignModalLead.address || "",
-        city: assignModalLead.city || "",
-        pincode: assignModalLead.pincode || "",
-        state: assignModalLead.state || "",
-        expectedBusiness: assignModalLead.expectedBusiness,
-        salesPerson: assignedPerson,
-        assignTo: assignedPerson,
-        assignedTo: assignedPerson,
-        assignedBy: currentUser?._id || null,
-        assignedByName: currentUser?.name || "Admin",
-        assignedDate: new Date(),
-        isAssigned: true,
-        status: assignModalLead.status || assignModalLead.leadStatus || "Warm",
-        leadStatus: assignModalLead.status || assignModalLead.leadStatus || "Warm",
-        remark: assignmentRemark || assignModalLead.remark || ""
-      });
-    } catch (err) {
-      console.error("Backend assign lead sync error:", err);
+      toast.success(`Lead ${statusModalLead.clientName || statusModalLead.concernPersonName || statusModalLead.id} marked as INTERESTED and sent to Lead Management! 🎯`);
+      setStatusModalLead(null);
+      setSelectedClientStatus("");
+      setNotInterestedReason("");
+      setCustomNotInterestedReason("");
+      setStatusRemark("");
+      setStatusRemarkAttachments([]);
+
+      navigate("/sales/leads/all", { state: { newInterestedLead: leadData } });
+    } else if (selectedClientStatus === "NOT INTERESTED") {
+      // 2. Move to Lost Leads
+      const lostLeadData = {
+        ...statusModalLead,
+        leadStatus: "CLOSED_LOST",
+        status: "CLOSED_LOST",
+        isLoss: true,
+        isInterested: false,
+        lostReason: finalReason,
+        lossReason: finalReason,
+        remark: statusRemark || statusModalLead.remark || "",
+        lossRemark: statusRemark || statusModalLead.remark || "",
+        remarkAttachments: processedAttachments.length > 0 ? processedAttachments : (statusModalLead.remarkAttachments || []),
+        attachments: processedAttachments.length > 0 ? processedAttachments : (statusModalLead.attachments || []),
+        lostDate: formattedDate,
+        lossDate: new Date(),
+        lostTime: formattedTime
+      };
+
+      updateLeadInStorage(lostLeadData);
+      setLeads((prevLeads) =>
+        prevLeads.map((l) => (String(l.id) === String(lostLeadData.id) ? lostLeadData : l))
+      );
+      invalidateCache("totalLeads");
+      invalidateCache("lostLeads");
+
+      try {
+        const targetId = statusModalLead._id || statusModalLead.id || statusModalLead.leadId;
+        const lossPayload = {
+          leadId: targetId,
+          clientName: statusModalLead.clientName || statusModalLead.concernPersonName,
+          phoneNumber: statusModalLead.phoneNumber || statusModalLead.contact,
+          phone: statusModalLead.phoneNumber || statusModalLead.contact,
+          emailAddress: statusModalLead.emailAddress || statusModalLead.email,
+          email: statusModalLead.emailAddress || statusModalLead.email,
+          workCategory: statusModalLead.workCategory,
+          workType: statusModalLead.workType,
+          expectedBusiness: statusModalLead.expectedBusiness,
+          lossReason: finalReason,
+          reason: finalReason,
+          lossRemark: statusRemark || statusModalLead.remark || "",
+          remark: statusRemark || statusModalLead.remark || "",
+          salesPerson: "Admin",
+          assignTo: "Admin",
+          assignedTo: null
+        };
+
+        if (targetId) {
+          await markLeadAsLossApi(targetId, lossPayload);
+        } else {
+          await createLossLeadApi(lossPayload);
+        }
+      } catch (e) {
+        console.error("Error saving to lost leads:", e);
+      }
+
+      toast.success(`Lead ${statusModalLead.clientName || statusModalLead.concernPersonName || statusModalLead.id} marked as NOT INTERESTED (${finalReason}) and moved to Lost Leads! 📌`);
+      setStatusModalLead(null);
+      setSelectedClientStatus("");
+      setNotInterestedReason("");
+      setCustomNotInterestedReason("");
+      setStatusRemark("");
+      setStatusRemarkAttachments([]);
+
+      navigate("/sales/leads/lost", { state: { lostLead: lostLeadData } });
     }
-
-    // Invalidate caches so Total Leads, Assigned Leads, etc. reflect fresh assignment
-    invalidateCache("totalLeads");
-    invalidateCache("assignedLeads");
-    invalidateCache("leadManagement");
-
-    toast.success(`Lead ${assignModalLead.clientName || assignModalLead.concernPersonName || assignModalLead.id} assigned to ${assignedPerson} successfully! 🎯`);
-    setAssignModalLead(null);
-    setAssignmentRemark("");
-    setAssignmentFiles([]);
-    navigate("/sales/leads/assigned", { state: { assignedLead: updatedLeadData } });
   };
 
   // Table Column Configuration matching AddLead form fields in exact sequence
@@ -540,10 +568,6 @@ const SalseTotalLeads = () => {
       label: "ACTIONS",
       align: "center",
       render: (val, row) => {
-        const rawAssignee = row.assignTo || row.salesPerson || (typeof row.assignedTo === 'object' ? row.assignedTo?.name : (row.assignedTo && !String(row.assignedTo).match(/^[0-9a-fA-F]{24}$/) ? row.assignedTo : "")) || "";
-        const assignee = String(rawAssignee).replace(" (Current User)", "").replace("(Current User)", "").trim();
-        const isAssigned = row.isAssigned === true || (!!assignee && assignee !== "Unassigned" && assignee !== "");
-
         return (
           <div className="flex items-center justify-center gap-1.5">
             {/* View Lead Details Eye Button */}
@@ -559,22 +583,22 @@ const SalseTotalLeads = () => {
               </svg>
             </button>
 
-            {/* Assign Lead Icon Button (Available only if lead is NOT yet assigned) */}
-            {filterScope?.toUpperCase() === "ALL" && !isAssigned && (
-              <button
-                type="button"
-                onClick={() => {
-                  setAssignType("executive");
-                  setSelectedExecutive("Rahul Sharma");
-                  setExecutiveBranch("Noida Branch");
-                  setAssignModalLead(row);
-                }}
-                className="w-7 h-7 rounded-lg border border-blue-200 bg-blue-50/70 text-blue-600 hover:bg-blue-100 hover:border-blue-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
-                title="Assign Lead"
-              >
-                <FaUserPlus className="w-3.5 h-3.5" />
-              </button>
-            )}
+            {/* Client Status (Interested / Not Interested) Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setStatusModalLead(row);
+                setSelectedClientStatus(row.isInterested ? "INTERESTED" : "");
+                setNotInterestedReason("");
+                setCustomNotInterestedReason("");
+                setStatusRemark(row.remark || "");
+                setStatusRemarkAttachments([]);
+              }}
+              className="w-7 h-7 rounded-lg border border-emerald-200 bg-emerald-50/70 text-emerald-600 hover:bg-emerald-100 hover:border-emerald-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
+              title="Client Status (Interested / Not Interested)"
+            >
+              <FaRegCheckCircle className="w-3.5 h-3.5" />
+            </button>
           </div>
         );
       }
@@ -679,26 +703,6 @@ const SalseTotalLeads = () => {
         return (
           <span className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold uppercase border ${colors[status] || "bg-slate-100 text-slate-700 border-slate-200"}`}>
             {status}
-          </span>
-        );
-      }
-    },
-    assignedTo: {
-      label: "ASSIGNED TO",
-      align: "center",
-      render: (val, row) => {
-        const rawAssignee = row.assignTo || row.salesPerson || (typeof row.assignedTo === 'object' ? row.assignedTo?.name : (row.assignedTo && !String(row.assignedTo).match(/^[0-9a-fA-F]{24}$/) ? row.assignedTo : "")) || "";
-        const assignee = String(rawAssignee).replace(" (Current User)", "").replace("(Current User)", "").trim();
-        const isAssigned = row.isAssigned === true || (!!assignee && assignee !== "Unassigned" && assignee !== "");
-
-        if (!isAssigned || !assignee || assignee === "Unassigned" || assignee === "") {
-          return <span className="text-slate-400 font-medium text-xs">--</span>;
-        }
-
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-            {assignee}
           </span>
         );
       }
@@ -906,7 +910,7 @@ const SalseTotalLeads = () => {
         );
       }
     }
-  }), [currentPage, rowsPerPage, filterScope]);
+  }), [currentPage, rowsPerPage]);
 
   // Filter & Search Logic
   const filteredLeads = useMemo(() => {
@@ -931,12 +935,6 @@ const SalseTotalLeads = () => {
         item.emailAddress?.toLowerCase().includes(search) ||
         item.email?.toLowerCase().includes(search) ||
         item.id?.toLowerCase().includes(search);
-
-      const sp = (item.salesPerson || item.assignTo || "").toLowerCase();
-      const isSelfLead = sp.includes("sales tl") || sp.includes("current") || sp.includes("self") || sp.includes("rahul");
-      const matchScope =
-        filterScope === "ALL" ||
-        (filterScope === "SELF" ? isSelfLead : !isSelfLead);
 
       const matchLeadMode =
         filterLeadMode === "ALL" ||
@@ -979,9 +977,9 @@ const SalseTotalLeads = () => {
         matchDate = matchDate && leadDate <= filterDateTo;
       }
 
-      return matchSearch && matchScope && matchLeadMode && matchLeadType && matchWorkCategory && matchWorkType && matchStatus && matchSalesPerson && matchCity && matchState && matchDate;
+      return matchSearch && matchLeadMode && matchLeadType && matchWorkCategory && matchWorkType && matchStatus && matchSalesPerson && matchCity && matchState && matchDate;
     });
-  }, [leads, searchTerm, filterScope, filterLeadMode, filterLeadType, filterWorkCategory, filterWorkType, filterStatus, filterSalesPerson, filterCity, filterState, filterDateFrom, filterDateTo]);
+  }, [leads, searchTerm, filterLeadMode, filterLeadType, filterWorkCategory, filterWorkType, filterStatus, filterSalesPerson, filterCity, filterState, filterDateFrom, filterDateTo]);
 
   // Sort Logic
   const sortedLeads = useMemo(() => {
@@ -1199,23 +1197,6 @@ const SalseTotalLeads = () => {
           }
         />
       </div>
-
-      {/* ================= ALL / SELF / TEAM SCOPE FILTER WITH EXECUTIVE DROPDOWN ================= */}
-      <ScopeTabs
-        activeTab={filterScope}
-        onTabChange={(tab) => {
-          setFilterScope(tab);
-          setCurrentPage(1);
-        }}
-        selectedExecutive={filterSalesPerson}
-        onExecutiveChange={(exec) => {
-          setFilterSalesPerson(exec);
-          setCurrentPage(1);
-        }}
-        executives={salesPersonsList}
-      />
-
-
 
       {/* COLLAPSIBLE FILTER PANEL (Opens on click) */}
       {showFilters && (
@@ -1518,169 +1499,177 @@ const SalseTotalLeads = () => {
         </div>
       )}
 
-      {/* ================= ASSIGN / RE-ASSIGN LEAD MODAL ================= */}
-      {assignModalLead && (() => {
-        const isAlreadyAssigned = assignModalLead.isAssigned === true && !!(assignModalLead.assignTo || assignModalLead.assignedTo || assignModalLead.salesPerson);
-        const modalTitleText = isAlreadyAssigned ? "Re-assign Lead" : "Assign Lead";
-
-        return (
+      {/* ================= CLIENT STATUS (INTERESTED / NOT INTERESTED) MODAL ================= */}
+      {statusModalLead && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl max-w-md w-full shadow-2xl overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200">
-            {/* Header Banner */}
-            <div className="bg-[#ff5722] text-white px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
-                  {isAlreadyAssigned ? <HiOutlineUsers className="w-5 h-5 text-white" /> : <FaUserPlus className="w-5 h-5 text-white" />}
-                </div>
-                <h3 className="text-xl font-extrabold tracking-wide">{modalTitleText}</h3>
-              </div>
+          <div className="bg-white rounded-3xl max-w-lg w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-100 p-6 space-y-5 animate-in zoom-in-95 duration-200">
+            
+            {/* Modal Title */}
+            <div className="flex items-center justify-between">
+              <h3 className="text-xl font-extrabold text-slate-900">Lead Status</h3>
               <button
                 type="button"
                 onClick={() => {
-                  setAssignModalLead(null);
-                  setAssignmentRemark("");
-                  setAssignmentFiles([]);
+                  setStatusModalLead(null);
+                  setSelectedClientStatus("");
+                  setNotInterestedReason("");
+                  setCustomNotInterestedReason("");
+                  setStatusRemark("");
+                  setStatusRemarkAttachments([]);
                 }}
-                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white text-base transition-colors cursor-pointer"
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-slate-500 text-sm font-bold transition-colors cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            {/* Modal Form Body */}
-            <div className="p-6 space-y-5 max-h-[80vh] overflow-y-auto">
-              
-              {/* ASSIGN TO RADIO SELECTION */}
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                  ASSIGN TO
-                </label>
-                <div className="flex items-center gap-6">
-                  <label className="flex items-center gap-2 text-sm font-bold text-slate-800 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="assignType"
-                      value="self"
-                      checked={assignType === "self"}
-                      onChange={() => {
-                        setAssignType("self");
-                        setSelectedExecutive("Sales TL");
-                        setExecutiveBranch("Head Office Main");
-                      }}
-                      className="w-4 h-4 text-[#ff5722] focus:ring-[#ff5722] accent-[#ff5722] cursor-pointer"
-                    />
-                    <span>Self</span>
-                  </label>
-
-                  <label className="flex items-center gap-2 text-sm font-bold text-slate-800 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="assignType"
-                      value="executive"
-                      checked={assignType === "executive"}
-                      onChange={() => {
-                        setAssignType("executive");
-                        const firstExec = salesPersonsList.find(p => p !== "ALL" && !p.includes("Current") && !p.includes("TL") && !p.includes("Self")) || "Rahul Sharma";
-                        setSelectedExecutive(firstExec);
-                        setExecutiveBranch(executiveBranchMap[firstExec] || "Noida Branch");
-                      }}
-                      className="w-4 h-4 text-[#ff5722] focus:ring-[#ff5722] accent-[#ff5722] cursor-pointer"
-                    />
-                    <span>Executive</span>
-                  </label>
+            {/* Top Cards: Client Info (Light Blue) & Expected Business (Light Green) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {/* Left Box: Client Info */}
+              <div className="p-4 rounded-2xl bg-blue-50/80 border border-blue-100 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-sm shrink-0">
+                  <FaUser className="w-4 h-4" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h4 className="text-sm font-extrabold text-slate-900 truncate">
+                    {statusModalLead.clientName || statusModalLead.concernPersonName || "Client Name"}
+                  </h4>
+                  <p className="text-xs font-mono text-slate-600 font-semibold truncate">
+                    {statusModalLead.phoneNumber || statusModalLead.contact || "--"}
+                  </p>
+                  <p className="text-[11px] text-slate-500 font-medium truncate">
+                    {statusModalLead.emailAddress || statusModalLead.email || "--"}
+                  </p>
                 </div>
               </div>
 
-              {/* EXECUTIVE SELECTION & BRANCH AUTO-FILL (Shown when Executive is selected) */}
-              {assignType === "executive" && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
-                      SELECT SALES EXECUTIVE
-                    </label>
-                    <select
-                      value={selectedExecutive}
-                      onChange={(e) => handleExecutiveChange(e.target.value)}
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-orange-300 text-xs sm:text-sm font-bold text-slate-800 bg-white focus:outline-none focus:border-[#ff5722] shadow-2xs cursor-pointer"
-                    >
-                      {salesPersonsList.filter(p => p !== "ALL" && !p.includes("Current") && !p.includes("TL") && !p.includes("Self")).map((p) => (
-                        <option key={p} value={p}>{p}</option>
-                      ))}
-                    </select>
-                  </div>
+              {/* Right Box: Expected Business */}
+              <div className="p-4 rounded-2xl bg-emerald-100/70 border border-emerald-200/80 text-center flex flex-col justify-center items-center">
+                <span className="text-xs font-bold text-slate-700 tracking-wide uppercase mb-1">
+                  Expected Business
+                </span>
+                <span className="text-2xl font-black text-slate-900 font-mono">
+                  {statusModalLead.expectedBusiness || statusModalLead.expectedRevenue || statusModalLead.expectedBusinessAmount || "0"}
+                </span>
+              </div>
+            </div>
 
-                  <div>
-                    <label className="block text-xs font-bold text-slate-600 uppercase mb-1">
-                      BRANCH (AUTO-FILLED)
+            {/* Form Section: Client Status Dropdown */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                Client Status <span className="text-red-500">*</span>
+              </label>
+              <select
+                value={selectedClientStatus}
+                onChange={(e) => {
+                  setSelectedClientStatus(e.target.value);
+                  if (e.target.value !== "NOT INTERESTED") {
+                    setNotInterestedReason("");
+                    setCustomNotInterestedReason("");
+                  }
+                }}
+                className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm font-bold text-slate-800 bg-white focus:outline-none focus:border-orange-500 shadow-2xs cursor-pointer"
+              >
+                <option value="">-- Select Status --</option>
+                <option value="INTERESTED">INTERESTED</option>
+                <option value="NOT INTERESTED">NOT INTERESTED</option>
+              </select>
+            </div>
+
+            {/* If NOT INTERESTED selected: Show Reason Dropdown, Custom Reason Input & Remarks with Media */}
+            {selectedClientStatus === "NOT INTERESTED" && (
+              <div className="space-y-4 pt-1 animate-in fade-in duration-200">
+                {/* Reason Dropdown */}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+                    Reason For Not Interested <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={notInterestedReason}
+                    onChange={(e) => setNotInterestedReason(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm font-bold text-slate-800 bg-white focus:outline-none focus:border-red-500 shadow-2xs cursor-pointer"
+                  >
+                    <option value="">-- Select Reason --</option>
+                    {notInterestedReasonsList.map((r) => (
+                      <option key={r} value={r}>
+                        {r}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* If "Other" selected: Custom Reason Write-In Input Box */}
+                {notInterestedReason === "Other" && (
+                  <div className="animate-in fade-in duration-200">
+                    <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                      Specify Other Reason <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
-                      readOnly
-                      value={executiveBranch}
-                      placeholder="Auto-fills on selection"
-                      className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold text-slate-600 bg-slate-50 italic focus:outline-none cursor-not-allowed shadow-2xs"
+                      placeholder="Type specific reason why client is not interested..."
+                      value={customNotInterestedReason}
+                      onChange={(e) => setCustomNotInterestedReason(e.target.value)}
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 text-sm font-medium text-slate-800 bg-white focus:outline-none focus:border-red-500 shadow-2xs placeholder:text-slate-400"
                     />
                   </div>
+                )}
+
+                {/* Remarks Field with Media Attachments */}
+                <div className="pt-1">
+                  <CommentWithMedia
+                    title="Remarks & Attachments (Audio / Image)"
+                    placeholder="Write detailed remarks or record audio note..."
+                    value={statusRemark}
+                    onChange={(val) => setStatusRemark(val)}
+                    files={statusRemarkAttachments}
+                    onFilesChange={(newFiles) => setStatusRemarkAttachments(newFiles)}
+                  />
                 </div>
-              )}
-
-              {/* LEAD PRIORITY */}
-              <div>
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                  LEAD PRIORITY
-                </label>
-                <select
-                  value={leadPriority}
-                  onChange={(e) => setLeadPriority(e.target.value)}
-                  className="w-full px-3.5 py-2.5 rounded-xl border border-orange-300 text-xs sm:text-sm font-bold text-slate-800 bg-white focus:outline-none focus:border-[#ff5722] shadow-2xs cursor-pointer"
-                >
-                  <option value="High">High</option>
-                  <option value="Medium">Medium</option>
-                  <option value="Low">Low</option>
-                </select>
               </div>
+            )}
 
-              {/* ASSIGNMENT REMARK (COMMENT WITH MEDIA COMPONENT) */}
-              <div>
+            {/* If INTERESTED selected: Optional Remarks with Media Attachment */}
+            {selectedClientStatus === "INTERESTED" && (
+              <div className="pt-1 animate-in fade-in duration-200">
                 <CommentWithMedia
-                  title="ASSIGNMENT REMARK"
-                  placeholder="Write assignment remark here..."
-                  value={assignmentRemark}
-                  onChange={(val) => setAssignmentRemark(val)}
-                  files={assignmentFiles}
-                  onFilesChange={(files) => setAssignmentFiles(files)}
-                  allowMedia={true}
+                  title="Remarks & Attachments (Optional)"
+                  placeholder="Write optional remark or record audio note..."
+                  value={statusRemark}
+                  onChange={(val) => setStatusRemark(val)}
+                  files={statusRemarkAttachments}
+                  onFilesChange={(newFiles) => setStatusRemarkAttachments(newFiles)}
                 />
               </div>
-
-            </div>
+            )}
 
             {/* Modal Footer Actions */}
-            <div className="bg-slate-50/70 px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3">
+            <div className="pt-2 flex items-center justify-end gap-3">
               <button
                 type="button"
                 onClick={() => {
-                  setAssignModalLead(null);
-                  setAssignmentRemark("");
-                  setAssignmentFiles([]);
+                  setStatusModalLead(null);
+                  setSelectedClientStatus("");
+                  setNotInterestedReason("");
+                  setCustomNotInterestedReason("");
+                  setStatusRemark("");
+                  setStatusRemarkAttachments([]);
                 }}
-                className="px-5 py-2.5 rounded-xl bg-slate-200 hover:bg-slate-300 text-slate-700 text-xs sm:text-sm font-bold transition-colors cursor-pointer"
+                className="px-5 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-sm font-semibold transition-colors cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={handleAssignLeadSubmit}
-                className="px-6 py-2.5 rounded-xl bg-[#ff5722] hover:bg-[#e64a19] text-white text-xs sm:text-sm font-extrabold shadow-md shadow-orange-500/20 transition-all cursor-pointer"
+                onClick={handleClientStatusSubmit}
+                className="px-6 py-2.5 rounded-xl bg-[#ff5722] hover:bg-[#e64a19] text-white text-sm font-extrabold shadow-md shadow-orange-500/20 transition-all cursor-pointer"
               >
-                {modalTitleText}
+                Submit
               </button>
             </div>
 
           </div>
         </div>
-        );
-      })()}
+      )}
 
       {/* ================= 6. SCHEDULE FOLLOW-UP MODAL ================= */}
       {followupModal && (

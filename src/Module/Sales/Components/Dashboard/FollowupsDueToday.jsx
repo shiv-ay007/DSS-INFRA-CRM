@@ -83,10 +83,10 @@ const FollowupsDueToday = ({ data = [] }) => {
       <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
         <span className="text-xs text-slate-500 font-medium">Keep in touch with every client daily</span>
         <Link
-          to="/sales/leads/followup"
+          to="/sales/leads/total"
           className="text-xs font-bold text-blue-600 hover:text-blue-800 hover:underline flex items-center gap-1"
         >
-          <span>View All Followups</span>
+          <span>View All Leads</span>
           <span>→</span>
         </Link>
       </div>

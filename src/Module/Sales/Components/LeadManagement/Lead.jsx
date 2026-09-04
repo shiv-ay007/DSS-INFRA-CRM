@@ -3,9 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import Table from "../../../../Common/Components/Table";
-import ScopeTabs from "../../../../Common/Components/ScopeTabs";
 import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
-import { initialLeadsData } from "../../data/leadManagementData";
 import { FaUserPlus, FaUsers, FaUser } from "react-icons/fa";
 import { subscribeToLeadUpdates, updateLeadInStorage, notifyLeadChange } from "../../utils/leadStorageUtils";
 import { getAllLeadsApi, updateLeadApi } from "../../../../services/totalLeads.api";
@@ -34,15 +32,6 @@ const formatLakhs = (val) => {
   const num = Number(val) || 0;
   return `₹${(num / 100000).toFixed(2)}L`;
 };
-
-const teamMembers = [
-  "Sales TL",
-  "John (Sales TL)",
-  "Sanjay Srivastava",
-  "Rahul Sharma",
-  "Pooja Verma",
-  "Vikram Malhotra" 
-];
 
 const timeOptions = [
   "09:00 am", "09:30 am", "10:00 am", "10:30 am", "11:00 am", "11:30 am",
@@ -238,7 +227,6 @@ const Lead = () => {
   // Filters & Collapsible Filter State
   const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterScope, setFilterScope] = useState("ALL");
   const [filterSalesPerson, setFilterSalesPerson] = useState("ALL");
   const [filterStatus, setFilterStatus] = useState("All");
   const [filterLeadType, setFilterLeadType] = useState("All");
@@ -474,19 +462,6 @@ const Lead = () => {
         return (
           <span className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold uppercase border ${colors[status] || "bg-slate-100 text-slate-700 border-slate-200"}`}>
             {status}
-          </span>
-        );
-      }
-    },
-    assignedTo: {
-      label: "ASSIGNED TO",
-      align: "center",
-      render: (val, row) => {
-        const assignee = row.assignTo || row.assignedTo || row.salesPerson || "Sales TL";
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-            {assignee}
           </span>
         );
       }
@@ -972,7 +947,7 @@ const Lead = () => {
     type: "Call",
     date: "",
     time: "10:00 am",
-    assignedTo: "Sales TL",
+    assignedTo: "Admin",
     talkToPerson: "",
     personDesignation: "",
     notes: "",
@@ -996,7 +971,7 @@ const Lead = () => {
     const fresh = leads.filter((l) => (l.leadType || "").toUpperCase() === "FRESH").length;
     const converted = leads.filter((l) => (l.status || "").toUpperCase() === "CONVERTED").length;
     const interested = leads.filter((l) => (l.status || "").toUpperCase().includes("INTERESTED")).length;
-    const conversionRate = total > 0 ? ((converted / total) * 100).toFixed(1) : "0.0";
+    const conversionRate = total > 0 ? `${((converted / total) * 100).toFixed(1)}%` : "0.0%";
     
     // Revenue calculations
     const totalRevenue = leads
@@ -1010,11 +985,11 @@ const Lead = () => {
     const expectedIncentives = expectedRevenue * 0.02;
 
     return {
-      total,
-      fresh,
-      converted,
-      interested,
-      conversionRate: `${conversionRate}%`,
+      total: String(total),
+      fresh: String(fresh),
+      converted: String(converted),
+      interested: String(interested),
+      conversionRate,
       totalRevenue: formatLakhs(totalRevenue),
       expectedRevenue: formatLakhs(expectedRevenue),
       totalIncentives: formatLakhs(totalIncentives),
@@ -1030,14 +1005,6 @@ const Lead = () => {
         ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(lead.leadStatus || "").toUpperCase()) ||
         ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(lead.status || "").toUpperCase());
       if (isLost) return false;
-
-      const sp = (lead.assignTo || lead.salesPerson || "").toLowerCase();
-      const isSelfLead = sp.includes("sales tl") || sp.includes("current") || sp.includes("self") || sp.includes("john") || sp.includes("rahul");
-      if (filterScope === "SELF" && !isSelfLead) return false;
-      if (filterScope === "TEAM") {
-        if (isSelfLead) return false;
-        if (filterSalesPerson !== "ALL" && !sp.includes(filterSalesPerson.toLowerCase())) return false;
-      }
 
       if (filterStatus !== "All" && lead.status !== filterStatus) return false;
       if (filterLeadType !== "All" && lead.leadType !== filterLeadType) return false;
@@ -1081,7 +1048,7 @@ const Lead = () => {
       };
       return getLeadTime(b) - getLeadTime(a);
     });
-  }, [leads, filterScope, filterStatus, filterLeadType, filterJobType, filterLeadLabel, searchTerm]);
+  }, [leads, filterStatus, filterLeadType, filterJobType, filterLeadLabel, searchTerm]);
 
   // 3. Paginated Leads
   const paginatedLeads = useMemo(() => {
@@ -1122,7 +1089,7 @@ const Lead = () => {
       type: "Call",
       date: lead.nextFollowupDateRaw || tmrStr,
       time: lead.nextFollowupTime !== "--" ? lead.nextFollowupTime : "10:00 am",
-      assignedTo: lead.assignTo !== "--" ? lead.assignTo : "Sales TL",
+      assignedTo: lead.assignTo !== "--" ? lead.assignTo : "Admin",
       talkToPerson: lead.concernPersonName || "",
       personDesignation: lead.clientDesignation || "",
       notes: "",
@@ -1303,23 +1270,6 @@ const Lead = () => {
 
       {/* ================= 2. DASHBOARD STYLE SLIDABLE KPI STAT CARDS ================= */}
       <LeadKpiSlider stats={stats} />
-
-      {/* ================= ALL / SELF / TEAM SCOPE FILTER WITH EXECUTIVE DROPDOWN ================= */}
-      <ScopeTabs
-        activeTab={filterScope}
-        onTabChange={(tab) => {
-          setFilterScope(tab);
-          setCurrentPage(1);
-        }}
-        selectedExecutive={filterSalesPerson}
-        onExecutiveChange={(exec) => {
-          setFilterSalesPerson(exec);
-          setCurrentPage(1);
-        }}
-        executives={teamMembers}
-      />
-
-
 
       {/* COLLAPSIBLE FILTER PANEL (Opens on click) */}
       {showFilters && (

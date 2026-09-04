@@ -12,7 +12,6 @@ import {
   FaPlus
 } from "react-icons/fa";
 import {
-  salesPersonsList,
   leadSourcesList,
   channelsList,
   leadTypesList,
@@ -43,7 +42,7 @@ const EditLeadModal = ({ lead, isOpen, onClose, onSaveSuccess }) => {
     leadType: "FRESH",
     jobType: "NEW",
     clientType: "Individual",
-    assignTo: "Sales TL",
+    assignTo: "Admin",
     expectedBusiness: "",
     workCategory: "",
     workType: [],
@@ -87,7 +86,7 @@ const EditLeadModal = ({ lead, isOpen, onClose, onSaveSuccess }) => {
         leadType: lead.leadType || "FRESH",
         jobType: lead.jobType || "NEW",
         clientType: lead.clientType || "Individual",
-        assignTo: lead.assignTo || lead.salesPerson || "Sales TL",
+        assignTo: lead.assignTo || lead.salesPerson || "Admin",
         expectedBusiness: lead.expectedBusiness || lead.expectedRevenue || lead.amount || "",
         workCategory: lead.workCategory || "",
         workType: parsedWorkType,
@@ -371,20 +370,6 @@ const EditLeadModal = ({ lead, isOpen, onClose, onSaveSuccess }) => {
                   <option value="">-- Select Source --</option>
                   {(leadSourcesList || ["Business Networking", "By Freelancer", "By Sales Team", "Customer to Customer", "Website", "Social Media"]).map((src, i) => (
                     <option key={i} value={src}>{src}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Assigned Sales Representative</label>
-                <select
-                  name="assignTo"
-                  value={formData.assignTo}
-                  onChange={handleChange}
-                  className="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 font-bold"
-                >
-                  {(salesPersonsList || ["Sales TL", "Rahul Sharma", "Pooja Verma", "Vikram Malhotra"]).map((sp, i) => (
-                    <option key={i} value={sp}>{sp}</option>
                   ))}
                 </select>
               </div>

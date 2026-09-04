@@ -6,7 +6,6 @@ import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
 import { createLeadApi, getAllLeadsApi } from "../../../../services/totalLeads.api";
 import { notifyLeadChange } from "../../utils/leadStorageUtils";
 import {
-  salesPersonsList,
   leadSourcesList,
   channelsList,
   leadTypesList,
@@ -16,7 +15,6 @@ import {
   indianStatesList,
   availableWorkTypes
 } from "../../data/addLeadData";
-import { initialTotalLeads } from "../../data/totalLeadsData";
 import { FaPlus, FaMicrophone, FaImage, FaVideo, FaFileAudio, FaTimes } from "react-icons/fa";
 
 const Addlead = () => {

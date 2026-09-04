@@ -17,7 +17,7 @@ import {
 import { availableWorkTypes, workCategoryList } from "../../data/addLeadData";
 
 const teamMembers = [
-  "Sales TL",
+  "Admin",
   "Rahul Sharma",
   "Pooja Verma",
   "Vikram Malhotra",
@@ -45,7 +45,7 @@ const SalesTransferModal = ({ lead, initialRemark, isOpen, onClose, onSubmit }) 
     requirement: "",
     transferRemark: "",
     clientRating: 4.5,
-    assignedTo: "Sales TL"
+    assignedTo: "Admin"
   });
 
   useEffect(() => {
@@ -69,7 +69,7 @@ const SalesTransferModal = ({ lead, initialRemark, isOpen, onClose, onSubmit }) 
         requirement: lead.requirement || "",
         transferRemark: initialRemark || lead.remark || "",
         clientRating: Number(lead.clientRating || 4.5),
-        assignedTo: lead.assignTo || lead.salesPerson || "Sales TL"
+        assignedTo: lead.assignTo || lead.salesPerson || "Admin"
       });
     }
   }, [lead, initialRemark]);
