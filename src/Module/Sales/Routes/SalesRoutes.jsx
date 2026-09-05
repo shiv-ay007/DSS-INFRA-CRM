@@ -9,6 +9,7 @@ import Loss from '../Pages/Loss'
 import LeadManagement from '../Pages/LeadManagement'
 import SalseManagment from '../Pages/SalseManagment'
 import LeadDetails from '../Pages/LeadDetails'
+import SalesLeadForm from '../Pages/SalesLeadForm'
 
 const SalesRoutes = () => {
   return (
@@ -26,6 +27,8 @@ const SalesRoutes = () => {
         <Route path="leads/all" element={<LeadManagement />} />
         <Route path="leads/details" element={<LeadDetails />} />
         <Route path="leads/details/:id" element={<LeadDetails />} />
+        <Route path="leads/sales-form" element={<SalesLeadForm />} />
+        <Route path="leads/sales-form/:id" element={<SalesLeadForm />} />
         <Route path="management-sheet" element={<SalseManagment />} />
       </Route>
     </Routes>

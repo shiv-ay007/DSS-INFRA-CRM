@@ -1,17 +1,16 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import Table from "../../../../Common/Components/Table";
 import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
 import { FaUserPlus, FaUsers, FaUser } from "react-icons/fa";
-import { subscribeToLeadUpdates, updateLeadInStorage, notifyLeadChange } from "../../utils/leadStorageUtils";
+import { subscribeToLeadUpdates, updateLeadInStorage, notifyLeadChange, markLeadAsTransferredToSales, isLeadTransferredToSales } from "../../utils/leadStorageUtils";
 import { getAllLeadsApi, updateLeadApi } from "../../../../services/totalLeads.api";
 import { markLeadAsLossApi, createLossLeadApi } from "../../../../services/lostLeads.api";
 import { getAllFollowupsApi, addFollowupApi } from "../../../../services/followup.api";
 import { useLeadContext } from "../../../../context/LeadContext";
 import LeadKpiSlider from "./LeadKpiSlider";
-import SalesTransferModal from "./SalesTransferModal";
 import DateTimePicker from "../Common/DateTimePicker";
 
 const notInterestedReasonsList = [
@@ -41,9 +40,15 @@ const timeOptions = [
 
 const Lead = () => {
   const navigate = useNavigate();
+  const location = useLocation();
 
   // Leads state fetched directly from backend API
-  const [leads, setLeads] = useState([]);
+  const [leads, setLeads] = useState(() => {
+    if (location.state?.newInterestedLead) {
+      return [location.state.newInterestedLead];
+    }
+    return [];
+  });
   const scheduledFollowupCacheRef = useRef(new Map());
   const { getCachedData, setCachedData, invalidateCache } = useLeadContext();
 
@@ -88,9 +93,13 @@ const Lead = () => {
               ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(l.status || "").toUpperCase());
             if (isLost) return false;
 
+            // Leads already moved to Sales Management Sheet should NOT appear in Lead Management!
+            if (isLeadTransferredToSales(l)) return false;
+
             // Only show leads that belong in Lead Management Sheet:
-            // 1. Marked INTERESTED (sent from Assigned Leads or call status)
+            // 1. Marked INTERESTED (sent from Total Leads or call status)
             // 2. OR Have an active follow-up scheduled or followup history
+            // 3. OR explicitly assigned to Lead Management
             const isInterested =
               l.isInterested === true ||
               String(l.status || "").toUpperCase() === "INTERESTED" ||
@@ -102,7 +111,7 @@ const Lead = () => {
                 Number(l.followupRemarksCount) > 0 ||
                 (l.nextFollowupDate && l.nextFollowupDate !== "--" && l.nextFollowupDate !== "Invalid Date" && l.nextFollowupDate !== ""));
 
-            return isInterested || hasFollowup;
+            return isInterested || hasFollowup || l.inLeadManagement === true;
           })
           .map((backendLead) => {
             const idKey = String(backendLead._id || backendLead.leadId || backendLead.id);
@@ -201,7 +210,19 @@ const Lead = () => {
           return 0;
         };
 
-        const sortedLeads = activeBackendLeads.sort((a, b) => getLeadTime(b) - getLeadTime(a));
+        const newInterestedLead = location.state?.newInterestedLead;
+        let allActiveLeads = activeBackendLeads;
+        if (newInterestedLead) {
+          const incId = newInterestedLead.leadId || newInterestedLead.clientId || newInterestedLead.id || newInterestedLead._id;
+          const exists = activeBackendLeads.some(
+            (l) => (l._id && l._id === incId) || (l.id && l.id === incId) || (l.leadId && l.leadId === incId)
+          );
+          if (!exists) {
+            allActiveLeads = [newInterestedLead, ...activeBackendLeads];
+          }
+        }
+
+        const sortedLeads = allActiveLeads.sort((a, b) => getLeadTime(b) - getLeadTime(a));
         setLeads(sortedLeads);
         setCachedData(cacheKey, sortedLeads);
       }
@@ -254,7 +275,7 @@ const Lead = () => {
           {/* 1. View Lead Details (Top-Left) */}
           <button
             type="button"
-            onClick={() => navigate(`/sales/leads/details/${row.id}`, { state: { lead: row } })}
+            onClick={() => navigate(`/sales/leads/details/${row.id}`, { state: { lead: row, from: "leadManagement", allowEdit: false } })}
             className="w-6 h-6 rounded-lg border border-orange-200 bg-orange-50/70 text-orange-600 hover:bg-orange-100 hover:border-orange-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
             title="View Lead Details"
           >
@@ -337,7 +358,7 @@ const Lead = () => {
               <span
                 className="font-extrabold text-emerald-900 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-200 shadow-2xs inline-block truncate max-w-full text-xs cursor-pointer hover:text-blue-600"
                 title={name}
-                onClick={() => row.id && navigate(`/sales/leads/details/${row.id}`, { state: { lead: row } })}
+                onClick={() => row.id && navigate(`/sales/leads/details/${row.id}`, { state: { lead: row, from: "leadManagement", allowEdit: false } })}
               >
                 {name}
               </span>
@@ -607,10 +628,6 @@ const Lead = () => {
   const [statusRemark, setStatusRemark] = useState("");
   const [statusRemarkAttachments, setStatusRemarkAttachments] = useState([]);
 
-  // Sales Management Transfer Modal State
-  const [transferModalLead, setTransferModalLead] = useState(null);
-  const [transferInitialRemark, setTransferInitialRemark] = useState("");
-
   // Handler to move lead to Lost Leads or open pre-filled Sales Transfer Form
   const handleSendToSalesManagement = async () => {
     if (!statusModalLead) return;
@@ -645,16 +662,75 @@ const Lead = () => {
     }));
 
     if (selectedClientStatus === "INTERESTED") {
-      // Open the pre-filled Sales Management transfer form modal
-      setTransferModalLead(statusModalLead);
-      setTransferInitialRemark(statusRemark || statusModalLead.remark || "");
+      const targetId = statusModalLead._id || statusModalLead.id || statusModalLead.leadId;
+      const finalRemark = statusRemark || statusModalLead.remark || "";
+      const finalLeadData = {
+        ...statusModalLead,
+        status: "INTERESTED",
+        leadStatus: "INTERESTED",
+        isInterested: true,
+        inSalesManagement: true,
+        isSalesTransferred: true,
+        isLoss: false,
+        remark: finalRemark,
+        remarkAttachments: processedAttachments.length > 0 ? processedAttachments : (statusModalLead.remarkAttachments || []),
+        attachments: processedAttachments.length > 0 ? processedAttachments : (statusModalLead.attachments || []),
+        movedToSalesManagementDate: new Date(),
+        updatedAt: new Date().toISOString()
+      };
 
+      // 1. Sync to backend MongoDB
+      try {
+        if (targetId) {
+          await updateLeadApi(targetId, {
+            status: "INTERESTED",
+            leadStatus: "INTERESTED",
+            isInterested: true,
+            inSalesManagement: true,
+            isSalesTransferred: true,
+            isLoss: false,
+            remark: finalRemark,
+            movedToSalesManagementDate: new Date()
+          });
+        }
+      } catch (apiErr) {
+        console.error("Error updating lead status in MongoDB:", apiErr);
+      }
+
+      // 2. Invalidate cache across all scopes
+      invalidateCache("sales_management_sheet");
+      invalidateCache("sales_management_sheet_all");
+      invalidateCache("leadManagement");
+      invalidateCache("leadManagement_sheet_all");
+
+      // 3. Remove from active in-memory list in Lead Management Sheet (since it has moved to Sales Management)
+      setLeads((prev) =>
+        prev.filter((l) =>
+          l._id !== targetId && l.id !== targetId && l.leadId !== targetId
+        )
+      );
+
+      // 4. Update storage & broadcast event to all listeners
+      markLeadAsTransferredToSales(targetId);
+      updateLeadInStorage(finalLeadData);
+      notifyLeadChange(finalLeadData);
+
+      toast.success(`Lead marked as INTERESTED & moved to Sales Management Sheet! 🚀`);
+
+      const leadToTransfer = { ...statusModalLead, ...finalLeadData };
+
+      // Reset status modal state
       setStatusModalLead(null);
       setSelectedClientStatus("");
       setNotInterestedReason("");
       setCustomNotInterestedReason("");
       setStatusRemark("");
       setStatusRemarkAttachments([]);
+
+      // 5. Navigate directly to dedicated Sales Form Page
+      navigate(`/sales/leads/sales-form/${targetId}`, {
+        state: { lead: leadToTransfer, initialRemark: finalRemark }
+      });
       return;
     } else if (selectedClientStatus === "NOT INTERESTED") {
       // Move to Lost Leads (dss_lost_leads) and remove from current list
@@ -727,119 +803,6 @@ const Lead = () => {
       navigate("/sales/leads/lost", { state: { lostLead: lostLeadData } });
       return;
     }
-  };
-
-  // Handler on confirming pre-filled Sales Management Transfer Form
-  const handleConfirmSalesTransfer = async (formData) => {
-    if (!transferModalLead) return;
-
-    const formattedDate = new Date().toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
-    const formattedTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
-
-    const finalLeadData = {
-      ...transferModalLead,
-      clientName: formData.clientName,
-      concernPersonName: formData.clientName,
-      phoneNumber: formData.phoneNumber,
-      phone: formData.phoneNumber,
-      alternateNumber: formData.alternateNumber,
-      whatsappNumber: formData.whatsappNumber,
-      emailAddress: formData.emailAddress,
-      email: formData.emailAddress,
-      companyName: formData.companyName,
-      businessType: formData.businessType,
-      clientDesignation: formData.clientDesignation,
-      amount: Number(formData.expectedBusiness) || 0,
-      expectedBusiness: Number(formData.expectedBusiness) || 0,
-      budget: Number(formData.expectedBusiness) || 0,
-      priority: formData.priority,
-      status: "INTERESTED",
-      leadStatus: "INTERESTED",
-      isInterested: true,
-      isLoss: false,
-      jobType: formData.jobType,
-      city: formData.city,
-      state: formData.state,
-      pincode: formData.pincode,
-      address: formData.address,
-      requirement: formData.requirement,
-      remark: formData.transferRemark || transferModalLead.remark || "",
-      clientRating: Number(formData.clientRating) || 4.5,
-      assignTo: formData.assignedTo,
-      salesPerson: formData.assignedTo,
-      createdAt: transferModalLead.createdDate || transferModalLead.createdAt || formattedDate,
-      createdTime: transferModalLead.createdTime || formattedTime,
-      clientId: transferModalLead.clientId || transferModalLead.leadId || `DSS${Math.floor(10000 + Math.random() * 90000)}`,
-      leadId: transferModalLead.leadId || transferModalLead.clientId || `DSS${Math.floor(10000 + Math.random() * 90000)}`,
-      updatedAt: new Date().toISOString()
-    };
-
-    // 1. Sync to backend MongoDB
-    try {
-      const targetId = transferModalLead._id || transferModalLead.id || transferModalLead.leadId;
-      if (targetId) {
-        await updateLeadApi(targetId, {
-          status: "INTERESTED",
-          leadStatus: "INTERESTED",
-          isInterested: true,
-          isLoss: false,
-          clientName: formData.clientName,
-          concernPersonName: formData.clientName,
-          phoneNumber: formData.phoneNumber,
-          phone: formData.phoneNumber,
-          alternateNumber: formData.alternateNumber,
-          whatsappNumber: formData.whatsappNumber,
-          emailAddress: formData.emailAddress,
-          email: formData.emailAddress,
-          companyName: formData.companyName,
-          businessType: formData.businessType,
-          clientDesignation: formData.clientDesignation,
-          amount: Number(formData.expectedBusiness) || 0,
-          expectedBusiness: Number(formData.expectedBusiness) || 0,
-          budget: Number(formData.expectedBusiness) || 0,
-          priority: formData.priority,
-          jobType: formData.jobType,
-          city: formData.city,
-          state: formData.state,
-          pincode: formData.pincode,
-          address: formData.address,
-          requirement: formData.requirement,
-          remark: formData.transferRemark || transferModalLead.remark || "",
-          clientRating: Number(formData.clientRating) || 4.5,
-          assignTo: formData.assignedTo,
-          salesPerson: formData.assignedTo,
-          movedToSalesManagementDate: new Date()
-        });
-      }
-    } catch (apiErr) {
-      console.error("Error updating lead status in MongoDB:", apiErr);
-    }
-
-    // 2. Invalidate cache across all scopes
-    invalidateCache("sales_management_sheet");
-    invalidateCache("sales_management_sheet_all");
-    invalidateCache("leadManagement");
-
-    // 3. Update active in-memory list in Lead Management Sheet
-    setLeads((prev) =>
-      prev.map((l) =>
-        (l._id === transferModalLead._id || l.id === transferModalLead.id || l.leadId === transferModalLead.leadId)
-          ? { ...l, ...finalLeadData }
-          : l
-      )
-    );
-
-    // 4. Update storage & broadcast event to all listeners
-    updateLeadInStorage(finalLeadData);
-    notifyLeadChange(finalLeadData);
-
-    toast.success(`Lead "${finalLeadData.clientName}" successfully submitted & transferred to Sales Management Sheet! 🚀`);
-
-    setTransferModalLead(null);
-    setTransferInitialRemark("");
-
-    // 5. Navigate directly to Sales Management Sheet page with the new lead data
-    navigate("/sales/management-sheet", { state: { lead: finalLeadData } });
   };
 
   // Media Attachments and Audio Recording State
@@ -2186,18 +2149,6 @@ const Lead = () => {
           </div>
         </div>
       )}
-
-      {/* ================= PRE-FILLED SALES MANAGEMENT TRANSFER MODAL ================= */}
-      <SalesTransferModal
-        isOpen={Boolean(transferModalLead)}
-        lead={transferModalLead}
-        initialRemark={transferInitialRemark}
-        onClose={() => {
-          setTransferModalLead(null);
-          setTransferInitialRemark("");
-        }}
-        onSubmit={handleConfirmSalesTransfer}
-      />
 
     </div>
   );

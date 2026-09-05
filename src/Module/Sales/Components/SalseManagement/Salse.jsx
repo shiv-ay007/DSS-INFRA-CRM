@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import Table from "../../../../Common/Components/Table";
-import { subscribeToLeadUpdates } from "../../utils/leadStorageUtils";
+import { subscribeToLeadUpdates, isLeadTransferredToSales } from "../../utils/leadStorageUtils";
 import { getAllLeadsApi } from "../../../../services/totalLeads.api";
 import { useLeadContext } from "../../../../context/LeadContext";
 import { workCategoryList } from "../../data/addLeadData";
@@ -13,7 +13,7 @@ const Salse = () => {
   const location = useLocation();
 
   const [salesData, setSalesData] = useState(() => {
-    if (location.state?.lead) {
+    if (location.state?.lead && isLeadTransferredToSales(location.state.lead)) {
       const incomingLead = location.state.lead;
       const cleanId = incomingLead.leadId || incomingLead.clientId || incomingLead.id || incomingLead._id;
       const dateObj = new Date(incomingLead.createdAt || incomingLead.date || Date.now());
@@ -43,9 +43,10 @@ const Salse = () => {
     const cacheKey = "sales_management_sheet_all";
     if (!forceRefresh) {
       const cached = getCachedData(cacheKey);
-      if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
-        setSalesData(cached.data);
-        return;
+      if (cached && Array.isArray(cached.data)) {
+        const validCached = cached.data.filter(isLeadTransferredToSales);
+        setSalesData(validCached);
+        if (validCached.length > 0) return;
       }
     }
 
@@ -53,13 +54,14 @@ const Salse = () => {
       const res = await getAllLeadsApi({ limit: 200, isLoss: false });
       if (res && res.success && res.data && res.data.leads) {
         const interestedLeads = res.data.leads
-          .filter(
-            (item) =>
-              !item.isLoss &&
-              !["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(item.leadStatus || "").toUpperCase()) &&
-              !["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(item.status || "").toUpperCase()) &&
-              (item.status === "INTERESTED" || item.leadStatus === "INTERESTED" || item.isInterested === true)
-          )
+          .filter((item) => {
+            if (item.isLoss) return false;
+            const statusUpper = String(item.status || "").toUpperCase();
+            const leadStatusUpper = String(item.leadStatus || "").toUpperCase();
+            if (["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(statusUpper)) return false;
+            if (["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(leadStatusUpper)) return false;
+            return isLeadTransferredToSales(item);
+          })
           .map((item) => {
             const dateObj = new Date(item.createdAt || item.date || Date.now());
             const formattedDate = !isNaN(dateObj.getTime())
@@ -83,7 +85,7 @@ const Salse = () => {
           });
 
         // Ensure newly transferred lead is prepended if not yet synced in this batch
-        if (location.state?.lead) {
+        if (location.state?.lead && isLeadTransferredToSales(location.state.lead)) {
           const incomingLead = location.state.lead;
           const incId = incomingLead.leadId || incomingLead.clientId || incomingLead.id || incomingLead._id;
           const exists = interestedLeads.some(l => (l.leadId || l.clientId || l.id || l._id) === incId);
@@ -125,14 +127,13 @@ const Salse = () => {
   }, [getCachedData, setCachedData, location.state]);
 
   useEffect(() => {
-    // If arriving from transfer form, force refresh to fetch latest from DB
-    const force = Boolean(location.state?.lead);
-    fetchSalesLeads(force);
+    // Always force fresh fetch on mount to prevent showing un-transferred leads
+    fetchSalesLeads(true);
     const unsubscribe = subscribeToLeadUpdates(() => {
       fetchSalesLeads(true);
     });
     return () => unsubscribe();
-  }, [fetchSalesLeads, location.state]);
+  }, [fetchSalesLeads]);
 
   // Filter States
   const [filterSalesPerson, setFilterSalesPerson] = useState("ALL");
@@ -161,17 +162,29 @@ const Salse = () => {
         label: "ACTIONS",
         align: "center",
         render: (val, row) => (
-          <button
-            type="button"
-            onClick={() => navigate(`/sales/leads/details/${row.id}`, { state: { lead: row } })}
-            className="w-7 h-7 rounded-lg border border-orange-200 bg-orange-50/70 text-orange-600 hover:bg-orange-100 hover:border-orange-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs mx-auto active:scale-95"
-            title="View Lead Details"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-            </svg>
-          </button>
+          <div className="flex items-center justify-center gap-1.5 mx-auto">
+            <button
+              type="button"
+              onClick={() => navigate(`/sales/leads/details/${row.id}`, { state: { lead: row, from: "salesManagement", allowEdit: false } })}
+              className="w-7 h-7 rounded-lg border border-orange-200 bg-orange-50/70 text-orange-600 hover:bg-orange-100 hover:border-orange-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
+              title="View Lead Details"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              onClick={() => navigate(`/sales/leads/sales-form/${row._id || row.id || row.leadId}`, { state: { lead: row } })}
+              className="w-7 h-7 rounded-lg border border-emerald-200 bg-emerald-50/70 text-emerald-600 hover:bg-emerald-100 hover:border-emerald-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
+              title="Edit Sales Form"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+              </svg>
+            </button>
+          </div>
         )
       },
       amount: {
@@ -203,7 +216,7 @@ const Salse = () => {
           <div className="text-left font-medium text-slate-800 text-xs">
             <div
               className="font-bold text-slate-900 cursor-pointer hover:text-blue-600 hover:underline"
-              onClick={() => navigate(`/sales/leads/details/${row.id}`, { state: { lead: row } })}
+              onClick={() => navigate(`/sales/leads/details/${row.id}`, { state: { lead: row, from: "salesManagement", allowEdit: false } })}
             >
               {row.clientName || row.concernPersonName || "--"}
             </div>

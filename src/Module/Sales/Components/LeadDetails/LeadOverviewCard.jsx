@@ -85,12 +85,6 @@ const LeadOverviewCard = ({ lead }) => {
           </span>
         </div>
 
-        <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50/90 border border-slate-200/70">
-          <span className="text-slate-500 font-bold uppercase tracking-wider">ASSIGNED TO</span>
-          <span className="font-extrabold text-blue-800 bg-blue-50 px-2.5 py-1 rounded-full border border-blue-200 text-xs">
-            {lead?.isAssigned === true ? (lead?.assignTo || lead?.salesPerson || "Admin") : "--"}
-          </span>
-        </div>
 
         <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50/90 border border-slate-200/70">
           <span className="text-slate-500 font-bold uppercase tracking-wider">LEAD TYPE</span>

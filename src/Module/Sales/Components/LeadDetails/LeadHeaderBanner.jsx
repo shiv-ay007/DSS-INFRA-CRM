@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import { FaEdit, FaPhoneAlt, FaWhatsapp } from "react-icons/fa";
 
-const LeadHeaderBanner = ({ lead, onOpenFollowupModal, onOpenEditModal }) => {
+const LeadHeaderBanner = ({ lead, onOpenFollowupModal, onOpenEditModal, allowEdit = false }) => {
   const navigate = useNavigate();
 
   const phone = lead?.phoneNumber || lead?.contact || lead?.whatsappNumber || "";
@@ -22,16 +22,18 @@ const LeadHeaderBanner = ({ lead, onOpenFollowupModal, onOpenEditModal }) => {
         showBackButton={true}
         rightActions={
           <div className="flex flex-wrap items-center justify-start sm:justify-end gap-2.5">
-            <button
-              type="button"
-              onClick={onOpenEditModal}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs sm:text-sm font-extrabold shadow-xs hover:shadow-md transition-all cursor-pointer"
-            >
-              <FaEdit className="w-3.5 h-3.5" />
-              <span>Edit Lead</span>
-            </button>
+            {allowEdit && (
+              <button
+                type="button"
+                onClick={onOpenEditModal}
+                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs sm:text-sm font-extrabold shadow-xs hover:shadow-md transition-all cursor-pointer"
+              >
+                <FaEdit className="w-3.5 h-3.5" />
+                <span>Edit Lead</span>
+              </button>
+            )}
 
-            {isAssigned && cleanPhone && (
+            {cleanPhone && (
               <a
                 href={`tel:${cleanPhone}`}
                 className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs sm:text-sm font-extrabold shadow-xs hover:shadow-md transition-all cursor-pointer"
@@ -41,7 +43,7 @@ const LeadHeaderBanner = ({ lead, onOpenFollowupModal, onOpenEditModal }) => {
               </a>
             )}
 
-            {isAssigned && cleanPhone && (
+            {cleanPhone && (
               <a
                 href={`https://wa.me/91${cleanPhone}`}
                 target="_blank"

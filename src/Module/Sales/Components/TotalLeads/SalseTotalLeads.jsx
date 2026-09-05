@@ -8,7 +8,7 @@ import { availableWorkTypes, workCategoryList, indianStatesList } from "../../da
 import { FaUser, FaRegCheckCircle, FaUsers, FaUserCheck, FaImage, FaVideo, FaMicrophone, FaFileAlt, FaPaperclip, FaTimes, FaDownload, FaPlay, FaPause } from "react-icons/fa";
 import { HiOutlineUsers } from "react-icons/hi";
 
-import { subscribeToLeadUpdates, updateLeadInStorage, getStoredLeads } from "../../utils/leadStorageUtils";
+import { subscribeToLeadUpdates, updateLeadInStorage, getStoredLeads, removeLeadFromSalesTransfer } from "../../utils/leadStorageUtils";
 import { getAllLeadsApi, updateLeadApi } from "../../../../services/totalLeads.api";
 import { markLeadAsLossApi, createLossLeadApi } from "../../../../services/lostLeads.api";
 import { useLeadContext } from "../../../../context/LeadContext";
@@ -430,12 +430,16 @@ const SalseTotalLeads = () => {
     }));
 
     if (selectedClientStatus === "INTERESTED") {
-      // 1. Move to Lead Management
+      // 1. Move to Lead Management (STRICTLY NOT SALES MANAGEMENT)
       const leadData = {
         ...statusModalLead,
         leadStatus: "Hot",
         status: "INTERESTED",
         isInterested: true,
+        inLeadManagement: true,
+        inSalesManagement: false,
+        isSalesTransferred: false,
+        movedToSalesManagementDate: null,
         followupCount: 0,
         followupRemarksCount: 0,
         followupHistory: [],
@@ -456,6 +460,10 @@ const SalseTotalLeads = () => {
           leadStatus: "Hot",
           status: "INTERESTED",
           isInterested: true,
+          inLeadManagement: true,
+          inSalesManagement: false,
+          isSalesTransferred: false,
+          movedToSalesManagementDate: null,
           followupCount: 0,
           followupRemarksCount: 0,
           followupHistory: [],
@@ -469,12 +477,16 @@ const SalseTotalLeads = () => {
         console.error("Error syncing INTERESTED lead to backend:", err);
       }
 
+      removeLeadFromSalesTransfer(targetId);
       updateLeadInStorage(leadData);
       setLeads((prevLeads) =>
         prevLeads.map((l) => (String(l.id) === String(leadData.id) ? leadData : l))
       );
       invalidateCache("totalLeads");
       invalidateCache("leadManagement");
+      invalidateCache("leadManagement_sheet_all");
+      invalidateCache("sales_management_sheet");
+      invalidateCache("sales_management_sheet_all");
 
       toast.success(`Lead ${statusModalLead.clientName || statusModalLead.concernPersonName || statusModalLead.id} marked as INTERESTED and sent to Lead Management! 🎯`);
       setStatusModalLead(null);
@@ -573,7 +585,7 @@ const SalseTotalLeads = () => {
             {/* View Lead Details Eye Button */}
             <button
               type="button"
-              onClick={() => navigate(`/sales/leads/details/${row.id}`, { state: { lead: row } })}
+              onClick={() => navigate(`/sales/leads/details/${row.id}`, { state: { lead: row, from: "totalLeads", allowEdit: true } })}
               className="w-7 h-7 rounded-lg border border-orange-200 bg-orange-50/70 text-orange-600 hover:bg-orange-100 hover:border-orange-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
               title="View Lead Details"
             >
@@ -632,7 +644,7 @@ const SalseTotalLeads = () => {
               <span
                 className="font-extrabold text-emerald-900 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-200 shadow-2xs inline-block truncate max-w-full text-xs cursor-pointer hover:text-blue-600"
                 title={name}
-                onClick={() => row.id && navigate(`/sales/leads/details/${row.id}`, { state: { lead: row } })}
+                onClick={() => row.id && navigate(`/sales/leads/details/${row.id}`, { state: { lead: row, from: "totalLeads", allowEdit: true } })}
               >
                 {name}
               </span>

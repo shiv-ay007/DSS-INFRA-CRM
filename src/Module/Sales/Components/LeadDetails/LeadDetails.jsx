@@ -16,6 +16,9 @@ const LeadDetails = () => {
   const [showFollowupModal, setShowFollowupModal] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
+  // Edit Lead option is strictly only allowed when navigated from Total Leads
+  const allowEdit = Boolean(location.state?.allowEdit === true || location.state?.from === "totalLeads");
+
   const fetchLeadData = useCallback(async () => {
     // 1. Check location state
     if (location.state?.lead && (!id || String(location.state.lead.id || location.state.lead._id) === String(id))) {
@@ -153,6 +156,7 @@ const LeadDetails = () => {
         <div className="sticky top-0 z-30 bg-[#F8FAFC] pt-1 pb-2">
           <LeadHeaderBanner
             lead={lead}
+            allowEdit={allowEdit}
             onOpenFollowupModal={() => setShowFollowupModal(true)}
             onOpenEditModal={() => setIsEditModalOpen(true)}
           />
@@ -173,13 +177,15 @@ const LeadDetails = () => {
           </div>
         </div>
 
-        {/* EDIT LEAD MODAL */}
-        <EditLeadModal
-          lead={lead}
-          isOpen={isEditModalOpen}
-          onClose={() => setIsEditModalOpen(false)}
-          onSaveSuccess={(updated) => setLead(updated)}
-        />
+        {/* EDIT LEAD MODAL (Only when allowed from Total Leads) */}
+        {allowEdit && (
+          <EditLeadModal
+            lead={lead}
+            isOpen={isEditModalOpen}
+            onClose={() => setIsEditModalOpen(false)}
+            onSaveSuccess={(updated) => setLead(updated)}
+          />
+        )}
       </div>
     </div>
   );

@@ -68,3 +68,47 @@ export const subscribeToLeadUpdates = (callback) => {
   };
 };
 
+const SALES_TRANSFERRED_KEY = "dss_sales_transferred_lead_ids_v1";
+
+export const getTransferredSalesLeadIds = () => {
+  try {
+    const raw = localStorage.getItem(SALES_TRANSFERRED_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {
+    console.error("Error reading transferred lead IDs:", e);
+  }
+  return [];
+};
+
+export const markLeadAsTransferredToSales = (leadId) => {
+  if (!leadId) return;
+  try {
+    const ids = new Set(getTransferredSalesLeadIds().map(String));
+    ids.add(String(leadId));
+    localStorage.setItem(SALES_TRANSFERRED_KEY, JSON.stringify(Array.from(ids)));
+  } catch (e) {
+    console.error("Error saving transferred lead ID:", e);
+  }
+};
+
+export const removeLeadFromSalesTransfer = (leadId) => {
+  if (!leadId) return;
+  try {
+    const ids = new Set(getTransferredSalesLeadIds().map(String));
+    ids.delete(String(leadId));
+    localStorage.setItem(SALES_TRANSFERRED_KEY, JSON.stringify(Array.from(ids)));
+  } catch (e) {
+    console.error("Error removing transferred lead ID:", e);
+  }
+};
+
+export const isLeadTransferredToSales = (lead) => {
+  if (!lead) return false;
+  if (lead.inSalesManagement === false) return false;
+  if (lead.inSalesManagement === true || lead.isSalesTransferred === true) return true;
+  const idStr = String(lead._id || lead.id || lead.leadId || "");
+  if (!idStr) return false;
+  const ids = getTransferredSalesLeadIds();
+  return ids.includes(idStr);
+};
+
