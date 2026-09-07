@@ -120,20 +120,16 @@ const Salesdash = () => {
     });
   }, [leads]);
 
-  // 2. Dynamic Follow-ups Due Today
+  // 2. Dynamic Follow-ups Due Today (Only genuine scheduled follow-ups, zero dummy fallbacks)
   const dynamicFollowups = useMemo(() => {
-    let listToUse = scheduledFollowups.length > 0
+    const listToUse = scheduledFollowups.length > 0
       ? scheduledFollowups
       : leads.filter(
           (l) => l.isFollowupScheduled || l.nextFollowupDate || (Array.isArray(l.followupHistory) && l.followupHistory.length > 0)
         );
 
-    if (listToUse.length === 0) {
-      listToUse = leads.slice(0, 4);
-    }
-
     return listToUse.slice(0, 5).map((l, index) => {
-      const timeVal = l.nextFollowupTime || l.followupTime || (l.createdTime ? l.createdTime : "10:00 AM");
+      const timeVal = l.nextFollowupTime || l.followupTime || l.createdTime || "--";
       const tagVal = Array.isArray(l.workType)
         ? (l.workType[0] || l.workCategory || "Followup Call")
         : (l.workType || l.workCategory || "Followup Call");

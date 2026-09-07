@@ -11,16 +11,22 @@ const FollowupsDueToday = ({ data = [] }) => {
         <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100 flex-wrap gap-2">
           <div className="flex items-center gap-2">
             <span className="flex h-2.5 w-2.5 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500" />
+              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${followups.length > 0 ? "bg-rose-400" : "bg-emerald-400"}`} />
+              <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${followups.length > 0 ? "bg-rose-500" : "bg-emerald-500"}`} />
             </span>
             <h2 className="text-sm sm:text-base font-extrabold text-slate-900 tracking-tight">
               Follow-ups Due Today
             </h2>
           </div>
-          <span className="px-2.5 py-0.5 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold font-mono">
-            {followups.length} Calls Pending
-          </span>
+          {followups.length > 0 ? (
+            <span className="px-2.5 py-0.5 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold font-mono">
+              {followups.length} Calls Pending
+            </span>
+          ) : (
+            <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold font-mono">
+              All Caught Up
+            </span>
+          )}
         </div>
 
         {/* List */}

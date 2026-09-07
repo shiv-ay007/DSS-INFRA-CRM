@@ -653,14 +653,6 @@ const Lostlead = () => {
 
               <button
                 type="button"
-                onClick={() => navigate("/sales/leads/add")}
-                className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold shadow-sm transition-colors cursor-pointer flex items-center gap-1.5"
-              >
-                <span>+ Add Lead</span>
-              </button>
-
-              <button
-                type="button"
                 onClick={() => setShowFilters(!showFilters)}
                 className={`p-2.5 rounded-xl border transition-all cursor-pointer ${
                   showFilters
