@@ -2,8 +2,28 @@ import React from "react";
 import { FaClock, FaCalendarAlt, FaUser, FaTag, FaFileAlt } from "react-icons/fa";
 
 const FollowupTimelineCard = ({ lead }) => {
-  // Determine history array safely - only show real logged history!
-  const followupHistory = Array.isArray(lead?.followupHistory) ? lead.followupHistory : [];
+  // Determine history array safely - support followupHistory, backend statusTimeline, and lead remarks
+  let followupHistory = (Array.isArray(lead?.followupHistory) && lead.followupHistory.length > 0)
+    ? [...lead.followupHistory]
+    : Array.isArray(lead?.statusTimeline) && lead.statusTimeline.length > 0
+    ? lead.statusTimeline.map((item) => ({
+        remark: item.remarks || item.remark || "Lead status updated",
+        status: item.status,
+        author: item.changedBy?.name || item.changedBy || "Sales Rep",
+        date: item.changedAt ? new Date(item.changedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "Today",
+        time: item.changedAt ? new Date(item.changedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true }) : ""
+      }))
+    : [];
+
+  if (followupHistory.length === 0 && (lead?.remarks || lead?.remark)) {
+    followupHistory.push({
+      remark: lead.remarks || lead.remark,
+      status: lead.status || lead.leadStatus || "NEW",
+      author: lead.leadBy?.name || lead.createdByName || "Sales Representative",
+      date: lead.createdDate || "Today",
+      time: lead.createdTime || ""
+    });
+  }
 
   const hasNextFollowup = !!(
     lead?.isFollowupScheduled ||

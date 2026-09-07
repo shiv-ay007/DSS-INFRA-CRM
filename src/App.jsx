@@ -6,26 +6,29 @@ import { ToastContainer } from 'react-toastify'
 import 'react-toastify/dist/ReactToastify.css'
 
 import { LeadProvider } from './context/LeadContext'
+import { AuthProvider } from './context/AuthContext'
 
 const App = () => {
   return (
     <Router>
-      <LeadProvider>
-        <ScrollToTop />
-        <ToastContainer
-          position="top-right"
-          autoClose={3000}
-          hideProgressBar={false}
-          newestOnTop={true}
-          closeOnClick
-          rtl={false}
-          pauseOnFocusLoss
-          draggable
-          pauseOnHover
-          theme="colored"
-        />
-        <MainRoute />
-      </LeadProvider>
+      <AuthProvider>
+        <LeadProvider>
+          <ScrollToTop />
+          <ToastContainer
+            position="top-right"
+            autoClose={3000}
+            hideProgressBar={false}
+            newestOnTop={true}
+            closeOnClick
+            rtl={false}
+            pauseOnFocusLoss
+            draggable
+            pauseOnHover
+            theme="colored"
+          />
+          <MainRoute />
+        </LeadProvider>
+      </AuthProvider>
     </Router>
   )
 }

@@ -21,8 +21,8 @@ import {
   availableWorkTypes,
   workCategoryList
 } from "../../data/addLeadData";
-import { updateLeadInStorage } from "../../utils/leadStorageUtils";
-import { updateLeadApi } from "../../../../services/totalLeads.api";
+import { updateLeadApi } from "../../services/totalLeads.api";
+import { updateLeadInStorage } from "../../../../context/LeadContext";
 
 const EditLeadModal = ({ lead, isOpen, onClose, onSaveSuccess }) => {
   if (!isOpen || !lead) return null;

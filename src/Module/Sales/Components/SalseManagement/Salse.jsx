@@ -1,16 +1,24 @@
 import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
+import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import Table from "../../../../Common/Components/Table";
-import { subscribeToLeadUpdates, isLeadTransferredToSales } from "../../utils/leadStorageUtils";
-import { getAllLeadsApi } from "../../../../services/totalLeads.api";
-import { useLeadContext } from "../../../../context/LeadContext";
+import { getAllLeadsApi } from "../../services/totalLeads.api";
+import {
+  useLeadContext,
+  subscribeToLeadUpdates,
+  isLeadTransferredToSales
+} from "../../../../context/LeadContext";
+import { useAuth } from "../../../../context/AuthContext";
 import { workCategoryList } from "../../data/addLeadData";
 import { FaFilter, FaSearch } from "react-icons/fa";
 
 const Salse = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { role, isObserver } = useAuth();
+  const currentRole = role || "Worker";
+  const isUserObserver = isObserver || String(currentRole).toLowerCase() === "observer";
 
   const [salesData, setSalesData] = useState(() => {
     if (location.state?.lead && isLeadTransferredToSales(location.state.lead)) {
@@ -176,9 +184,14 @@ const Salse = () => {
             </button>
             <button
               type="button"
-              onClick={() => navigate(`/sales/leads/sales-form/${row._id || row.id || row.leadId}`, { state: { lead: row } })}
-              className="w-7 h-7 rounded-lg border border-emerald-200 bg-emerald-50/70 text-emerald-600 hover:bg-emerald-100 hover:border-emerald-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
-              title="Edit Sales Form"
+              disabled={isUserObserver}
+              onClick={isUserObserver ? () => toast.info("Observer Mode: Sales Form editing is disabled.") : () => navigate(`/sales/leads/sales-form/${row._id || row.id || row.leadId}`, { state: { lead: row } })}
+              className={`w-7 h-7 rounded-lg border flex items-center justify-center transition-all shadow-2xs ${
+                isUserObserver
+                  ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed opacity-50"
+                  : "border-emerald-200 bg-emerald-50/70 text-emerald-600 hover:bg-emerald-100 hover:border-emerald-300 cursor-pointer active:scale-95"
+              }`}
+              title={isUserObserver ? "Disabled for Observer (View Only)" : "Edit Sales Form"}
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -334,7 +347,7 @@ const Salse = () => {
         )
       }
     }),
-    [navigate, currentPage, rowsPerPage]
+    [navigate, currentPage, rowsPerPage, isUserObserver]
   );
 
   // KPI numbers

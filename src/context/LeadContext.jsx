@@ -1,8 +1,83 @@
 import React, { createContext, useContext, useRef, useCallback } from "react";
-import { subscribeToLeadUpdates } from "../Module/Sales/utils/leadStorageUtils";
 
 const LeadContext = createContext(null);
 const SESSION_CACHE_KEY = "dss_lead_session_cache_v4";
+const SALES_TRANSFERRED_KEY = "dss_sales_transferred_lead_ids_v1";
+
+/**
+ * Dispatches a custom window event to notify all components of lead updates.
+ */
+export const notifyLeadChange = (updatedLead) => {
+  try {
+    const event = new CustomEvent("dss_leads_updated", { detail: { lead: updatedLead } });
+    window.dispatchEvent(event);
+  } catch (err) {
+    console.error("Error dispatching lead update event:", err);
+  }
+};
+
+/**
+ * Subscribes a callback to lead update events.
+ */
+export const subscribeToLeadUpdates = (callback) => {
+  const handleCustomEvent = (e) => callback(e.detail);
+  window.addEventListener("dss_leads_updated", handleCustomEvent);
+  return () => {
+    window.removeEventListener("dss_leads_updated", handleCustomEvent);
+  };
+};
+
+/**
+ * Safe in-memory notify helper
+ */
+export const updateLeadInStorage = (updatedLead) => {
+  if (!updatedLead) return;
+  notifyLeadChange(updatedLead);
+};
+
+export const getStoredLeads = () => [];
+
+export const getTransferredSalesLeadIds = () => {
+  try {
+    const raw = localStorage.getItem(SALES_TRANSFERRED_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {
+    console.error("Error reading transferred lead IDs:", e);
+  }
+  return [];
+};
+
+export const markLeadAsTransferredToSales = (leadId) => {
+  if (!leadId) return;
+  try {
+    const ids = new Set(getTransferredSalesLeadIds().map(String));
+    ids.add(String(leadId));
+    localStorage.setItem(SALES_TRANSFERRED_KEY, JSON.stringify(Array.from(ids)));
+  } catch (e) {
+    console.error("Error saving transferred lead ID:", e);
+  }
+};
+
+export const removeLeadFromSalesTransfer = (leadId) => {
+  if (!leadId) return;
+  try {
+    const ids = new Set(getTransferredSalesLeadIds().map(String));
+    ids.delete(String(leadId));
+    localStorage.setItem(SALES_TRANSFERRED_KEY, JSON.stringify(Array.from(ids)));
+  } catch (e) {
+    console.error("Error removing transferred lead ID:", e);
+  }
+};
+
+export const isLeadTransferredToSales = (lead) => {
+  if (!lead) return false;
+  if (lead.inSalesManagement === false) return false;
+  if (lead.inSalesManagement === true || lead.isSalesTransferred === true) return true;
+  const idStr = String(lead._id || lead.id || lead.leadId || "");
+  if (!idStr) return false;
+  const ids = getTransferredSalesLeadIds();
+  return ids.includes(idStr);
+};
 
 // Helper to load session cache on initial mount
 const loadSessionCache = () => {

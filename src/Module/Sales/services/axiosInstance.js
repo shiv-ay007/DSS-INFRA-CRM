@@ -35,6 +35,7 @@ export const getAuthHeaders = (isFormData = false) => {
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 90000,
+  withCredentials: true,
   headers: {
     "Content-Type": "application/json"
   }

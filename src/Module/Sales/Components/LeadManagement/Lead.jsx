@@ -5,13 +5,20 @@ import PageHeader from "../../../../Common/Components/PageHeader";
 import Table from "../../../../Common/Components/Table";
 import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
 import { FaUserPlus, FaUsers, FaUser } from "react-icons/fa";
-import { subscribeToLeadUpdates, updateLeadInStorage, notifyLeadChange, markLeadAsTransferredToSales, isLeadTransferredToSales } from "../../utils/leadStorageUtils";
-import { getAllLeadsApi, updateLeadApi } from "../../../../services/totalLeads.api";
-import { markLeadAsLossApi, createLossLeadApi } from "../../../../services/lostLeads.api";
-import { getAllFollowupsApi, addFollowupApi } from "../../../../services/followup.api";
-import { useLeadContext } from "../../../../context/LeadContext";
+import { getAllLeadsApi, updateLeadApi, markInterestedFromTableApi } from "../../services/totalLeads.api";
+import { markLeadAsLossApi, createLossLeadApi } from "../../services/lostLeads.api";
+import { getAllFollowupsApi, addFollowupApi } from "../../services/followup.api";
+import {
+  useLeadContext,
+  subscribeToLeadUpdates,
+  updateLeadInStorage,
+  notifyLeadChange,
+  markLeadAsTransferredToSales,
+  isLeadTransferredToSales
+} from "../../../../context/LeadContext";
 import LeadKpiSlider from "./LeadKpiSlider";
 import DateTimePicker from "../Common/DateTimePicker";
+import { useAuth } from "../../../../context/AuthContext";
 
 const notInterestedReasonsList = [
   "High Price / Budget Out",
@@ -41,6 +48,9 @@ const timeOptions = [
 const Lead = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { role, isObserver } = useAuth();
+  const currentRole = role || "Worker";
+  const isUserObserver = isObserver || String(currentRole).toLowerCase() === "observer";
 
   // Leads state fetched directly from backend API
   const [leads, setLeads] = useState(() => {
@@ -172,8 +182,11 @@ const Lead = () => {
               city: backendLead.city || "--",
               state: backendLead.state || "--",
               projectDetail: backendLead.projectDetail || backendLead.notes || "",
-              remark: backendLead.remark || backendLead.requirement || backendLead.notes || "",
-              requirement: backendLead.requirement || backendLead.remark || backendLead.notes || "",
+              remarks: backendLead.remarks || backendLead.remark || "",
+              remark: backendLead.remarks || backendLead.remark || backendLead.requirement || backendLead.notes || "",
+              requirement: backendLead.requirement || backendLead.remarks || backendLead.remark || backendLead.notes || "",
+              remarksFile: backendLead.remarksFile || "",
+              remarksFiles: backendLead.remarksFiles || [],
               followupHistory: Array.isArray(backendLead.followupHistory) ? backendLead.followupHistory : [],
               followupCount: count,
               followupRemarksCount: count,
@@ -288,9 +301,14 @@ const Lead = () => {
           {/* 2. Schedule / Reschedule Follow-up (Top-Right) */}
           <button
             type="button"
-            onClick={() => handleOpenScheduleModal(row)}
-            className="w-6 h-6 rounded-lg border border-blue-200 bg-blue-50/70 text-blue-600 hover:bg-blue-100 hover:border-blue-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
-            title="Schedule / Reschedule Follow-up"
+            disabled={isUserObserver}
+            onClick={isUserObserver ? () => toast.info("Observer Mode: Scheduling follow-up is disabled.") : () => handleOpenScheduleModal(row)}
+            className={`w-6 h-6 rounded-lg border flex items-center justify-center transition-all shadow-2xs ${
+              isUserObserver
+                ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed opacity-50"
+                : "border-blue-200 bg-blue-50/70 text-blue-600 hover:bg-blue-100 hover:border-blue-300 cursor-pointer active:scale-95"
+            }`}
+            title={isUserObserver ? "Disabled for Observer (View Only)" : "Schedule / Reschedule Follow-up"}
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -300,7 +318,8 @@ const Lead = () => {
           {/* 3. Client Status (Interested / Not Interested) (Bottom-Left) */}
           <button
             type="button"
-            onClick={() => {
+            disabled={isUserObserver}
+            onClick={isUserObserver ? () => toast.info("Observer Mode: Status update is disabled.") : () => {
               setStatusModalLead(row);
               setSelectedClientStatus("");
               setNotInterestedReason("");
@@ -308,8 +327,12 @@ const Lead = () => {
               setStatusRemark("");
               setStatusRemarkAttachments([]);
             }}
-            className="w-6 h-6 rounded-lg border border-emerald-200 bg-emerald-50/70 text-emerald-600 hover:bg-emerald-100 hover:border-emerald-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
-            title="Client Status (Interested / Not Interested)"
+            className={`w-6 h-6 rounded-lg border flex items-center justify-center transition-all shadow-2xs ${
+              isUserObserver
+                ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed opacity-50"
+                : "border-emerald-200 bg-emerald-50/70 text-emerald-600 hover:bg-emerald-100 hover:border-emerald-300 cursor-pointer active:scale-95"
+            }`}
+            title={isUserObserver ? "Disabled for Observer (View Only)" : "Client Status (Interested / Not Interested)"}
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -611,7 +634,7 @@ const Lead = () => {
         );
       }
     }
-  }), [currentPage, rowsPerPage, navigate]);
+  }), [currentPage, rowsPerPage, navigate, isUserObserver]);
 
   // Modals
   const [detailModalLead, setDetailModalLead] = useState(null);
@@ -631,6 +654,10 @@ const Lead = () => {
   // Handler to move lead to Lost Leads or open pre-filled Sales Transfer Form
   const handleSendToSalesManagement = async () => {
     if (!statusModalLead) return;
+    if (isUserObserver) {
+      toast.info("Observer Mode: Status update is disabled.");
+      return;
+    }
 
     if (!selectedClientStatus) {
       toast.error("Please select Client Status (INTERESTED or NOT INTERESTED)!");
@@ -736,15 +763,18 @@ const Lead = () => {
       // Move to Lost Leads (dss_lost_leads) and remove from current list
       const lostLeadData = {
         ...statusModalLead,
-        leadStatus: "CLOSED_LOST",
-        status: "CLOSED_LOST",
+        leadStatus: "Cold",
+        status: "Cold",
+        intrestedStatus: "Not Intersted",
+        intrestedFromTableLead: false,
         isLoss: true,
         isInterested: false,
         isAssigned: false,
         lostReason: finalReason,
         lossReason: finalReason,
-        remark: statusRemark || statusModalLead.remark || "",
-        lossRemark: statusRemark || statusModalLead.remark || "",
+        remark: statusRemark || statusModalLead.remark || statusModalLead.remarks || "",
+        remarks: statusRemark || statusModalLead.remarks || statusModalLead.remark || "",
+        lossRemark: statusRemark || statusModalLead.remark || statusModalLead.remarks || "",
         remarkAttachments: processedAttachments.length > 0 ? processedAttachments : (statusModalLead.remarkAttachments || []),
         attachments: processedAttachments.length > 0 ? processedAttachments : (statusModalLead.attachments || []),
         lostDate: formattedDate,
@@ -755,34 +785,16 @@ const Lead = () => {
       updateLeadInStorage(lostLeadData);
       notifyLeadChange(lostLeadData);
       invalidateCache("lostLeads");
+      invalidateCache("lostLeads_all");
       invalidateCache("leadManagement");
 
       try {
-        // Sync with MongoDB backend LossLead collection
         const targetId = statusModalLead._id || statusModalLead.id || statusModalLead.leadId;
-        const lossPayload = {
-          leadId: targetId,
-          clientName: statusModalLead.clientName || statusModalLead.concernPersonName,
-          phoneNumber: statusModalLead.phoneNumber || statusModalLead.contact,
-          phone: statusModalLead.phoneNumber || statusModalLead.contact,
-          emailAddress: statusModalLead.emailAddress || statusModalLead.email,
-          email: statusModalLead.emailAddress || statusModalLead.email,
-          workCategory: statusModalLead.workCategory,
-          workType: statusModalLead.workType,
-          expectedBusiness: statusModalLead.expectedBusiness,
-          lossReason: finalReason,
-          reason: finalReason,
-          lossRemark: statusRemark || statusModalLead.remark || "",
-          remark: statusRemark || statusModalLead.remark || "",
-          salesPerson: statusModalLead.salesPerson || statusModalLead.assignTo || "",
-          assignTo: statusModalLead.salesPerson || statusModalLead.assignTo || "",
-          assignedTo: statusModalLead.assignedTo || statusModalLead.salesPerson || null
-        };
-
         if (targetId) {
-          await markLeadAsLossApi(targetId, lossPayload);
-        } else {
-          await createLossLeadApi(lossPayload);
+          await markInterestedFromTableApi(targetId, false, {
+            lossReason: finalReason,
+            lossRemark: statusRemark || statusModalLead.remark || statusModalLead.remarks || ""
+          });
         }
       } catch (e) {
         console.error("Error saving to lost leads:", e);
@@ -1075,6 +1087,10 @@ const Lead = () => {
   const handleSaveSchedule = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     if (!scheduleModalLead) return;
+    if (isUserObserver) {
+      toast.info("Observer Mode: Scheduling follow-up is disabled.");
+      return;
+    }
 
     const activeNotes = scheduleFormData.notes || scheduleFormData.nextDiscussionTopic || "Follow-up scheduled";
 
@@ -1205,12 +1221,23 @@ const Lead = () => {
           showBackButton={true}
           rightActions={
             <div className="flex items-center gap-2">
-              <Link
-                to="/sales/leads/add"
-                className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs sm:text-sm font-bold shadow-md shadow-emerald-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
-              >
-                <span>+</span> Add Lead
-              </Link>
+              {isUserObserver ? (
+                <button
+                  type="button"
+                  disabled
+                  className="px-4 py-2.5 rounded-xl bg-slate-200 text-slate-400 text-xs sm:text-sm font-bold shadow-xs cursor-not-allowed opacity-60 flex items-center gap-1.5"
+                  title="Disabled for Observer"
+                >
+                  <span>+</span> Add Lead
+                </button>
+              ) : (
+                <Link
+                  to="/sales/leads/add"
+                  className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs sm:text-sm font-bold shadow-md shadow-emerald-600/20 transition-all flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span>+</span> Add Lead
+                </Link>
+              )}
 
               <button
                 type="button"
@@ -1364,8 +1391,14 @@ const Lead = () => {
               <div className="flex items-center gap-2.5">
                 <button
                   type="button"
-                  onClick={handleSaveSchedule}
-                  className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-98 text-white font-bold text-sm shadow-md shadow-blue-600/25 transition-all cursor-pointer"
+                  disabled={isUserObserver}
+                  onClick={isUserObserver ? () => toast.info("Observer Mode: Action is disabled.") : handleSaveSchedule}
+                  className={`px-6 py-2.5 rounded-xl font-bold text-sm shadow-md transition-all ${
+                    isUserObserver
+                      ? "bg-slate-200 text-slate-400 cursor-not-allowed opacity-60 shadow-none"
+                      : "bg-blue-600 hover:bg-blue-700 active:scale-98 text-white shadow-blue-600/25 cursor-pointer"
+                  }`}
+                  title={isUserObserver ? "Disabled for Observer" : "Save"}
                 >
                   Save
                 </button>
@@ -2139,8 +2172,14 @@ const Lead = () => {
               </button>
               <button
                 type="button"
-                onClick={handleSendToSalesManagement}
-                className="px-6 py-2.5 rounded-xl bg-[#ff5722] hover:bg-[#e64a19] text-white text-sm font-extrabold shadow-md shadow-orange-500/20 transition-all cursor-pointer"
+                disabled={isUserObserver}
+                onClick={isUserObserver ? () => toast.info("Observer Mode: Action is disabled.") : handleSendToSalesManagement}
+                className={`px-6 py-2.5 rounded-xl text-sm font-extrabold shadow-md transition-all ${
+                  isUserObserver
+                    ? "bg-slate-200 text-slate-400 cursor-not-allowed opacity-60 shadow-none"
+                    : "bg-[#ff5722] hover:bg-[#e64a19] text-white shadow-orange-500/20 cursor-pointer"
+                }`}
+                title={isUserObserver ? "Disabled for Observer" : "Submit"}
               >
                 Submit
               </button>

@@ -28,9 +28,14 @@ import {
 import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import { workCategoryList } from "../../data/addLeadData";
-import { getLeadByIdApi, updateLeadApi } from "../../../../services/totalLeads.api";
-import { updateLeadInStorage, notifyLeadChange, markLeadAsTransferredToSales } from "../../utils/leadStorageUtils";
-import { useLeadContext } from "../../../../context/LeadContext";
+import { getLeadByIdApi, updateLeadApi } from "../../services/totalLeads.api";
+import {
+  useLeadContext,
+  updateLeadInStorage,
+  notifyLeadChange,
+  markLeadAsTransferredToSales
+} from "../../../../context/LeadContext";
+import { useAuth } from "../../../../context/AuthContext";
 
 const teamMembers = [
   "Admin",
@@ -46,6 +51,9 @@ const SalesLeadForm = () => {
   const location = useLocation();
   const { id } = useParams();
   const { invalidateCache } = useLeadContext();
+  const { role, isObserver } = useAuth();
+  const currentRole = role || "Worker";
+  const isUserObserver = isObserver || String(currentRole).toLowerCase() === "observer";
 
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -135,6 +143,10 @@ const SalesLeadForm = () => {
 
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
+    if (isUserObserver) {
+      toast.info("Observer Mode: Sales Form submission is disabled.");
+      return;
+    }
     if (!formData.clientName.trim()) {
       toast.error("Client Name is required!");
       return;
@@ -281,9 +293,14 @@ const SalesLeadForm = () => {
               </button>
               <button
                 type="button"
-                onClick={handleSubmit}
-                disabled={submitting}
-                className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                onClick={isUserObserver ? () => toast.info("Observer Mode: Action is disabled.") : handleSubmit}
+                disabled={submitting || isUserObserver}
+                className={`px-4 py-1.5 rounded-lg text-xs sm:text-sm font-bold shadow-xs transition-all flex items-center gap-1.5 ${
+                  isUserObserver
+                    ? "bg-slate-200 text-slate-400 cursor-not-allowed opacity-60"
+                    : "bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer disabled:opacity-50"
+                }`}
+                title={isUserObserver ? "Disabled for Observer" : "Save & Proceed"}
               >
                 {submitting ? <FaSpinner className="animate-spin text-xs" /> : <FaSave className="text-xs" />}
                 <span>Save & Proceed</span>
@@ -762,8 +779,13 @@ const SalesLeadForm = () => {
 
             <button
               type="submit"
-              disabled={submitting}
-              className="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold shadow-xs transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+              disabled={submitting || isUserObserver}
+              className={`px-5 py-2 rounded-lg text-xs sm:text-sm font-bold shadow-xs transition-all flex items-center justify-center gap-2 ${
+                isUserObserver
+                  ? "bg-slate-200 text-slate-400 cursor-not-allowed opacity-60"
+                  : "bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer disabled:opacity-50"
+              }`}
+              title={isUserObserver ? "Disabled for Observer" : "Save & View in Sales Management Sheet"}
             >
               {submitting ? <FaSpinner className="animate-spin text-xs" /> : <FaCheck className="text-xs" />}
               <span>Save & View in Sales Management Sheet</span>

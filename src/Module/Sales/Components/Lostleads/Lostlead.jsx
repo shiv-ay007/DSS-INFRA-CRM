@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import Table from "../../../../Common/Components/Table";
 import { availableWorkTypes, workCategoryList, leadTypesList } from "../../data/addLeadData";
@@ -13,13 +14,16 @@ const leadModesList = [
   "Customer to customer"
 ];
 
-import { subscribeToLeadUpdates, getStoredLeads } from "../../utils/leadStorageUtils";
-import { getLossLeadsApi, getAllLossLeadsApi } from "../../../../services/lostLeads.api";
-import { useLeadContext } from "../../../../context/LeadContext";
+import { getAllLeadsApi, updateLeadApi } from "../../services/totalLeads.api";
+import { useLeadContext, subscribeToLeadUpdates, getStoredLeads } from "../../../../context/LeadContext";
+import { useAuth } from "../../../../context/AuthContext";
 
 const Lostlead = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { role, isObserver } = useAuth();
+  const currentRole = role || "Worker";
+  const isUserObserver = isObserver || String(currentRole).toLowerCase() === "observer";
   const [leads, setLeads] = useState(() => {
     if (location.state?.lostLead) {
       return [location.state.lostLead];
@@ -40,30 +44,14 @@ const Lostlead = () => {
     try {
       let rawData = [];
 
-      // 1. Fetch authoritative loss leads
-      try {
-        const resDirect = await getAllLossLeadsApi({ limit: 200 });
-        if (resDirect && resDirect.success && resDirect.data) {
-          rawData = Array.isArray(resDirect.data)
-            ? resDirect.data
-            : (resDirect.data.leads || resDirect.data.lossLeads || resDirect.data.data || []);
-        }
-      } catch (err) {
-        console.warn("getAllLossLeadsApi warning:", err);
-      }
-
-      // Fallback to getLossLeadsApi only if direct endpoint returned empty or failed
-      if (!rawData || rawData.length === 0) {
-        try {
-          const res = await getLossLeadsApi({ limit: 200 });
-          if (res && res.success && res.data) {
-            rawData = Array.isArray(res.data)
-              ? res.data
-              : (res.data.leads || res.data.lossLeads || res.data.data || []);
-          }
-        } catch (err) {
-          console.warn("getLossLeadsApi fallback warning:", err);
-        }
+      // Direct backend API call matching schema's intrestedStatus: "Not Intersted"
+      const res = await getAllLeadsApi({ intrestedStatus: "Not Intersted", limit: 200 });
+      if (res && res.success && res.data) {
+        rawData = Array.isArray(res.data.leads)
+          ? res.data.leads
+          : Array.isArray(res.data)
+          ? res.data
+          : (res.data.leads || []);
       }
 
       const seen = new Set();
@@ -94,6 +82,48 @@ const Lostlead = () => {
         const leadObj = (item.lead && typeof item.lead === "object") ? item.lead : {};
         const assignee = item.salesPerson || (typeof item.assignedTo === 'object' ? item.assignedTo?.name : item.assignedTo) || leadObj.salesPerson || (typeof leadObj.assignedTo === 'object' ? leadObj.assignedTo?.name : leadObj.assignedTo) || "Admin";
 
+        // Extract reason and remark cleanly from backend response / remarks text
+        let itemReason = item.lossReason || item.reason || item.lostReason || leadObj.lossReason || leadObj.reason || leadObj.lostReason || "";
+        let itemRemark = item.lossRemark || item.remark || item.remarks || leadObj.lossRemark || leadObj.remark || leadObj.remarks || "";
+
+        const allRemarks = String(item.remarks || leadObj.remarks || itemRemark || "").trim();
+        if ((!itemReason || itemReason === "Closed Lost" || itemReason === "Client Not Interested") && allRemarks) {
+          const reasonMatch = allRemarks.match(/Reason:\s*([^|]+)/i);
+          const remarkMatch = allRemarks.match(/Remark:\s*(.+)/i);
+          if (reasonMatch) {
+            const rawReason = reasonMatch[1].trim();
+            if (!remarkMatch && rawReason.includes(" - ")) {
+              const parts = rawReason.split(" - ");
+              itemReason = parts[0].trim();
+              if (!itemRemark || itemRemark === allRemarks) {
+                itemRemark = parts.slice(1).join(" - ").trim();
+              }
+            } else {
+              itemReason = rawReason;
+              if (remarkMatch && (!itemRemark || itemRemark === allRemarks)) {
+                itemRemark = remarkMatch[1].trim();
+              }
+            }
+          }
+        }
+
+        if (itemRemark && itemRemark.startsWith("Reason:")) {
+          if (itemRemark.includes("Remark:")) {
+            itemRemark = itemRemark.split(/Remark:\s*/i)[1]?.trim() || "--";
+          } else if (itemRemark.includes(" - ")) {
+            itemRemark = itemRemark.split(" - ").slice(1).join(" - ").trim() || "--";
+          } else {
+            itemRemark = "--";
+          }
+        }
+
+        if (!itemReason || itemReason === "Closed Lost") {
+          itemReason = "Client Not Interested";
+        }
+        if (!itemRemark) {
+          itemRemark = "--";
+        }
+
         const processed = {
           ...leadObj,
           ...item,
@@ -117,9 +147,12 @@ const Lostlead = () => {
           state: item.state || leadObj.state || "--",
           projectDetail: item.projectDetail || leadObj.projectDetail || item.projectDetails || leadObj.projectDetails || item.notes || leadObj.notes || "--",
           expectedBusiness: String(item.expectedBusiness || item.budget || leadObj.expectedBusiness || leadObj.budget || 0),
-          reason: item.lossReason || item.reason || leadObj.lossReason || leadObj.reason || "Closed Lost",
-          lostReason: item.lossReason || item.reason || leadObj.lossReason || leadObj.reason || "Closed Lost",
-          remark: item.lossRemark || item.remark || item.requirement || leadObj.lossRemark || leadObj.remark || leadObj.requirement || item.notes || leadObj.notes || "--",
+          reason: itemReason,
+          lostReason: itemReason,
+          lossReason: itemReason,
+          remark: itemRemark,
+          remarks: itemRemark,
+          lossRemark: itemRemark,
           lossDate: formattedDate,
           createdDate: formattedDate,
           createdTime: formattedTime,
@@ -191,9 +224,6 @@ const Lostlead = () => {
 
   // Modal States
   const [selectedLead, setSelectedLead] = useState(null);
-  const [reviveModalLead, setReviveModalLead] = useState(null);
-  const [reviveStatus, setReviveStatus] = useState("Warm");
-  const [reviveNotes, setReviveNotes] = useState("");
 
   const handleResetFilters = () => {
     setSearchTerm("");
@@ -281,18 +311,6 @@ const Lostlead = () => {
               <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
             </svg>
           </button>
-
-          {/* Revive Lead Button */}
-          <button
-            type="button"
-            onClick={() => setReviveModalLead(row)}
-            className="w-7 h-7 rounded-lg border border-emerald-200 bg-emerald-50/70 text-emerald-600 hover:bg-emerald-100 hover:border-emerald-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
-            title="Revive / Reopen Lead"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-            </svg>
-          </button>
         </div>
       )
     },
@@ -338,7 +356,7 @@ const Lostlead = () => {
       align: "center",
       render: (val, row) => (
         <span className="px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-rose-100 text-rose-800 border border-rose-200 uppercase">
-          {row.lostReason || val || "Client Not Interested"}
+          {row.lostReason || row.lossReason || row.reason || val || "Client Not Interested"}
         </span>
       )
     },
@@ -544,7 +562,7 @@ const Lostlead = () => {
       label: "REMARK",
       align: "center",
       render: (val, row) => {
-        const rem = row.remark || row.requirement || "--";
+        const rem = row.remark || row.remarks || row.lossRemark || val || "--";
         return (
           <div className="max-w-[150px] truncate text-xs text-slate-700 font-medium mx-auto text-center" title={rem}>
             {rem}
@@ -552,7 +570,7 @@ const Lostlead = () => {
         );
       }
     }
-  }), [currentPage, rowsPerPage]);
+  }), [currentPage, rowsPerPage, isUserObserver]);
 
   // Filter & Search Logic
   const filteredLeads = useMemo(() => {
@@ -606,24 +624,7 @@ const Lostlead = () => {
     return filteredLeads.slice(start, start + rowsPerPage);
   }, [filteredLeads, currentPage, rowsPerPage]);
 
-  const handleReviveSubmit = () => {
-    if (!reviveModalLead) return;
 
-    const revivedItem = {
-      ...reviveModalLead,
-      leadStatus: reviveStatus,
-      isAssigned: false,
-      nextFollowup: "Re-opened - Followup Scheduled",
-      remark: `${reviveModalLead.remark || ""} [Reopened: ${reviveNotes || "Revived lead for fresh negotiation"}]`
-    };
-
-    const updatedLost = leads.filter((l) => l.id !== reviveModalLead.id);
-    saveLeads(updatedLost);
-    notifyLeadChange(revivedItem);
-
-    setReviveModalLead(null);
-    setReviveNotes("");
-  };
 
   return (
     <div className="space-y-4 font-sans pb-16">
@@ -876,41 +877,7 @@ const Lostlead = () => {
         itemsPerPageOptions={[10, 25, 50, 100]}
       />
 
-      {/* ================= 4. REVIVE MODAL ================= */}
-      {reviveModalLead && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 space-y-4">
-            <div>
-              <h3 className="text-sm font-black text-slate-900">Revive / Reopen Lead</h3>
-              <p className="text-xs text-slate-500 mt-0.5">Client: <strong className="text-slate-800">{reviveModalLead.clientName || reviveModalLead.concernPersonName}</strong></p>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Lead Priority Status</label>
-              <select value={reviveStatus} onChange={(e) => setReviveStatus(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 bg-white cursor-pointer">
-                <option value="Hot">Hot Lead 🔥</option>
-                <option value="Warm">Warm Lead ⚡</option>
-                <option value="Cold">Cold Lead ❄️</option>
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1.5">Revive Notes / Remarks</label>
-              <textarea
-                value={reviveNotes}
-                onChange={(e) => setReviveNotes(e.target.value)}
-                placeholder="Enter negotiation notes..."
-                rows={3}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-medium text-slate-800 bg-white"
-              />
-            </div>
-            <div className="pt-2 flex items-center justify-end gap-2">
-              <button type="button" onClick={() => setReviveModalLead(null)} className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50">Cancel</button>
-              <button type="button" onClick={handleReviveSubmit} className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700">Revive Lead</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ================= 5. DETAIL VIEW MODAL ================= */}
+      {/* ================= 4. DETAIL VIEW MODAL ================= */}
       {selectedLead && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
           <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-100 space-y-4">
@@ -922,9 +889,9 @@ const Lostlead = () => {
               <p><strong>Client Name:</strong> {selectedLead.clientName || selectedLead.concernPersonName}</p>
               <p><strong>Phone:</strong> {selectedLead.phoneNumber || selectedLead.contact}</p>
               <p><strong>Email:</strong> {selectedLead.emailAddress || selectedLead.email || "--"}</p>
-              <p><strong>Lost Reason:</strong> <span className="text-rose-700 font-bold">{selectedLead.lostReason || "Client Not Interested"}</span></p>
+              <p><strong>Lost Reason:</strong> <span className="text-rose-700 font-bold">{selectedLead.lostReason || selectedLead.lossReason || selectedLead.reason || "Client Not Interested"}</span></p>
               <p><strong>Expected Business:</strong> ₹{Number(selectedLead.expectedBusiness || selectedLead.expectedBusinessAmount || 0).toLocaleString("en-IN")}</p>
-              <p><strong>Remarks:</strong> {selectedLead.remark || selectedLead.remarks || "--"}</p>
+              <p><strong>Remarks:</strong> {selectedLead.remark || selectedLead.remarks || selectedLead.lossRemark || "--"}</p>
             </div>
             <div className="pt-2 flex justify-end">
               <button type="button" onClick={() => setSelectedLead(null)} className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 cursor-pointer">Close</button>

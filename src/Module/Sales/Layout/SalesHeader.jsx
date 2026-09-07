@@ -1,29 +1,20 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
+import { useAuth } from "../../../context/AuthContext";
 
 const SalesHeader = ({
   department = "Sales Department",
-  role = "Admin",
   unreadNotification = true,
   onLogout,
   toggleSidebar
 }) => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [user, setUser] = useState(null);
   const dropdownRef = useRef(null);
   const navigate = useNavigate();
 
-  useEffect(() => {
-    try {
-      const storedUser = localStorage.getItem("dss_user");
-      if (storedUser) {
-        setUser(JSON.parse(storedUser));
-      }
-    } catch (e) {
-      console.warn("Error parsing user profile:", e);
-    }
-  }, []);
+  // Consume AuthContext directly (0 API calls needed)
+  const { user, role, logout } = useAuth();
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -35,21 +26,14 @@ const SalesHeader = ({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Format user role display
-  const getFormattedRole = (userRole) => {
-    return "Admin";
-  };
+  const userName = user?.name || user?.username || "";
+  const userRoleDisplay = role || user?.role || "";
 
-  const userName = user?.name || user?.username || department;
-  const userRoleDisplay = getFormattedRole(user?.role);
-
-  // Handle Logout with Toast & Local Storage Cleanup
+  // Handle Logout with Toast & Context Cleanup
   const handleLogout = () => {
     setIsProfileOpen(false);
 
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
-    localStorage.removeItem("dss_user");
+    logout();
     
     toast.info("Logged out successfully! See you soon 👋", {
       position: "top-right",

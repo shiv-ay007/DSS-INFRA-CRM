@@ -6,18 +6,23 @@ import LeadOverviewCard from "./LeadOverviewCard";
 import RequirementAddressCard from "./RequirementAddressCard";
 import FollowupTimelineCard from "./FollowupTimelineCard";
 import EditLeadModal from "./EditLeadModal";
-import { updateLeadInStorage, subscribeToLeadUpdates } from "../../utils/leadStorageUtils";
-import { getLeadByIdApi } from "../../../../services/totalLeads.api";
+import { getLeadByIdApi } from "../../services/totalLeads.api";
+import { updateLeadInStorage, subscribeToLeadUpdates } from "../../../../context/LeadContext";
+import { useAuth } from "../../../../context/AuthContext";
 
 const LeadDetails = () => {
   const { id } = useParams();
   const location = useLocation();
+  const { role, isObserver } = useAuth();
+  const currentRole = role || "Worker";
+  const isUserObserver = isObserver || String(currentRole).toLowerCase() === "observer";
+
   const [lead, setLead] = useState(null);
   const [showFollowupModal, setShowFollowupModal] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  // Edit Lead option is strictly only allowed when navigated from Total Leads
-  const allowEdit = Boolean(location.state?.allowEdit === true || location.state?.from === "totalLeads");
+  // Edit Lead option is strictly only allowed when navigated from Total Leads and user is NOT Observer
+  const allowEdit = Boolean((location.state?.allowEdit === true || location.state?.from === "totalLeads") && !isUserObserver);
 
   const fetchLeadData = useCallback(async () => {
     // 1. Check location state
@@ -56,6 +61,11 @@ const LeadDetails = () => {
             date: formattedDate,
             address: backendLead.address || "--",
             projectDetail: backendLead.projectDetail || backendLead.remark || "",
+            remarks: backendLead.remarks || backendLead.remark || "",
+            remark: backendLead.remarks || backendLead.remark || "",
+            remarksFile: backendLead.remarksFile || "",
+            remarksFiles: backendLead.remarksFiles || [],
+            statusTimeline: backendLead.statusTimeline || [],
             remarkAttachments: backendLead.remarkAttachments || backendLead.attachments || [],
             attachments: backendLead.remarkAttachments || backendLead.attachments || []
           });

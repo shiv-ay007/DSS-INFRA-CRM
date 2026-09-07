@@ -8,10 +8,16 @@ import { availableWorkTypes, workCategoryList, indianStatesList } from "../../da
 import { FaUser, FaRegCheckCircle, FaUsers, FaUserCheck, FaImage, FaVideo, FaMicrophone, FaFileAlt, FaPaperclip, FaTimes, FaDownload, FaPlay, FaPause } from "react-icons/fa";
 import { HiOutlineUsers } from "react-icons/hi";
 
-import { subscribeToLeadUpdates, updateLeadInStorage, getStoredLeads, removeLeadFromSalesTransfer } from "../../utils/leadStorageUtils";
-import { getAllLeadsApi, updateLeadApi } from "../../../../services/totalLeads.api";
-import { markLeadAsLossApi, createLossLeadApi } from "../../../../services/lostLeads.api";
-import { useLeadContext } from "../../../../context/LeadContext";
+import { getAllLeadsApi, updateLeadApi, markInterestedFromTableApi } from "../../services/totalLeads.api";
+import { markLeadAsLossApi, createLossLeadApi } from "../../services/lostLeads.api";
+import {
+  useLeadContext,
+  subscribeToLeadUpdates,
+  updateLeadInStorage,
+  getStoredLeads,
+  removeLeadFromSalesTransfer
+} from "../../../../context/LeadContext";
+import { useAuth } from "../../../../context/AuthContext";
 
 const notInterestedReasonsList = [
   "High Price / Budget Out",
@@ -85,6 +91,9 @@ const getImagePreviewUrl = (att) => {
 const SalseTotalLeads = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { role, isObserver } = useAuth();
+  const currentRole = role || "Worker";
+  const isUserObserver = isObserver || String(currentRole).toLowerCase() === "observer";
 
   const [leads, setLeads] = useState([]);
   const [totalLeadsCount, setTotalLeadsCount] = useState(0);
@@ -141,21 +150,7 @@ const SalseTotalLeads = () => {
     setCurrentPage(1);
   };
 
-  const fetchBackendLeads = useCallback(async (forceRefresh = false) => {
-    const cacheKey = `totalLeads_${currentPage}_${rowsPerPage}_${debouncedSearch}_${filterStatus}_${filterLeadMode}_${filterLeadType}_${filterWorkCategory}_${filterCity}_${filterState}_${filterSalesPerson}`;
-
-    if (!forceRefresh) {
-      const cached = getCachedData(cacheKey);
-      if (cached && Array.isArray(cached.data)) {
-        setLeads(cached.data);
-        if (typeof cached.pagination?.total === "number") {
-          setTotalLeadsCount(cached.pagination.total);
-        }
-        setIsLoading(false);
-        return;
-      }
-    }
-
+  const fetchBackendLeads = useCallback(async () => {
     try {
       setIsLoading(true);
       const queryParams = {
@@ -165,7 +160,7 @@ const SalseTotalLeads = () => {
       };
 
       if (debouncedSearch && debouncedSearch.trim()) queryParams.search = debouncedSearch.trim();
-      if (filterStatus && filterStatus !== "ALL") queryParams.status = filterStatus;
+      if (filterStatus && filterStatus !== "ALL") queryParams.leadStatus = filterStatus;
       if (filterLeadMode && filterLeadMode !== "ALL") queryParams.leadMode = filterLeadMode;
       if (filterLeadType && filterLeadType !== "ALL") queryParams.leadType = filterLeadType;
       if (filterWorkCategory && filterWorkCategory !== "ALL") queryParams.workCategory = filterWorkCategory;
@@ -223,10 +218,69 @@ const SalseTotalLeads = () => {
             state: backendLead.state || "--",
             googleLocation: backendLead.googleLocation || "",
             projectDetail: backendLead.projectDetail || backendLead.notes || "",
-            remark: backendLead.remark || backendLead.requirement || backendLead.notes || "",
-            requirement: backendLead.requirement || backendLead.remark || backendLead.notes || "",
-            remarkAttachments: backendLead.remarkAttachments || backendLead.attachments || [],
-            attachments: backendLead.remarkAttachments || backendLead.attachments || []
+            remarks: backendLead.remarks || backendLead.remark || "",
+            remark: backendLead.remarks || backendLead.remark || backendLead.requirement || backendLead.notes || "",
+            requirement: backendLead.requirement || backendLead.remarks || backendLead.remark || backendLead.notes || "",
+            remarksFile: backendLead.remarksFile || "",
+            remarksFiles: backendLead.remarksFiles || [],
+            remarkAttachments: (() => {
+              const list = [];
+              if (Array.isArray(backendLead.remarksFiles) && backendLead.remarksFiles.length > 0) {
+                list.push(...backendLead.remarksFiles.map((f) => ({
+                  ...f,
+                  type: f.fileType || f.type || "image"
+                })));
+              }
+              if (Array.isArray(backendLead.remarkAttachments)) {
+                backendLead.remarkAttachments.forEach((a) => {
+                  const url = a?.url || a?.preview;
+                  if (url && !list.some((x) => (x.url || x.preview) === url)) {
+                    list.push(a);
+                  }
+                });
+              }
+              if (backendLead.remarksFile && typeof backendLead.remarksFile === "string" && !list.some((x) => x.url === backendLead.remarksFile)) {
+                const u = backendLead.remarksFile;
+                const isImg = u.match(/\.(png|jpg|jpeg|webp|gif|svg)($|\?)/i);
+                const isAudio = u.match(/\.(mp3|wav|ogg|m4a|webm|aac)($|\?)/i);
+                const isVid = u.match(/\.(mp4|webm|mov|mkv)($|\?)/i);
+                list.unshift({
+                  url: u,
+                  type: isImg ? "image" : isAudio ? "audio" : isVid ? "video" : "document",
+                  name: "Attachment"
+                });
+              }
+              return list;
+            })(),
+            attachments: (() => {
+              const list = [];
+              if (Array.isArray(backendLead.remarksFiles) && backendLead.remarksFiles.length > 0) {
+                list.push(...backendLead.remarksFiles.map((f) => ({
+                  ...f,
+                  type: f.fileType || f.type || "image"
+                })));
+              }
+              if (Array.isArray(backendLead.attachments)) {
+                backendLead.attachments.forEach((a) => {
+                  const url = a?.url || a?.preview;
+                  if (url && !list.some((x) => (x.url || x.preview) === url)) {
+                    list.push(a);
+                  }
+                });
+              }
+              if (backendLead.remarksFile && typeof backendLead.remarksFile === "string" && !list.some((x) => x.url === backendLead.remarksFile)) {
+                const u = backendLead.remarksFile;
+                const isImg = u.match(/\.(png|jpg|jpeg|webp|gif|svg)($|\?)/i);
+                const isAudio = u.match(/\.(mp3|wav|ogg|m4a|webm|aac)($|\?)/i);
+                const isVid = u.match(/\.(mp4|webm|mov|mkv)($|\?)/i);
+                list.unshift({
+                  url: u,
+                  type: isImg ? "image" : isAudio ? "audio" : isVid ? "video" : "document",
+                  name: "Attachment"
+                });
+              }
+              return list;
+            })()
           };
         });
 
@@ -235,7 +289,6 @@ const SalseTotalLeads = () => {
           ? res.data.pagination.total
           : mappedLeads.length;
         setTotalLeadsCount(total);
-        setCachedData(cacheKey, mappedLeads, { total, page: currentPage, limit: rowsPerPage });
       }
     } catch (err) {
       console.warn("Backend API fetch leads warning:", err);
@@ -252,9 +305,7 @@ const SalseTotalLeads = () => {
     filterWorkCategory,
     filterCity,
     filterState,
-    filterSalesPerson,
-    getCachedData,
-    setCachedData
+    filterSalesPerson
   ]);
 
   useEffect(() => {
@@ -284,17 +335,17 @@ const SalseTotalLeads = () => {
 
   const getMediaType = (att) => {
     if (!att) return "document";
-    const t = (att.type || "").toLowerCase();
+    const t = (att.fileType || att.type || "").toLowerCase();
     const name = (att.name || "").toLowerCase();
     const url = (att.url || "").toLowerCase();
 
-    if (t.includes("image") || url.startsWith("data:image") || name.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i)) {
+    if (t.includes("image") || url.startsWith("data:image") || name.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i) || url.match(/\.(jpg|jpeg|png|gif|webp|svg)($|\?)/i)) {
       return "image";
     }
-    if (t.includes("audio") || url.startsWith("data:audio") || name.match(/\.(mp3|wav|ogg|m4a|webm|aac)$/i) || name.includes("audio")) {
+    if (t.includes("audio") || url.startsWith("data:audio") || name.match(/\.(mp3|wav|ogg|m4a|webm|aac)$/i) || url.match(/\.(mp3|wav|ogg|m4a|webm|aac)($|\?)/i) || name.includes("audio")) {
       return "audio";
     }
-    if (t.includes("video") || url.startsWith("data:video") || name.match(/\.(mp4|webm|ogg|mov|mkv)$/i) || name.includes("video")) {
+    if (t.includes("video") || url.startsWith("data:video") || name.match(/\.(mp4|webm|ogg|mov|mkv)$/i) || url.match(/\.(mp4|webm|ogg|mov|mkv)($|\?)/i) || name.includes("video")) {
       return "video";
     }
     return "document";
@@ -399,6 +450,10 @@ const SalseTotalLeads = () => {
   // Handler to move lead to Lead Management or Lost Leads based on Client Status
   const handleClientStatusSubmit = async () => {
     if (!statusModalLead) return;
+    if (isUserObserver) {
+      toast.info("Observer Mode: Status update is disabled.");
+      return;
+    }
 
     if (!selectedClientStatus) {
       toast.error("Please select Client Status (INTERESTED or NOT INTERESTED)!");
@@ -429,6 +484,8 @@ const SalseTotalLeads = () => {
       url: item.preview || item.url || ""
     }));
 
+    const targetId = statusModalLead._id || statusModalLead.id || statusModalLead.leadId;
+
     if (selectedClientStatus === "INTERESTED") {
       // 1. Move to Lead Management (STRICTLY NOT SALES MANAGEMENT)
       const leadData = {
@@ -455,10 +512,16 @@ const SalseTotalLeads = () => {
       };
 
       try {
-        const targetId = statusModalLead._id || statusModalLead.id || statusModalLead.leadId;
+        // 1. Mark as Interested via Dedicated Table API
+        if (targetId) {
+          await markInterestedFromTableApi(targetId, true);
+        }
+
+        // 2. Sync fields to Lead Management
         await updateLeadApi(targetId, {
           leadStatus: "Hot",
           status: "INTERESTED",
+          intrestedStatus: "Intrested",
           isInterested: true,
           inLeadManagement: true,
           inSalesManagement: false,
@@ -501,14 +564,17 @@ const SalseTotalLeads = () => {
       // 2. Move to Lost Leads
       const lostLeadData = {
         ...statusModalLead,
-        leadStatus: "CLOSED_LOST",
-        status: "CLOSED_LOST",
+        leadStatus: "Cold",
+        status: "Cold",
+        intrestedStatus: "Not Intersted",
+        intrestedFromTableLead: false,
         isLoss: true,
         isInterested: false,
         lostReason: finalReason,
         lossReason: finalReason,
-        remark: statusRemark || statusModalLead.remark || "",
-        lossRemark: statusRemark || statusModalLead.remark || "",
+        remark: statusRemark || statusModalLead.remark || statusModalLead.remarks || "",
+        remarks: statusRemark || statusModalLead.remarks || statusModalLead.remark || "",
+        lossRemark: statusRemark || statusModalLead.remark || statusModalLead.remarks || "",
         remarkAttachments: processedAttachments.length > 0 ? processedAttachments : (statusModalLead.remarkAttachments || []),
         attachments: processedAttachments.length > 0 ? processedAttachments : (statusModalLead.attachments || []),
         lostDate: formattedDate,
@@ -522,32 +588,17 @@ const SalseTotalLeads = () => {
       );
       invalidateCache("totalLeads");
       invalidateCache("lostLeads");
+      invalidateCache("lostLeads_all");
 
       try {
         const targetId = statusModalLead._id || statusModalLead.id || statusModalLead.leadId;
-        const lossPayload = {
-          leadId: targetId,
-          clientName: statusModalLead.clientName || statusModalLead.concernPersonName,
-          phoneNumber: statusModalLead.phoneNumber || statusModalLead.contact,
-          phone: statusModalLead.phoneNumber || statusModalLead.contact,
-          emailAddress: statusModalLead.emailAddress || statusModalLead.email,
-          email: statusModalLead.emailAddress || statusModalLead.email,
-          workCategory: statusModalLead.workCategory,
-          workType: statusModalLead.workType,
-          expectedBusiness: statusModalLead.expectedBusiness,
-          lossReason: finalReason,
-          reason: finalReason,
-          lossRemark: statusRemark || statusModalLead.remark || "",
-          remark: statusRemark || statusModalLead.remark || "",
-          salesPerson: "Admin",
-          assignTo: "Admin",
-          assignedTo: null
-        };
 
+        // 1. Dedicated Table API marks lead as NOT INTERESTED & shifts to lost
         if (targetId) {
-          await markLeadAsLossApi(targetId, lossPayload);
-        } else {
-          await createLossLeadApi(lossPayload);
+          await markInterestedFromTableApi(targetId, false, {
+            lossReason: finalReason,
+            lossRemark: statusRemark || statusModalLead.remark || statusModalLead.remarks || ""
+          });
         }
       } catch (e) {
         console.error("Error saving to lost leads:", e);
@@ -585,7 +636,7 @@ const SalseTotalLeads = () => {
             {/* View Lead Details Eye Button */}
             <button
               type="button"
-              onClick={() => navigate(`/sales/leads/details/${row.id}`, { state: { lead: row, from: "totalLeads", allowEdit: true } })}
+              onClick={() => navigate(`/sales/leads/details/${row.id}`, { state: { lead: row, from: "totalLeads", allowEdit: !isUserObserver } })}
               className="w-7 h-7 rounded-lg border border-orange-200 bg-orange-50/70 text-orange-600 hover:bg-orange-100 hover:border-orange-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
               title="View Lead Details"
             >
@@ -598,7 +649,8 @@ const SalseTotalLeads = () => {
             {/* Client Status (Interested / Not Interested) Button */}
             <button
               type="button"
-              onClick={() => {
+              disabled={isUserObserver}
+              onClick={isUserObserver ? () => toast.info("Observer Mode: Status cannot be updated.") : () => {
                 setStatusModalLead(row);
                 setSelectedClientStatus(row.isInterested ? "INTERESTED" : "");
                 setNotInterestedReason("");
@@ -606,8 +658,12 @@ const SalseTotalLeads = () => {
                 setStatusRemark(row.remark || "");
                 setStatusRemarkAttachments([]);
               }}
-              className="w-7 h-7 rounded-lg border border-emerald-200 bg-emerald-50/70 text-emerald-600 hover:bg-emerald-100 hover:border-emerald-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
-              title="Client Status (Interested / Not Interested)"
+              className={`w-7 h-7 rounded-lg border flex items-center justify-center transition-all shadow-2xs ${
+                isUserObserver
+                  ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed opacity-50"
+                  : "border-emerald-200 bg-emerald-50/70 text-emerald-600 hover:bg-emerald-100 hover:border-emerald-300 cursor-pointer active:scale-95"
+              }`}
+              title={isUserObserver ? "Disabled for Observer (View Only)" : "Client Status (Interested / Not Interested)"}
             >
               <FaRegCheckCircle className="w-3.5 h-3.5" />
             </button>
@@ -644,7 +700,7 @@ const SalseTotalLeads = () => {
               <span
                 className="font-extrabold text-emerald-900 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-200 shadow-2xs inline-block truncate max-w-full text-xs cursor-pointer hover:text-blue-600"
                 title={name}
-                onClick={() => row.id && navigate(`/sales/leads/details/${row.id}`, { state: { lead: row, from: "totalLeads", allowEdit: true } })}
+                onClick={() => row.id && navigate(`/sales/leads/details/${row.id}`, { state: { lead: row, from: "totalLeads", allowEdit: !isUserObserver } })}
               >
                 {name}
               </span>
@@ -835,8 +891,16 @@ const SalseTotalLeads = () => {
       label: "REMARK",
       align: "center",
       render: (val, row) => {
-        const rem = row.remark || row.requirement || "--";
-        const attachments = row.remarkAttachments || row.attachments || [];
+        const rem = row.remarks || row.remark || row.requirement || "--";
+        const attachments = Array.isArray(row.remarkAttachments) && row.remarkAttachments.length > 0
+          ? row.remarkAttachments
+          : Array.isArray(row.attachments) && row.attachments.length > 0
+          ? row.attachments
+          : Array.isArray(row.remarksFiles) && row.remarksFiles.length > 0
+          ? row.remarksFiles
+          : row.remarksFile
+          ? [{ url: row.remarksFile, type: "image", name: "Attachment" }]
+          : [];
 
         return (
           <div className="flex items-center justify-center gap-1.5 max-w-[200px] mx-auto text-center">
@@ -922,13 +986,14 @@ const SalseTotalLeads = () => {
         );
       }
     }
-  }), [currentPage, rowsPerPage]);
+  }), [currentPage, rowsPerPage, isUserObserver]);
 
   // Filter & Search Logic
   const filteredLeads = useMemo(() => {
     return leads.filter((item) => {
       const isLost =
         item.isLoss === true ||
+        item.intrestedStatus === "Not Intersted" ||
         ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(item.leadStatus || "").toUpperCase()) ||
         ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(item.status || "").toUpperCase());
       if (isLost) return false;
@@ -1185,8 +1250,14 @@ const SalseTotalLeads = () => {
 
               <button
                 type="button"
-                onClick={() => navigate("/sales/leads/add")}
-                className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-bold shadow-sm transition-colors cursor-pointer flex items-center gap-1.5"
+                disabled={isUserObserver}
+                onClick={isUserObserver ? () => toast.info("Observer Mode: Adding leads is disabled.") : () => navigate("/sales/leads/add")}
+                className={`px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold shadow-sm transition-colors flex items-center gap-1.5 ${
+                  isUserObserver
+                    ? "bg-slate-200 text-slate-400 cursor-not-allowed opacity-60"
+                    : "bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
+                }`}
+                title={isUserObserver ? "Disabled for Observer" : "+ Add Lead"}
               >
                 <span>+ Add Lead</span>
               </button>
@@ -1672,8 +1743,14 @@ const SalseTotalLeads = () => {
               </button>
               <button
                 type="button"
-                onClick={handleClientStatusSubmit}
-                className="px-6 py-2.5 rounded-xl bg-[#ff5722] hover:bg-[#e64a19] text-white text-sm font-extrabold shadow-md shadow-orange-500/20 transition-all cursor-pointer"
+                disabled={isUserObserver}
+                onClick={isUserObserver ? () => toast.info("Observer Mode: Action is disabled.") : handleClientStatusSubmit}
+                className={`px-6 py-2.5 rounded-xl text-sm font-extrabold shadow-md transition-all ${
+                  isUserObserver
+                    ? "bg-slate-200 text-slate-400 cursor-not-allowed opacity-60"
+                    : "bg-[#ff5722] hover:bg-[#e64a19] text-white shadow-orange-500/20 cursor-pointer"
+                }`}
+                title={isUserObserver ? "Disabled for Observer" : "Submit"}
               >
                 Submit
               </button>

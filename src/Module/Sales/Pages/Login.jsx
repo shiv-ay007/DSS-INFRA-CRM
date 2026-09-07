@@ -1,15 +1,18 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { FaUser, FaLock, FaArrowLeft, FaSignInAlt } from "react-icons/fa";
+import { FaUser, FaLock, FaArrowLeft, FaSignInAlt, FaEye, FaEyeSlash } from "react-icons/fa";
 import { toast } from "react-toastify";
-import { loginApi } from "../../../services/auth.api";
+import { loginApi } from "../services/auth.api";
+import { useAuth } from "../../../context/AuthContext";
 
 const Login = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   });
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleChange = (e) => {
@@ -26,11 +29,10 @@ const Login = () => {
     try {
       const res = await loginApi(formData);
       if (res && res.success && res.data) {
-        if (res.data.accessToken) localStorage.setItem("accessToken", res.data.accessToken);
-        if (res.data.refreshToken) localStorage.setItem("refreshToken", res.data.refreshToken);
-        if (res.data.user) localStorage.setItem("dss_user", JSON.stringify(res.data.user));
+        // Save to AuthContext & localStorage (Zero extra API calls needed)
+        login(res.data.user, res.data.accessToken, res.data.refreshToken);
 
-        toast.success(res.message || `Sales Login Successful! Welcome ${res.data.user?.name || ""}`, {
+        toast.success(res.message || `Login Successful! Welcome ${res.data.user?.name || ""}`, {
           position: "top-right",
           autoClose: 2000,
         });

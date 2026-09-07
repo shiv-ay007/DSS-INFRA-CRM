@@ -3,9 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
-// AddLead Component
-import { createLeadApi, getAllLeadsApi } from "../../../../services/totalLeads.api";
-import { notifyLeadChange } from "../../utils/leadStorageUtils";
+import { createLeadApi, getAllLeadsApi } from "../../services/totalLeads.api";
+import { notifyLeadChange } from "../../../../context/LeadContext";
+import { useAuth } from "../../../../context/AuthContext";
 import {
   leadSourcesList,
   channelsList,
@@ -20,6 +20,9 @@ import { FaPlus, FaMicrophone, FaImage, FaVideo, FaFileAudio, FaTimes } from "re
 
 const Addlead = () => {
   const navigate = useNavigate();
+  const { role, isObserver } = useAuth();
+  const currentRole = role || "Worker";
+  const isUserObserver = isObserver || String(currentRole).toLowerCase() === "observer";
 
   // Helper to get today's date in YYYY-MM-DD
   const getTodayDate = () => {
@@ -552,6 +555,11 @@ const Addlead = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (isUserObserver) {
+      toast.info("Observer Mode: Creating leads is disabled.");
+      return;
+    }
+
     if (!validateForm()) {
       return;
     }
@@ -680,6 +688,7 @@ const Addlead = () => {
         projectDetail: formData.projectDetail || "",
         projectDetails: formData.projectDetail || "",
         remark: formData.remark || "",
+        remarks: formData.remark || "",
         remarkAttachments: processedAttachments,
         attachments: processedAttachments,
         whatsappNumber: formData.whatsappNumber || formData.phoneNumber,
@@ -698,13 +707,20 @@ const Addlead = () => {
       };
 
       try {
-        // Save lead to backend MongoDB Atlas Database with all form fields & attachments
-        const apiRes = await createLeadApi(newLead);
+        // Extract raw File / Blob objects to upload to Cloudinary
+        const rawUploadFiles = (formData.remarkAttachments || [])
+          .map((att) => att.file || att.blob || (att instanceof File || att instanceof Blob ? att : null))
+          .filter(Boolean);
+
+        // Save lead to backend MongoDB Atlas Database with Cloudinary file upload
+        const apiRes = await createLeadApi(newLead, rawUploadFiles);
         if (apiRes && apiRes.success && apiRes.data) {
           const bLead = apiRes.data;
           newLead.id = bLead.leadId || bLead._id;
           newLead.leadId = bLead.leadId || bLead._id;
           newLead._id = bLead._id;
+          newLead.remarksFile = bLead.remarksFile || "";
+          newLead.remarksFiles = bLead.remarksFiles || [];
         }
         notifyLeadChange(newLead);
       } catch (err) {
@@ -1208,16 +1224,27 @@ const Addlead = () => {
         <div className="pt-3 border-t border-slate-100 flex flex-col-reverse sm:flex-row items-center justify-end gap-2.5">
           <button
             type="button"
-            onClick={handleReset}
-            className="w-full sm:w-auto px-4 py-2 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
+            disabled={isUserObserver}
+            onClick={isUserObserver ? () => toast.info("Observer Mode: Action is disabled.") : handleReset}
+            className={`w-full sm:w-auto px-4 py-2 rounded-lg border text-xs sm:text-sm font-semibold transition-colors ${
+              isUserObserver
+                ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed opacity-60"
+                : "border-slate-200 hover:bg-slate-100 text-slate-700 cursor-pointer"
+            }`}
+            title={isUserObserver ? "Disabled for Observer" : "Reset Form"}
           >
             Reset Form
           </button>
 
           <button
             type="submit"
-            disabled={isSubmitting}
-            className="w-full sm:w-auto px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-xs sm:text-sm font-semibold shadow-2xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+            disabled={isSubmitting || isUserObserver}
+            className={`w-full sm:w-auto px-5 py-2 rounded-lg text-xs sm:text-sm font-semibold shadow-2xs transition-all flex items-center justify-center gap-1.5 ${
+              isUserObserver
+                ? "bg-slate-200 text-slate-400 cursor-not-allowed opacity-60"
+                : "bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white cursor-pointer"
+            }`}
+            title={isUserObserver ? "Disabled for Observer" : "Submit & Create Lead"}
           >
             {isSubmitting ? (
               <>
