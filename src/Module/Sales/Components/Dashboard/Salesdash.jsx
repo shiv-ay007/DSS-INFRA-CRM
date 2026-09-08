@@ -11,8 +11,7 @@ import { getFollowupLeadsApi } from "../../services/followup.api";
 import { getDashboardStatsApi } from "../../services/dashboard.api";
 import {
   useLeadContext,
-  subscribeToLeadUpdates,
-  getStoredLeads
+  subscribeToLeadUpdates
 } from "../../../../context/LeadContext";
 import { useAuth } from "../../../../context/AuthContext";
 
@@ -22,17 +21,10 @@ const Salesdash = () => {
   const isUserObserver = isObserver || String(currentRole).toLowerCase() === "observer";
 
   const { getCachedData, setCachedData } = useLeadContext();
-  const [leads, setLeads] = useState(() => {
-    return getStoredLeads("dss_leads");
-  });
+  const [leads, setLeads] = useState([]);
   const [scheduledFollowups, setScheduledFollowups] = useState([]);
 
   useEffect(() => {
-    const handleRefresh = () => {
-      setLeads(getStoredLeads("dss_leads"));
-    };
-    const unsubscribe = subscribeToLeadUpdates(handleRefresh);
-
     const fetchBackendData = async () => {
       const cacheKey = "dashboard_leads_all";
       const cached = getCachedData(cacheKey);
@@ -41,16 +33,12 @@ const Salesdash = () => {
       }
 
       try {
-        // Temporarily commented out getFollowupLeadsApi until backend route is ready
         const [leadsRes] = await Promise.allSettled([
-          getAllLeadsApi({ limit: 10, isLoss: false })
-          // getFollowupLeadsApi({ limit: 10, isLoss: false })
+          getAllLeadsApi({ limit: 1000 })
         ]);
 
         if (leadsRes.status === "fulfilled" && leadsRes.value && leadsRes.value.success && leadsRes.value.data?.leads) {
-          const apiLeads = leadsRes.value.data.leads
-            .filter((l) => !l.isLoss && !["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(l.leadStatus || l.status || "").toUpperCase()))
-            .map((backendLead) => {
+          const apiLeads = leadsRes.value.data.leads.map((backendLead) => {
             const dateObj = new Date(backendLead.createdAt || Date.now());
             const formattedDate = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
 
@@ -81,26 +69,16 @@ const Salesdash = () => {
             };
           });
 
-          const stored = getStoredLeads("dss_leads");
-          const merged = [...stored];
-          apiLeads.forEach((bLead) => {
-            if (!merged.some((m) => String(m.id) === String(bLead.id))) {
-              merged.push(bLead);
-            }
-          });
-          setLeads(merged);
-          setCachedData(cacheKey, merged);
+          setLeads(apiLeads);
+          setCachedData(cacheKey, apiLeads);
         }
-
-        // if (followupRes?.status === "fulfilled" && followupRes.value?.success && followupRes.value.data?.leads) {
-        //   setScheduledFollowups(followupRes.value.data.leads);
-        // }
       } catch (e) {
         console.error("Dashboard fetch error:", e);
       }
     };
 
     fetchBackendData();
+    const unsubscribe = subscribeToLeadUpdates(fetchBackendData);
     return () => unsubscribe();
   }, [getCachedData, setCachedData]);
 
