@@ -946,15 +946,51 @@ const SalseTotalLeads = () => {
       align: "center",
       render: (val, row) => {
         const rem = row.remarks || row.remark || row.requirement || "--";
-        const attachments = Array.isArray(row.remarkAttachments) && row.remarkAttachments.length > 0
-          ? row.remarkAttachments
-          : Array.isArray(row.attachments) && row.attachments.length > 0
-          ? row.attachments
-          : Array.isArray(row.remarksFiles) && row.remarksFiles.length > 0
-          ? row.remarksFiles
-          : row.remarksFile
-          ? [{ url: row.remarksFile, type: "image", name: "Attachment" }]
-          : [];
+        const attachments = [];
+        if (Array.isArray(row.remarksFiles)) {
+          row.remarksFiles.forEach((f) => {
+            const url = f?.url || f?.preview;
+            if (url && !attachments.some((x) => (x.url || x.preview) === url)) {
+              attachments.push({ ...f, type: f.fileType || f.type || "image" });
+            }
+          });
+        }
+        if (Array.isArray(row.remarkAttachments)) {
+          row.remarkAttachments.forEach((att) => {
+            const url = att?.url || att?.preview;
+            if (url && !attachments.some((x) => (x.url || x.preview) === url)) {
+              attachments.push({ ...att, type: att.type || att.fileType || "image" });
+            }
+          });
+        }
+        if (Array.isArray(row.attachments)) {
+          row.attachments.forEach((att) => {
+            const url = att?.url || att?.preview;
+            if (url && !attachments.some((x) => (x.url || x.preview) === url)) {
+              attachments.push({ ...att, type: att.type || att.fileType || "image" });
+            }
+          });
+        }
+        if (row.remarksFile && typeof row.remarksFile === "string" && !attachments.some((x) => x.url === row.remarksFile)) {
+          attachments.push({ url: row.remarksFile, type: "image", name: "Attachment" });
+        }
+        if (Array.isArray(row.followups)) {
+          row.followups.forEach((f) => {
+            [
+              ...(f.currentDiscussion?.files || []),
+              ...(f.nextDiscussion?.files || []),
+              ...(f.followupRemark?.files || [])
+            ].forEach((fileObj) => {
+              const u = fileObj?.url;
+              if (u && !attachments.some((x) => x.url === u)) {
+                attachments.push({
+                  ...fileObj,
+                  type: fileObj.fileType || fileObj.type || "image"
+                });
+              }
+            });
+          });
+        }
 
         return (
           <div className="flex items-center justify-center gap-1.5 max-w-[200px] mx-auto text-center">

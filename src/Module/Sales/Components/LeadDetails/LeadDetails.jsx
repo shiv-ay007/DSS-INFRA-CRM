@@ -66,8 +66,12 @@ const LeadDetails = () => {
             remarksFile: backendLead.remarksFile || "",
             remarksFiles: backendLead.remarksFiles || [],
             statusTimeline: backendLead.statusTimeline || [],
-            remarkAttachments: backendLead.remarkAttachments || backendLead.attachments || [],
-            attachments: backendLead.remarkAttachments || backendLead.attachments || []
+            remarkAttachments: (Array.isArray(backendLead.remarksFiles) && backendLead.remarksFiles.length > 0)
+              ? backendLead.remarksFiles
+              : (backendLead.remarkAttachments || backendLead.attachments || []),
+            attachments: (Array.isArray(backendLead.remarksFiles) && backendLead.remarksFiles.length > 0)
+              ? backendLead.remarksFiles
+              : (backendLead.attachments || backendLead.remarkAttachments || [])
           });
         }
       } catch (err) {

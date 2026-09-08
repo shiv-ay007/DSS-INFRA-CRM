@@ -723,6 +723,10 @@ const Addlead = () => {
         newLead._id = bLead._id;
         newLead.remarksFile = bLead.remarksFile || "";
         newLead.remarksFiles = bLead.remarksFiles || [];
+        if (Array.isArray(bLead.remarksFiles) && bLead.remarksFiles.length > 0) {
+          newLead.remarkAttachments = bLead.remarksFiles;
+          newLead.attachments = bLead.remarksFiles;
+        }
       }
       notifyLeadChange(newLead);
       toast.success("Lead Captured Successfully! 🎯", {

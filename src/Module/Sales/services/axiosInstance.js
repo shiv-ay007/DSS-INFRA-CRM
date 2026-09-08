@@ -35,10 +35,7 @@ export const getAuthHeaders = (isFormData = false) => {
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
   timeout: 90000,
-  withCredentials: true,
-  headers: {
-    "Content-Type": "application/json"
-  }
+  withCredentials: true
 });
 
 // Request Interceptor: Attach bearer token & handle content headers
@@ -49,8 +46,19 @@ apiClient.interceptors.request.use(
       config.headers.Authorization = `Bearer ${token}`;
     }
 
-    if (config.data instanceof FormData) {
-      delete config.headers["Content-Type"];
+    const isFormData =
+      config.data instanceof FormData ||
+      (config.data && Object.prototype.toString.call(config.data) === "[object FormData]");
+
+    if (isFormData) {
+      if (config.headers) {
+        if (typeof config.headers.delete === "function") {
+          config.headers.delete("Content-Type");
+          config.headers.delete("content-type");
+        }
+        delete config.headers["Content-Type"];
+        delete config.headers["content-type"];
+      }
     }
 
     return config;

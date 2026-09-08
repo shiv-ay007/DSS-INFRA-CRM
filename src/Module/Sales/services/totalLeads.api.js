@@ -8,8 +8,13 @@ const buildFormData = (data, files = []) => {
 
   Object.entries(data).forEach(([key, value]) => {
     if (value !== undefined && value !== null) {
-      if (key === "remarkAttachments" || key === "attachments") {
-        return; // Exclude client-side preview objects from payload
+      if (
+        key === "remarkAttachments" ||
+        key === "attachments" ||
+        key === "remarksFiles" ||
+        key === "remarksFile"
+      ) {
+        return; // Exclude client-side preview objects and raw DB file arrays
       }
       if (Array.isArray(value) || (typeof value === "object" && !(value instanceof File))) {
         formData.append(key, JSON.stringify(value));
@@ -57,8 +62,10 @@ export const createLeadApi = async (leadData, files = null) => {
       }
     }
 
+    const config = {};
     if (hasActualFiles) {
       payload = buildFormData(leadData, fileArray);
+      config.headers = { "Content-Type": undefined };
     } else {
       // Ensure remarks text is present in JSON payload
       if (!payload.remarks && payload.remark) {
@@ -66,7 +73,7 @@ export const createLeadApi = async (leadData, files = null) => {
       }
     }
 
-    const response = await api.post("/leads", payload);
+    const response = await api.post("/leads", payload, config);
     return response;
   } catch (error) {
     console.error("createLeadApi Error:", error);
@@ -129,15 +136,17 @@ export const updateLeadApi = async (id, leadData, files = null) => {
       }
     }
 
+    const config = {};
     if (hasActualFiles) {
       payload = buildFormData(leadData, fileArray);
+      config.headers = { "Content-Type": undefined };
     } else {
       if (!payload.remarks && payload.remark) {
         payload.remarks = payload.remark;
       }
     }
 
-    const response = await api.put(`/leads/${id}`, payload);
+    const response = await api.put(`/leads/${id}`, payload, config);
     return response;
   } catch (error) {
     console.error("updateLeadApi Error:", error);
