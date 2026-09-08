@@ -4,10 +4,9 @@ import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import Table from "../../../../Common/Components/Table";
 import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
-import { FaUserPlus, FaUsers, FaUser } from "react-icons/fa";
+import { FaUser } from "react-icons/fa";
 import { getAllLeadsApi, updateLeadApi, markInterestedFromTableApi } from "../../services/totalLeads.api";
-import { markLeadAsLossApi, createLossLeadApi } from "../../services/lostLeads.api";
-import { getAllFollowupsApi, addFollowupApi } from "../../services/followup.api";
+import { getAllFollowupsApi, addFollowupApi, addLeadFollowupApi } from "../../services/followup.api";
 import {
   useLeadContext,
   subscribeToLeadUpdates,
@@ -28,29 +27,52 @@ const notInterestedReasonsList = [
   "Other"
 ];
 
-/**
- * Component: Lead (Lead Management Sheet)
- * Design matching the DSS CRM Lead Management Sheet screenshot with rich colorful styling & larger text.
- */
-
 // Helper to format currency
 const formatLakhs = (val) => {
   const num = Number(val) || 0;
   return `₹${(num / 100000).toFixed(2)}L`;
 };
 
-const timeOptions = [
-  "09:00 am", "09:30 am", "10:00 am", "10:30 am", "11:00 am", "11:30 am",
-  "12:00 pm", "12:30 pm", "02:00 pm", "02:30 pm", "03:00 pm", "03:30 pm",
-  "04:00 pm", "04:30 pm", "05:00 pm", "05:30 pm", "06:00 pm"
-];
+// Helper: Extract timestamp for sorting
+const getLeadTime = (lead) => {
+  if (!lead) return 0;
+  if (lead.createdAt) {
+    const t = new Date(lead.createdAt).getTime();
+    if (!isNaN(t)) return t;
+  }
+  if (lead.updatedAt) {
+    const t = new Date(lead.updatedAt).getTime();
+    if (!isNaN(t)) return t;
+  }
+  if (lead._id && String(lead._id).length === 24) {
+    const t = parseInt(String(lead._id).substring(0, 8), 16) * 1000;
+    if (!isNaN(t)) return t;
+  }
+  if (lead.createdDate) {
+    const t = new Date(lead.createdDate).getTime();
+    if (!isNaN(t)) return t;
+  }
+  if (lead.date) {
+    const t = new Date(lead.date).getTime();
+    if (!isNaN(t)) return t;
+  }
+  return 0;
+};
 
 const Lead = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { role, isObserver } = useAuth();
+  const { user, role, isObserver } = useAuth();
   const currentRole = role || "Worker";
   const isUserObserver = isObserver || String(currentRole).toLowerCase() === "observer";
+
+  const loggedInUserName = user?.name || "";
+  const loggedInDepartment = useMemo(() => {
+    const deptObj = user?.departments || user?.department;
+    if (typeof deptObj === "object" && deptObj?.name) return deptObj.name;
+    if (typeof deptObj === "string" && deptObj.trim()) return deptObj;
+    return "Sales";
+  }, [user]);
 
   // Leads state fetched directly from backend API
   const [leads, setLeads] = useState(() => {
@@ -59,7 +81,8 @@ const Lead = () => {
     }
     return [];
   });
-  const scheduledFollowupCacheRef = useRef(new Map());
+  const [isStatusSubmitting, setIsStatusSubmitting] = useState(false);
+  const [isScheduling, setIsScheduling] = useState(false);
   const { getCachedData, setCachedData, invalidateCache } = useLeadContext();
 
   const fetchBackendLeads = async (forceRefresh = false) => {
@@ -99,6 +122,7 @@ const Lead = () => {
           .filter((l) => {
             const isLost =
               l.isLoss === true ||
+              l.intrestedStatus === "Not Intersted" ||
               ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(l.leadStatus || "").toUpperCase()) ||
               ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(l.status || "").toUpperCase());
             if (isLost) return false;
@@ -112,10 +136,13 @@ const Lead = () => {
             // 3. OR explicitly assigned to Lead Management
             const isInterested =
               l.isInterested === true ||
+              l.intrestedFromTableLead === true ||
+              l.intrestedStatus === "Intrested" ||
               String(l.status || "").toUpperCase() === "INTERESTED" ||
               String(l.leadStatus || "").toUpperCase() === "INTERESTED";
 
             const hasFollowup =
+              (Array.isArray(l.followups) && l.followups.length > 0) ||
               (l.isFollowupScheduled === true || l.isFollowup === true) &&
               ((Array.isArray(l.followupHistory) && l.followupHistory.length > 0) ||
                 Number(l.followupRemarksCount) > 0 ||
@@ -132,17 +159,72 @@ const Lead = () => {
             const assignee = backendLead.salesPerson || (typeof backendLead.assignedTo === 'object' ? backendLead.assignedTo?.name : backendLead.assignedTo) || backendLead.assignTo || "--";
             const formattedTime = backendLead.createdTime || dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
 
-            const historyCount = Array.isArray(backendLead.followupHistory) ? backendLead.followupHistory.length : 0;
-            const remarksCount = Number(backendLead.followupRemarksCount) || Number(backendLead.followupCount) || 0;
-            const count = Math.max(historyCount, remarksCount, extraFollowups.length, (backendLead.isFollowupScheduled && backendLead.nextFollowupDate) ? 1 : 0);
+            // 1. Map NEW SCHEMA followups array
+            const schemaFollowups = Array.isArray(backendLead.followups) ? backendLead.followups : [];
+            const mappedSchemaFollowups = schemaFollowups.map((f) => {
+              const dt = f.dateTime ? new Date(f.dateTime) : (f.createdAt ? new Date(f.createdAt) : null);
+              const fDate = dt && !isNaN(dt.getTime())
+                ? dt.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' })
+                : "--";
+              const fTime = dt && !isNaN(dt.getTime())
+                ? dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })
+                : "10:00 am";
+              const creatorObj = typeof f.createdBy === "object" ? f.createdBy : null;
+              const creatorName = creatorObj?.name;
+              const creatorDept = (typeof creatorObj?.departments === "object" ? creatorObj.departments?.name : null) ||
+                (typeof creatorObj?.department === "object" ? creatorObj.department?.name : null) ||
+                creatorObj?.departments ||
+                creatorObj?.department;
+              const creatorRole = creatorObj?.role;
 
-            const rawNextDate = backendLead.nextFollowupDate || (extraFollowups.length > 0 ? extraFollowups[0].scheduledDate : null);
+              const cleanAssignee = (assignee && assignee !== "--") ? assignee : "";
+              const repName = creatorName || cleanAssignee || (typeof backendLead.leadBy === 'object' ? backendLead.leadBy?.name : null) || loggedInUserName || "";
+              const repDept = creatorDept || loggedInDepartment || "Sales";
+
+              return {
+                _id: f._id,
+                date: fDate,
+                time: fTime,
+                rawDate: f.dateTime,
+                type: f.type || "Call",
+                discussionType: f.type || "Call",
+                status: f.type || "Call",
+                rep: repName,
+                repDesignation: creatorRole || user?.role || "",
+                department: repDept,
+                talkToPerson: f.talkToPerson || backendLead.clientName || "--",
+                personDesignation: f.personDesignation || "--",
+                discussionWithClient: f.currentDiscussion?.discussion || f.followupRemark?.remarks || "--",
+                notes: f.currentDiscussion?.discussion || f.followupRemark?.remarks || "--",
+                nextDiscussionTopic: f.nextDiscussion?.nextDiscussion || "--",
+                rating: f.rating !== undefined ? f.rating : 4,
+                matrix: f.matrix || {},
+                followupRemark: f.followupRemark?.remarks || "",
+                attachments: {
+                  current: f.currentDiscussion?.files || [],
+                  next: f.nextDiscussion?.files || [],
+                  remarks: f.followupRemark?.files || []
+                }
+              };
+            });
+
+            // 2. Combine with any legacy followupHistory
+            const legacyHistory = Array.isArray(backendLead.followupHistory) ? backendLead.followupHistory : [];
+            const combinedHistory = [...mappedSchemaFollowups, ...legacyHistory];
+
+            const count = Math.max(schemaFollowups.length, combinedHistory.length, extraFollowups.length, Number(backendLead.followupRemarksCount) || 0);
+
+            // Latest Scheduled Date from new schema or fallback
+            const latestFollowup = schemaFollowups[0];
+            const rawNextDate = latestFollowup?.dateTime || backendLead.nextFollowupDate || (extraFollowups.length > 0 ? extraFollowups[0].scheduledDate : null);
             let formattedNextDate = "";
-            if (count > 0 && rawNextDate && rawNextDate !== "--" && rawNextDate !== "Completed" && rawNextDate !== "Invalid Date") {
+            let nextTime = "10:00 am";
+            if (rawNextDate && rawNextDate !== "--" && rawNextDate !== "Completed" && rawNextDate !== "Invalid Date") {
               try {
                 const d = new Date(rawNextDate);
                 if (!isNaN(d.getTime())) {
                   formattedNextDate = d.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+                  nextTime = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
                 } else {
                   formattedNextDate = String(rawNextDate);
                 }
@@ -150,8 +232,7 @@ const Lead = () => {
                 formattedNextDate = String(rawNextDate);
               }
             }
-
-            const nextTime = backendLead.nextFollowupTime || backendLead.followupTime || (extraFollowups.length > 0 ? extraFollowups[0].scheduledTime : "") || "10:00 am";
+            if (backendLead.nextFollowupTime) nextTime = backendLead.nextFollowupTime;
 
             return {
               ...backendLead,
@@ -187,7 +268,10 @@ const Lead = () => {
               requirement: backendLead.requirement || backendLead.remarks || backendLead.remark || backendLead.notes || "",
               remarksFile: backendLead.remarksFile || "",
               remarksFiles: backendLead.remarksFiles || [],
-              followupHistory: Array.isArray(backendLead.followupHistory) ? backendLead.followupHistory : [],
+              statusTimeline: backendLead.statusTimeline || [],
+              remarkAttachments: (Array.isArray(backendLead.remarksFiles) && backendLead.remarksFiles.length > 0) ? backendLead.remarksFiles : (backendLead.remarkAttachments || []),
+              attachments: (Array.isArray(backendLead.remarksFiles) && backendLead.remarksFiles.length > 0) ? backendLead.remarksFiles : (backendLead.attachments || []),
+              followupHistory: combinedHistory,
               followupCount: count,
               followupRemarksCount: count,
               nextFollowupDate: count > 0 ? (formattedNextDate || "") : "",
@@ -198,30 +282,6 @@ const Lead = () => {
               isFollowup: count > 0
             };
           });
-
-        const getLeadTime = (lead) => {
-          if (lead.createdAt) {
-            const t = new Date(lead.createdAt).getTime();
-            if (!isNaN(t)) return t;
-          }
-          if (lead.updatedAt) {
-            const t = new Date(lead.updatedAt).getTime();
-            if (!isNaN(t)) return t;
-          }
-          if (lead._id && String(lead._id).length === 24) {
-            const t = parseInt(String(lead._id).substring(0, 8), 16) * 1000;
-            if (!isNaN(t)) return t;
-          }
-          if (lead.createdDate) {
-            const t = new Date(lead.createdDate).getTime();
-            if (!isNaN(t)) return t;
-          }
-          if (lead.date) {
-            const t = new Date(lead.date).getTime();
-            if (!isNaN(t)) return t;
-          }
-          return 0;
-        };
 
         const newInterestedLead = location.state?.newInterestedLead;
         let allActiveLeads = activeBackendLeads;
@@ -261,7 +321,6 @@ const Lead = () => {
   // Filters & Collapsible Filter State
   const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterSalesPerson, setFilterSalesPerson] = useState("ALL");
   const [filterStatus, setFilterStatus] = useState("All");
   const [filterLeadType, setFilterLeadType] = useState("All");
   const [filterJobType, setFilterJobType] = useState("All");
@@ -283,75 +342,89 @@ const Lead = () => {
     actions: {
       label: "ACTIONS",
       align: "center",
-      render: (val, row) => (
-        <div className="grid grid-cols-2 gap-1.5 w-14 mx-auto">
-          {/* 1. View Lead Details (Top-Left) */}
-          <button
-            type="button"
-            onClick={() => navigate(`/sales/leads/details/${row.id}`, { state: { lead: row, from: "leadManagement", allowEdit: false } })}
-            className="w-6 h-6 rounded-lg border border-orange-200 bg-orange-50/70 text-orange-600 hover:bg-orange-100 hover:border-orange-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
-            title="View Lead Details"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-            </svg>
-          </button>
+      render: (val, row) => {
+        const actionButtons = [
+          {
+            key: "view",
+            title: "View Lead Details",
+            disabled: false,
+            onClick: () => navigate(`/sales/leads/details/${row.id}`, { state: { lead: row, from: "leadManagement", allowEdit: false } }),
+            activeColor: "border-orange-200 bg-orange-50/70 text-orange-600 hover:bg-orange-100 hover:border-orange-300",
+            icon: (
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+              </svg>
+            ),
+          },
+          {
+            key: "schedule",
+            title: isUserObserver ? "Disabled for Observer (View Only)" : "Schedule / Reschedule Follow-up",
+            disabled: isUserObserver,
+            onClick: isUserObserver ? () => toast.info("Observer Mode: Scheduling follow-up is disabled.") : () => handleOpenScheduleModal(row),
+            activeColor: "border-blue-200 bg-blue-50/70 text-blue-600 hover:bg-blue-100 hover:border-blue-300",
+            icon: (
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            ),
+          },
+          {
+            key: "status",
+            title: isUserObserver ? "Disabled for Observer (View Only)" : "Client Status (Interested / Not Interested)",
+            disabled: isUserObserver,
+            onClick: isUserObserver
+              ? () => toast.info("Observer Mode: Status update is disabled.")
+              : () => {
+                  setStatusModalLead(row);
+                  setSelectedClientStatus("");
+                  setNotInterestedReason("");
+                  setCustomNotInterestedReason("");
+                  setStatusRemark("");
+                  setStatusRemarkAttachments([]);
+                },
+            activeColor: "border-emerald-200 bg-emerald-50/70 text-emerald-600 hover:bg-emerald-100 hover:border-emerald-300",
+            icon: (
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            ),
+          },
+          {
+            key: "remarks",
+            title: "View Follow-up Remarks & History",
+            disabled: false,
+            onClick: () => setRemarksModalLead(row),
+            activeColor: "border-purple-200 bg-purple-50/70 text-purple-600 hover:bg-purple-100 hover:border-purple-300",
+            icon: (
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            ),
+          },
+        ];
 
-          {/* 2. Schedule / Reschedule Follow-up (Top-Right) */}
-          <button
-            type="button"
-            disabled={isUserObserver}
-            onClick={isUserObserver ? () => toast.info("Observer Mode: Scheduling follow-up is disabled.") : () => handleOpenScheduleModal(row)}
-            className={`w-6 h-6 rounded-lg border flex items-center justify-center transition-all shadow-2xs ${
-              isUserObserver
-                ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed opacity-50"
-                : "border-blue-200 bg-blue-50/70 text-blue-600 hover:bg-blue-100 hover:border-blue-300 cursor-pointer active:scale-95"
-            }`}
-            title={isUserObserver ? "Disabled for Observer (View Only)" : "Schedule / Reschedule Follow-up"}
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-            </svg>
-          </button>
-
-          {/* 3. Client Status (Interested / Not Interested) (Bottom-Left) */}
-          <button
-            type="button"
-            disabled={isUserObserver}
-            onClick={isUserObserver ? () => toast.info("Observer Mode: Status update is disabled.") : () => {
-              setStatusModalLead(row);
-              setSelectedClientStatus("");
-              setNotInterestedReason("");
-              setCustomNotInterestedReason("");
-              setStatusRemark("");
-              setStatusRemarkAttachments([]);
-            }}
-            className={`w-6 h-6 rounded-lg border flex items-center justify-center transition-all shadow-2xs ${
-              isUserObserver
-                ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed opacity-50"
-                : "border-emerald-200 bg-emerald-50/70 text-emerald-600 hover:bg-emerald-100 hover:border-emerald-300 cursor-pointer active:scale-95"
-            }`}
-            title={isUserObserver ? "Disabled for Observer (View Only)" : "Client Status (Interested / Not Interested)"}
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </button>
-
-          {/* 4. Follow-up Remarks & History (Bottom-Right) */}
-          <button
-            type="button"
-            onClick={() => setRemarksModalLead(row)}
-            className="w-6 h-6 rounded-lg border border-purple-200 bg-purple-50/70 text-purple-600 hover:bg-purple-100 hover:border-purple-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
-            title="View Follow-up Remarks & History"
-          >
-            <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-          </button>
-        </div>
-      )
+        return (
+          <div className="grid grid-cols-2 gap-1.5 w-14 mx-auto">
+            {actionButtons.map((btn) => (
+              <button
+                key={btn.key}
+                type="button"
+                disabled={btn.disabled}
+                onClick={btn.onClick}
+                title={btn.title}
+                className={`w-6 h-6 rounded-lg border flex items-center justify-center transition-all shadow-2xs ${
+                  btn.disabled
+                    ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed opacity-50"
+                    : `${btn.activeColor} cursor-pointer active:scale-95`
+                }`}
+              >
+                {btn.icon}
+              </button>
+            ))}
+          </div>
+        );
+      },
     },
     createdDate: {
       label: "CREATED DATE",
@@ -637,11 +710,9 @@ const Lead = () => {
   }), [currentPage, rowsPerPage, navigate, isUserObserver]);
 
   // Modals
-  const [detailModalLead, setDetailModalLead] = useState(null);
   const [scheduleModalLead, setScheduleModalLead] = useState(null);
   const [remarksModalLead, setRemarksModalLead] = useState(null);
   const [followupDetailsModalLead, setFollowupDetailsModalLead] = useState(null);
-  const [completeModalLead, setCompleteModalLead] = useState(null);
 
   // Client Status Modal States
   const [statusModalLead, setStatusModalLead] = useState(null);
@@ -651,9 +722,74 @@ const Lead = () => {
   const [statusRemark, setStatusRemark] = useState("");
   const [statusRemarkAttachments, setStatusRemarkAttachments] = useState([]);
 
+  // Helper to render media files / audio player / image attachments
+  const renderMediaFiles = (files) => {
+    const list = Array.isArray(files) ? files : (files && typeof files === "object" && files.url ? [files] : []);
+    const validFiles = list.filter((f) => f && (f.url || typeof f === "string"));
+    if (validFiles.length === 0) return null;
+
+    return (
+      <div className="mt-2.5 flex flex-wrap gap-2.5">
+        {validFiles.map((file, fIdx) => {
+          const url = file.url || (typeof file === "string" ? file : "");
+          if (!url) return null;
+          const name = file.name || (url.startsWith("http") ? url.split("/").pop() : `Attachment ${fIdx + 1}`);
+          const type = (file.fileType || file.type || "").toLowerCase();
+          const isAudio = type === "audio" || /\.(mp3|wav|m4a|aac|ogg|webm)(\?.*)?$/i.test(url) || /\.(mp3|wav|m4a|aac|ogg|webm)$/i.test(name);
+          const isImage = type === "image" || /\.(jpg|jpeg|png|webp|gif|svg)(\?.*)?$/i.test(url) || /\.(jpg|jpeg|png|webp|gif|svg)$/i.test(name);
+
+          if (isAudio) {
+            return (
+              <div key={fIdx} className="w-full sm:w-auto min-w-[260px] bg-purple-50/80 border border-purple-200 rounded-xl p-2.5 shadow-2xs space-y-1">
+                <div className="flex items-center gap-1.5 text-[11px] font-bold text-purple-900 truncate">
+                  <span>🎙️</span>
+                  <span className="truncate">{name}</span>
+                </div>
+                <audio controls src={url} className="w-full h-8 max-w-[280px]" preload="metadata" />
+              </div>
+            );
+          }
+
+          if (isImage) {
+            return (
+              <a
+                key={fIdx}
+                href={url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="group relative block w-16 h-16 rounded-xl overflow-hidden border border-slate-200 bg-slate-100 shadow-2xs hover:border-blue-400 transition-all shrink-0"
+                title={`View ${name}`}
+              >
+                <img src={url} alt={name} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white text-[10px] font-bold transition-opacity">
+                  View
+                </div>
+              </a>
+            );
+          }
+
+          return (
+            <a
+              key={fIdx}
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-2xs transition-colors shrink-0"
+              title={name}
+            >
+              <span>📎</span>
+              <span className="truncate max-w-[150px]">{name}</span>
+            </a>
+          );
+        })}
+      </div>
+    );
+  };
+
   // Handler to move lead to Lost Leads or open pre-filled Sales Transfer Form
   const handleSendToSalesManagement = async () => {
     if (!statusModalLead) return;
+    if (isStatusSubmitting) return;
     if (isUserObserver) {
       toast.info("Observer Mode: Status update is disabled.");
       return;
@@ -675,11 +811,17 @@ const Lead = () => {
       }
     }
 
-    const today = new Date();
+    setIsStatusSubmitting(true);
+    try {
+      const today = new Date();
     const formattedDate = today.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
     const formattedTime = today.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
 
     const finalReason = notInterestedReason === "Other" ? customNotInterestedReason.trim() : notInterestedReason;
+
+    const rawUploadFiles = (statusRemarkAttachments || [])
+      .map((att) => att.file || att.blob || (att instanceof File || att instanceof Blob ? att : null))
+      .filter(Boolean);
 
     const processedAttachments = (statusRemarkAttachments || []).map((item) => ({
       id: item.id || `att-${Date.now()}-${Math.random()}`,
@@ -706,19 +848,31 @@ const Lead = () => {
         updatedAt: new Date().toISOString()
       };
 
-      // 1. Sync to backend MongoDB
+      // 1. Sync to backend MongoDB & Cloudinary
       try {
         if (targetId) {
-          await updateLeadApi(targetId, {
-            status: "INTERESTED",
-            leadStatus: "INTERESTED",
-            isInterested: true,
-            inSalesManagement: true,
-            isSalesTransferred: true,
-            isLoss: false,
-            remark: finalRemark,
-            movedToSalesManagementDate: new Date()
-          });
+          const updateRes = await updateLeadApi(
+            targetId,
+            {
+              status: "INTERESTED",
+              leadStatus: "INTERESTED",
+              isInterested: true,
+              inSalesManagement: true,
+              isSalesTransferred: true,
+              isLoss: false,
+              remark: finalRemark,
+              movedToSalesManagementDate: new Date()
+            },
+            rawUploadFiles
+          );
+          if (updateRes && (updateRes.data || updateRes.remarksFiles)) {
+            const updatedBLead = updateRes.data || updateRes;
+            if (updatedBLead.remarksFiles && updatedBLead.remarksFiles.length > 0) {
+              finalLeadData.remarksFiles = updatedBLead.remarksFiles;
+              finalLeadData.remarkAttachments = updatedBLead.remarksFiles;
+              finalLeadData.attachments = updatedBLead.remarksFiles;
+            }
+          }
         }
       } catch (apiErr) {
         console.error("Error updating lead status in MongoDB:", apiErr);
@@ -760,11 +914,11 @@ const Lead = () => {
       });
       return;
     } else if (selectedClientStatus === "NOT INTERESTED") {
-      // Move to Lost Leads (dss_lost_leads) and remove from current list
+      const originalLeadStatus = statusModalLead.leadStatus || statusModalLead.status || "Warm";
       const lostLeadData = {
         ...statusModalLead,
-        leadStatus: "Cold",
-        status: "Cold",
+        leadStatus: originalLeadStatus,
+        status: originalLeadStatus,
         intrestedStatus: "Not Intersted",
         intrestedFromTableLead: false,
         isLoss: true,
@@ -782,12 +936,6 @@ const Lead = () => {
         lostTime: formattedTime
       };
 
-      updateLeadInStorage(lostLeadData);
-      notifyLeadChange(lostLeadData);
-      invalidateCache("lostLeads");
-      invalidateCache("lostLeads_all");
-      invalidateCache("leadManagement");
-
       try {
         const targetId = statusModalLead._id || statusModalLead.id || statusModalLead.leadId;
         if (targetId) {
@@ -795,10 +943,37 @@ const Lead = () => {
             lossReason: finalReason,
             lossRemark: statusRemark || statusModalLead.remark || statusModalLead.remarks || ""
           });
+
+          // Upload remarks files/audio to Cloudinary on lead if present
+          if (rawUploadFiles.length > 0) {
+            const updateRes = await updateLeadApi(
+              targetId,
+              {
+                remarks: statusRemark || statusModalLead.remark || statusModalLead.remarks || "",
+                remark: statusRemark || statusModalLead.remark || statusModalLead.remarks || "",
+                lossReason: finalReason
+              },
+              rawUploadFiles
+            );
+            if (updateRes && (updateRes.data || updateRes.remarksFiles)) {
+              const updatedBLead = updateRes.data || updateRes;
+              if (updatedBLead.remarksFiles && updatedBLead.remarksFiles.length > 0) {
+                lostLeadData.remarksFiles = updatedBLead.remarksFiles;
+                lostLeadData.remarkAttachments = updatedBLead.remarksFiles;
+                lostLeadData.attachments = updatedBLead.remarksFiles;
+              }
+            }
+          }
         }
       } catch (e) {
         console.error("Error saving to lost leads:", e);
       }
+
+      updateLeadInStorage(lostLeadData);
+      notifyLeadChange(lostLeadData);
+      invalidateCache("lostLeads");
+      invalidateCache("lostLeads_all");
+      invalidateCache("leadManagement");
 
       // Remove from active lead management sheet
       const filtered = leads.filter(l => l.id !== statusModalLead.id);
@@ -815,107 +990,20 @@ const Lead = () => {
       navigate("/sales/leads/lost", { state: { lostLead: lostLeadData } });
       return;
     }
-  };
+  } catch (err) {
+    console.error("Error submitting status change:", err);
+    toast.error("Failed to update status. Please try again.");
+  } finally {
+    setIsStatusSubmitting(false);
+  }
+};
 
-  // Media Attachments and Audio Recording State
+  // Media Attachments State for Schedule Modal
   const [attachments, setAttachments] = useState({
     current: [],
     next: [],
     remarks: []
   });
-  const [recordingState, setRecordingState] = useState({
-    current: false,
-    next: false,
-    remarks: false
-  });
-
-  const fileInputRef = useRef(null);
-  const activeUploadSectionRef = useRef("current");
-  const mediaRecorderRef = useRef(null);
-  const audioChunksRef = useRef([]);
-
-  const triggerFileUpload = (section) => {
-    activeUploadSectionRef.current = section;
-    if (fileInputRef.current) {
-      fileInputRef.current.click();
-    }
-  };
-
-  const handleFileChange = (e) => {
-    const files = Array.from(e.target.files || []);
-    if (!files.length) return;
-
-    const section = activeUploadSectionRef.current;
-    const newItems = files.map((file) => ({
-      name: file.name,
-      type: file.type.startsWith("image") ? "image" : file.type.startsWith("audio") ? "audio" : file.type.startsWith("video") ? "video" : "file",
-      url: URL.createObjectURL(file)
-    }));
-
-    setAttachments((prev) => ({
-      ...prev,
-      [section]: [...(prev[section] || []), ...newItems]
-    }));
-    e.target.value = "";
-  };
-
-  const removeAttachment = (section, index) => {
-    setAttachments((prev) => ({
-      ...prev,
-      [section]: prev[section].filter((_, i) => i !== index)
-    }));
-  };
-
-  const toggleVoiceRecording = async (section) => {
-    if (recordingState[section]) {
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-        mediaRecorderRef.current.stop();
-      }
-      setRecordingState((prev) => ({ ...prev, [section]: false }));
-    } else {
-      try {
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          mediaRecorderRef.current = new MediaRecorder(stream);
-          audioChunksRef.current = [];
-
-          mediaRecorderRef.current.ondataavailable = (ev) => {
-            if (ev.data.size > 0) audioChunksRef.current.push(ev.data);
-          };
-
-          mediaRecorderRef.current.onstop = () => {
-            const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-            const audioUrl = URL.createObjectURL(audioBlob);
-            const voiceNote = {
-              name: `Voice Note (${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})`,
-              type: "audio",
-              url: audioUrl
-            };
-            setAttachments((prev) => ({
-              ...prev,
-              [section]: [...(prev[section] || []), voiceNote]
-            }));
-            stream.getTracks().forEach((t) => t.stop());
-          };
-
-          mediaRecorderRef.current.start();
-          setRecordingState((prev) => ({ ...prev, [section]: true }));
-        } else {
-          throw new Error("No mediaDevices");
-        }
-      } catch (err) {
-        const voiceNote = {
-          name: `Voice Note (${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})`,
-          type: "audio",
-          url: ""
-        };
-        setAttachments((prev) => ({
-          ...prev,
-          [section]: [...(prev[section] || []), voiceNote]
-        }));
-      }
-    }
-  };
 
   // Schedule Form State
   const [scheduleFormData, setScheduleFormData] = useState({
@@ -938,7 +1026,6 @@ const Lead = () => {
     reminder: true,
     reminderHours: 24
   });
-  const [scheduleFormErrors, setScheduleFormErrors] = useState({});
 
   // 1. KPI Aggregations
   const stats = useMemo(() => {
@@ -997,32 +1084,7 @@ const Lead = () => {
         if (!matches) return false;
       }
       return true;
-    }).sort((a, b) => {
-      const getLeadTime = (lead) => {
-        if (lead.createdAt) {
-          const t = new Date(lead.createdAt).getTime();
-          if (!isNaN(t)) return t;
-        }
-        if (lead.updatedAt) {
-          const t = new Date(lead.updatedAt).getTime();
-          if (!isNaN(t)) return t;
-        }
-        if (lead._id && String(lead._id).length === 24) {
-          const t = parseInt(String(lead._id).substring(0, 8), 16) * 1000;
-          if (!isNaN(t)) return t;
-        }
-        if (lead.createdDate) {
-          const t = new Date(lead.createdDate).getTime();
-          if (!isNaN(t)) return t;
-        }
-        if (lead.date) {
-          const t = new Date(lead.date).getTime();
-          if (!isNaN(t)) return t;
-        }
-        return 0;
-      };
-      return getLeadTime(b) - getLeadTime(a);
-    });
+    }).sort((a, b) => getLeadTime(b) - getLeadTime(a));
   }, [leads, filterStatus, filterLeadType, filterJobType, filterLeadLabel, searchTerm]);
 
   // 3. Paginated Leads
@@ -1033,29 +1095,10 @@ const Lead = () => {
 
   const totalPages = Math.ceil(filteredLeads.length / rowsPerPage) || 1;
 
-  // Status Badge Class
-  const getStatusBadgeClass = (status) => {
-    const s = (status || "").toUpperCase();
-    if (s.includes("INTERESTED")) return "text-emerald-700 bg-emerald-50 border border-emerald-300";
-    if (s.includes("CONVERTED")) return "text-blue-700 bg-blue-50 border border-blue-300";
-    if (s.includes("LOST")) return "text-rose-700 bg-rose-50 border border-rose-300";
-    return "text-slate-700 bg-slate-100 border border-slate-300";
-  };
-
-  // Lead Label Badge Class
-  const getLeadLabelBadgeClass = (label) => {
-    const l = (label || "").toUpperCase();
-    if (l === "HOT") return "text-rose-700 bg-rose-50 border border-rose-200";
-    if (l === "WARM") return "text-amber-700 bg-amber-50 border border-amber-200";
-    if (l === "COLD") return "text-sky-700 bg-sky-50 border border-sky-200";
-    return "text-purple-700 bg-purple-50 border border-purple-200";
-  };
-
   // Open Schedule Modal
   const handleOpenScheduleModal = (lead) => {
     setScheduleModalLead(lead);
     setAttachments({ current: [], next: [], remarks: [] });
-    setRecordingState({ current: false, next: false, remarks: false });
     const tmr = new Date();
     tmr.setDate(tmr.getDate() + 1);
     const tmrStr = tmr.toISOString().split("T")[0];
@@ -1080,48 +1123,122 @@ const Lead = () => {
       reminder: true,
       reminderHours: 24
     });
-    setScheduleFormErrors({});
   };
 
   // Submit Schedule Form
   const handleSaveSchedule = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
+    if (isScheduling) return;
     if (!scheduleModalLead) return;
     if (isUserObserver) {
       toast.info("Observer Mode: Scheduling follow-up is disabled.");
       return;
     }
 
-    const activeNotes = scheduleFormData.notes || scheduleFormData.nextDiscussionTopic || "Follow-up scheduled";
+    setIsScheduling(true);
+    try {
+      const targetId = String(scheduleModalLead._id || scheduleModalLead.id || scheduleModalLead.leadId);
 
-    let formattedDisplayDate = scheduleFormData.date;
+    // Format combined Date & Time for ISO Date
+    let scheduledDateTime = null;
     if (scheduleFormData.date) {
       try {
-        const d = new Date(scheduleFormData.date);
+        const timeStr = scheduleFormData.time || "10:00 AM";
+        const combined = new Date(`${scheduleFormData.date} ${timeStr}`);
+        scheduledDateTime = !isNaN(combined.getTime()) ? combined : new Date(scheduleFormData.date);
+      } catch (err) {
+        scheduledDateTime = new Date(scheduleFormData.date);
+      }
+    }
+
+    const displayDate = scheduleFormData.date;
+    let formattedDisplayDate = displayDate;
+    if (displayDate) {
+      try {
+        const d = new Date(displayDate);
         if (!isNaN(d.getTime())) {
           formattedDisplayDate = d.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
         }
       } catch (err) {}
     }
 
+    // New Schema Payload matching backend followupSchema
+    const followupPayload = {
+      leadId: targetId,
+      type: scheduleFormData.type || "Call",
+      dateTime: scheduledDateTime,
+      date: scheduleFormData.date,
+      time: scheduleFormData.time || "10:00 am",
+      talkToPerson: scheduleFormData.talkToPerson || scheduleModalLead.concernPersonName || scheduleModalLead.clientName || "",
+      personDesignation: scheduleFormData.personDesignation || scheduleModalLead.clientDesignation || "",
+      currentDiscussion: {
+        discussion: scheduleFormData.notes || "",
+        files: (attachments.current || [])
+          .filter((f) => f.url && (f.url.startsWith("http://") || f.url.startsWith("https://")))
+          .map((f) => ({
+            url: f.url,
+            name: f.name || "attachment",
+            fileType: f.type || "file",
+            size: f.size || 0
+          }))
+      },
+      nextDiscussion: {
+        nextDiscussion: scheduleFormData.nextDiscussionTopic || "",
+        files: (attachments.next || [])
+          .filter((f) => f.url && (f.url.startsWith("http://") || f.url.startsWith("https://")))
+          .map((f) => ({
+            url: f.url,
+            name: f.name || "attachment",
+            fileType: f.type || "file",
+            size: f.size || 0
+          }))
+      },
+      rating: Number(scheduleFormData.clientRating || 4),
+      matrix: {
+        revenue: scheduleFormData.revenue || "",
+        satisfaction: scheduleFormData.satisfaction || "",
+        repeatPotential: scheduleFormData.repeatPotential || "",
+        complexity: scheduleFormData.complexity || "",
+        engagement: scheduleFormData.engagement || "",
+        positiveAttitude: scheduleFormData.positiveAttitude || ""
+      },
+      followupRemark: {
+        remarks: scheduleFormData.followupRemarks || "",
+        files: (attachments.remarks || [])
+          .filter((f) => f.url && (f.url.startsWith("http://") || f.url.startsWith("https://")))
+          .map((f) => ({
+            url: f.url,
+            name: f.name || "attachment",
+            fileType: f.type || "file",
+            size: f.size || 0
+          }))
+      },
+      createdBy: user?._id || undefined
+    };
+
     const newHistoryEntry = {
       date: formattedDisplayDate,
       time: scheduleFormData.time || "10:00 am",
-      notes: scheduleFormData.notes || activeNotes || "--",
-      discussionWithClient: scheduleFormData.notes || activeNotes || "--",
+      rawDate: scheduledDateTime,
+      notes: scheduleFormData.notes || scheduleFormData.followupRemarks || "--",
+      discussionWithClient: scheduleFormData.notes || "--",
       nextDiscussionTopic: scheduleFormData.nextDiscussionTopic || "--",
       talkToPerson: scheduleFormData.talkToPerson || scheduleModalLead.concernPersonName || scheduleModalLead.clientName || "--",
       personDesignation: scheduleFormData.personDesignation || scheduleModalLead.clientDesignation || "--",
       discussionType: scheduleFormData.type || "Call",
       type: scheduleFormData.type || "Call",
-      rep: scheduleModalLead.salesPerson || scheduleFormData.assignedTo || "Sales Manager",
-      repDesignation: "Sales Manager",
-      department: "Sales",
-      status: scheduleFormData.type || "Scheduled"
+      rep: user?.name || scheduleModalLead.salesPerson || scheduleFormData.assignedTo || "",
+      repDesignation: user?.role || "",
+      department: loggedInDepartment || "Sales",
+      status: scheduleFormData.type || "Scheduled",
+      rating: Number(scheduleFormData.clientRating || 4),
+      matrix: followupPayload.matrix,
+      followupRemark: scheduleFormData.followupRemarks || "",
+      attachments: { ...attachments }
     };
 
+    // Optimistically update React State
     let updatedTargetLead = null;
-
     const updated = leads.map((item) => {
       if (String(item.id || item._id) === String(scheduleModalLead.id || scheduleModalLead._id)) {
         const prevHist = Array.isArray(item.followupHistory) ? item.followupHistory : [];
@@ -1137,66 +1254,47 @@ const Lead = () => {
           followupScheduled: true,
           followupRemarksCount: newHist.length,
           followupHistory: newHist,
-          notes: scheduleFormData.notes || activeNotes,
-          nextDiscussionTopic: scheduleFormData.nextDiscussionTopic || item.nextDiscussionTopic,
+          notes: scheduleFormData.notes,
+          nextDiscussionTopic: scheduleFormData.nextDiscussionTopic,
           talkToPerson: scheduleFormData.talkToPerson || item.talkToPerson,
           personDesignation: scheduleFormData.personDesignation || item.personDesignation,
-          assignTo: scheduleFormData.assignedTo || item.assignTo || item.salesPerson
+          assignTo: scheduleFormData.assignedTo || item.assignTo || item.salesPerson,
+          inLeadManagement: true
         };
         return updatedTargetLead;
       }
       return item;
     });
 
-    // Update lead in Lead Management Sheet with new followup count and scheduled date
     setLeads(updated);
 
-    if (updatedTargetLead) {
-      const targetId = String(updatedTargetLead._id || updatedTargetLead.id || updatedTargetLead.leadId);
-      if (targetId) {
-        scheduledFollowupCacheRef.current.set(targetId, updatedTargetLead);
-
-        try {
-          await addFollowupApi({
-            leadId: targetId,
-            clientName: updatedTargetLead.clientName,
-            phoneNumber: updatedTargetLead.phoneNumber || updatedTargetLead.phone || updatedTargetLead.contact,
-            remarks: activeNotes,
-            remark: activeNotes,
-            notes: activeNotes,
-            scheduledDate: scheduleFormData.date,
-            nextFollowupDate: scheduleFormData.date,
-            date: scheduleFormData.date,
-            scheduledTime: scheduleFormData.time || "10:00 am",
-            nextFollowupTime: scheduleFormData.time || "10:00 am",
-            time: scheduleFormData.time || "10:00 am",
-            followupType: scheduleFormData.type || "Call",
-            channelType: scheduleFormData.type || "Call",
-            assignedTo: scheduleFormData.assignedTo || updatedTargetLead.salesPerson
-          });
-
-          await updateLeadApi(targetId, {
-            nextFollowupDate: scheduleFormData.date,
-            nextFollowupDateRaw: scheduleFormData.date,
-            followupTime: scheduleFormData.time || "10:00 am",
-            followupRemark: activeNotes,
-            isFollowup: true,
-            isFollowupScheduled: true,
-            followupCount: updatedTargetLead.followupRemarksCount,
-            followupRemarksCount: updatedTargetLead.followupRemarksCount,
-            followupHistory: updatedTargetLead.followupHistory
-          });
-        } catch (err) {
-          console.error("Error updating lead followup in backend:", err);
-        }
+    // Save to Backend using the new Follow-up Schema API (with Cloudinary uploads)
+    try {
+      const res = await addLeadFollowupApi(targetId, followupPayload, attachments);
+      if (res && res.success === false) {
+        console.warn("Backend reported unsuccessful followup save:", res.message);
       }
+      invalidateCache("leadManagement_sheet_all");
+      invalidateCache("leadManagement");
+      await fetchBackendLeads(true);
+    } catch (err) {
+      console.error("Error saving followup to backend:", err);
+    }
 
+    if (updatedTargetLead) {
       updateLeadInStorage(updatedTargetLead);
+      notifyLeadChange(updatedTargetLead);
     }
 
     setScheduleModalLead(null);
-    toast.success("Follow-up scheduled and lead moved to Follow-up directory! 🎯");
-  };
+    toast.success("Follow-up saved successfully! 🎯");
+  } catch (err) {
+    console.error("Error saving schedule:", err);
+    toast.error("Failed to save follow-up. Please try again.");
+  } finally {
+    setIsScheduling(false);
+  }
+};
 
   // Reset Filters
   const handleResetFilters = () => {
@@ -1391,16 +1489,26 @@ const Lead = () => {
               <div className="flex items-center gap-2.5">
                 <button
                   type="button"
-                  disabled={isUserObserver}
+                  disabled={isScheduling || isUserObserver}
                   onClick={isUserObserver ? () => toast.info("Observer Mode: Action is disabled.") : handleSaveSchedule}
-                  className={`px-6 py-2.5 rounded-xl font-bold text-sm shadow-md transition-all ${
-                    isUserObserver
+                  className={`px-6 py-2.5 rounded-xl font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2 ${
+                    isScheduling || isUserObserver
                       ? "bg-slate-200 text-slate-400 cursor-not-allowed opacity-60 shadow-none"
                       : "bg-blue-600 hover:bg-blue-700 active:scale-98 text-white shadow-blue-600/25 cursor-pointer"
                   }`}
-                  title={isUserObserver ? "Disabled for Observer" : "Save"}
+                  title={isUserObserver ? "Disabled for Observer" : isScheduling ? "Saving..." : "Save"}
                 >
-                  Save
+                  {isScheduling ? (
+                    <>
+                      <svg className="w-4 h-4 animate-spin text-white" viewBox="0 0 24 24" fill="none">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                      </svg>
+                      <span>Saving...</span>
+                    </>
+                  ) : (
+                    <span>Save</span>
+                  )}
                 </button>
                 <button
                   type="button"
@@ -1412,16 +1520,6 @@ const Lead = () => {
                 </button>
               </div>
             </div>
-
-            {/* Hidden File Input for Image/Audio/Video upload */}
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleFileChange}
-              accept="image/*,audio/*,video/*"
-              multiple
-              className="hidden"
-            />
 
             {/* Modal Body Form */}
             <form onSubmit={handleSaveSchedule} className="p-5 sm:p-6 space-y-5 max-h-[72vh] overflow-y-auto">
@@ -1536,100 +1634,33 @@ const Lead = () => {
                 </div>
               </div>
 
-              {/* Row 5 (From Image 2): REVENUE, SATISFACTION, REPEAT POTENTIAL */}
+              {/* Rows 5 & 6: Evaluation Metrics (REVENUE, SATISFACTION, REPEAT POTENTIAL, COMPLEXITY, ENGAGEMENT, POSITIVE ATTITUDE) */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-1">
-                <div>
-                  <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
-                    REVENUE
-                  </label>
-                  <select
-                    value={scheduleFormData.revenue || "LOW"}
-                    onChange={(e) => setScheduleFormData({ ...scheduleFormData, revenue: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-800 focus:outline-none focus:border-blue-500 transition-all cursor-pointer shadow-2xs"
-                  >
-                    <option value="LOW">LOW</option>
-                    <option value="MEDIUM">MEDIUM</option>
-                    <option value="HIGH">HIGH</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
-                    SATISFACTION
-                  </label>
-                  <select
-                    value={scheduleFormData.satisfaction || "LOW"}
-                    onChange={(e) => setScheduleFormData({ ...scheduleFormData, satisfaction: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-800 focus:outline-none focus:border-blue-500 transition-all cursor-pointer shadow-2xs"
-                  >
-                    <option value="LOW">LOW</option>
-                    <option value="MEDIUM">MEDIUM</option>
-                    <option value="HIGH">HIGH</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
-                    REPEAT POTENTIAL
-                  </label>
-                  <select
-                    value={scheduleFormData.repeatPotential || "LOW"}
-                    onChange={(e) => setScheduleFormData({ ...scheduleFormData, repeatPotential: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-800 focus:outline-none focus:border-blue-500 transition-all cursor-pointer shadow-2xs"
-                  >
-                    <option value="LOW">LOW</option>
-                    <option value="MEDIUM">MEDIUM</option>
-                    <option value="HIGH">HIGH</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Row 6 (From Image 2): COMPLEXITY, ENGAGEMENT, POSITIVE ATTITUDE */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
-                    COMPLEXITY
-                  </label>
-                  <select
-                    value={scheduleFormData.complexity || "LOW"}
-                    onChange={(e) => setScheduleFormData({ ...scheduleFormData, complexity: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-800 focus:outline-none focus:border-blue-500 transition-all cursor-pointer shadow-2xs"
-                  >
-                    <option value="LOW">LOW</option>
-                    <option value="MEDIUM">MEDIUM</option>
-                    <option value="HIGH">HIGH</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
-                    ENGAGEMENT
-                  </label>
-                  <select
-                    value={scheduleFormData.engagement || "HIGH"}
-                    onChange={(e) => setScheduleFormData({ ...scheduleFormData, engagement: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-800 focus:outline-none focus:border-blue-500 transition-all cursor-pointer shadow-2xs"
-                  >
-                    <option value="LOW">LOW</option>
-                    <option value="MEDIUM">MEDIUM</option>
-                    <option value="HIGH">HIGH</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
-                    POSITIVE ATTITUDE
-                  </label>
-                  <select
-                    value={scheduleFormData.positiveAttitude || "LOW"}
-                    onChange={(e) => setScheduleFormData({ ...scheduleFormData, positiveAttitude: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-800 focus:outline-none focus:border-blue-500 transition-all cursor-pointer shadow-2xs"
-                  >
-                    <option value="LOW">LOW</option>
-                    <option value="MEDIUM">MEDIUM</option>
-                    <option value="HIGH">HIGH</option>
-                  </select>
-                </div>
+                {[
+                  { key: "revenue", label: "REVENUE" },
+                  { key: "satisfaction", label: "SATISFACTION" },
+                  { key: "repeatPotential", label: "REPEAT POTENTIAL" },
+                  { key: "complexity", label: "COMPLEXITY" },
+                  { key: "engagement", label: "ENGAGEMENT", defaultVal: "HIGH" },
+                  { key: "positiveAttitude", label: "POSITIVE ATTITUDE" },
+                ].map((field) => (
+                  <div key={field.key}>
+                    <label className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
+                      {field.label}
+                    </label>
+                    <select
+                      value={scheduleFormData[field.key] || field.defaultVal || "LOW"}
+                      onChange={(e) => setScheduleFormData({ ...scheduleFormData, [field.key]: e.target.value })}
+                      className="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-800 focus:outline-none focus:border-blue-500 transition-all cursor-pointer shadow-2xs"
+                    >
+                      {["LOW", "MEDIUM", "HIGH"].map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
               </div>
 
               {/* Row 7 (From Image 2): FOLLOW-UP REMARKS SPEECH CARD */}
@@ -1676,11 +1707,98 @@ const Lead = () => {
 
             {/* Timeline Body */}
             <div className="p-5 sm:p-6 max-h-[65vh] overflow-y-auto space-y-6">
-              {remarksModalLead.followupHistory && remarksModalLead.followupHistory.length > 0 ? (
-                remarksModalLead.followupHistory.map((hist, idx) => {
-                  const isLast = idx === remarksModalLead.followupHistory.length - 1;
+              {(() => {
+                const arr = [];
+                // 1. Existing followupHistory (from schema or legacy)
+                if (Array.isArray(remarksModalLead.followupHistory) && remarksModalLead.followupHistory.length > 0) {
+                  remarksModalLead.followupHistory.forEach((hist, idx) => {
+                    arr.push({
+                      id: hist._id || hist.id || `hist-${idx}`,
+                      rep: hist.rep || remarksModalLead.salesPerson || "Sales",
+                      status: hist.status || hist.discussionType || "Follow-up",
+                      date: hist.date || "Recently",
+                      time: hist.time || "",
+                      rawDate: hist.rawDate || null,
+                      notes: hist.followupRemark || hist.notes || hist.discussionWithClient || hist.remarks || hist.remark || "",
+                      attachments: hist.attachments?.remarks || hist.attachments?.current || hist.attachments || hist.files || []
+                    });
+                  });
+                }
+
+                // 2. Status timeline history
+                if (Array.isArray(remarksModalLead.statusTimeline) && remarksModalLead.statusTimeline.length > 0) {
+                  remarksModalLead.statusTimeline.forEach((st, sIdx) => {
+                    const dt = st.changedAt ? new Date(st.changedAt) : null;
+                    const fDate = dt && !isNaN(dt.getTime())
+                      ? dt.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' })
+                      : (remarksModalLead.createdDate || "Recently");
+                    const fTime = dt && !isNaN(dt.getTime())
+                      ? dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })
+                      : "";
+                    const repName = (typeof st.changedBy === 'object' ? st.changedBy?.name : null) || remarksModalLead.salesPerson || "Sales";
+                    const isFirst = sIdx === 0;
+                    const isLast = sIdx === remarksModalLead.statusTimeline.length - 1;
+                    const files = (isFirst || isLast)
+                      ? (remarksModalLead.remarksFiles || remarksModalLead.remarkAttachments || remarksModalLead.attachments || [])
+                      : [];
+
+                    arr.push({
+                      id: st._id || `st-${sIdx}`,
+                      rep: repName,
+                      status: st.status ? `${st.status} Status` : "Status Change",
+                      date: fDate,
+                      time: fTime,
+                      rawDate: st.changedAt || null,
+                      notes: st.remarks || st.remark || (isFirst ? (remarksModalLead.remarks || remarksModalLead.remark) : ""),
+                      attachments: files
+                    });
+                  });
+                }
+
+                // 3. Lead base remarks if not yet added
+                if (arr.length === 0 && (remarksModalLead.remarks || remarksModalLead.remark || remarksModalLead.requirement || (Array.isArray(remarksModalLead.remarksFiles) && remarksModalLead.remarksFiles.length > 0))) {
+                  arr.push({
+                    id: "lead-initial",
+                    rep: remarksModalLead.salesPerson || (typeof remarksModalLead.leadBy === 'object' ? remarksModalLead.leadBy?.name : null) || "Sales",
+                    status: remarksModalLead.leadStatus || remarksModalLead.status || "Lead Remarks",
+                    date: remarksModalLead.createdDate || remarksModalLead.date || "Recently",
+                    time: remarksModalLead.createdTime || "",
+                    rawDate: remarksModalLead.createdAt || null,
+                    notes: remarksModalLead.remarks || remarksModalLead.remark || remarksModalLead.requirement || "",
+                    attachments: remarksModalLead.remarksFiles || remarksModalLead.remarkAttachments || remarksModalLead.attachments || []
+                  });
+                }
+
+                // Deduplicate
+                const uniqueList = [];
+                const seenKeys = new Set();
+                arr.forEach((item) => {
+                  const key = `${item.notes || ''}-${item.date || ''}-${item.time || ''}-${item.status || ''}`;
+                  if (!seenKeys.has(key)) {
+                    seenKeys.add(key);
+                    uniqueList.push(item);
+                  }
+                });
+
+                const sortedLogs = uniqueList.sort((a, b) => {
+                  const timeA = a.rawDate ? new Date(a.rawDate).getTime() : 0;
+                  const timeB = b.rawDate ? new Date(b.rawDate).getTime() : 0;
+                  if (timeA && timeB && timeA !== timeB) return timeB - timeA;
+                  return 0;
+                });
+
+                if (sortedLogs.length === 0) {
                   return (
-                    <div key={idx} className="relative flex gap-4">
+                    <div className="text-center py-10 text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200 font-medium text-sm">
+                      No discussion logs or follow-up remarks recorded yet.
+                    </div>
+                  );
+                }
+
+                return sortedLogs.map((hist, idx) => {
+                  const isLast = idx === sortedLogs.length - 1;
+                  return (
+                    <div key={hist.id || idx} className="relative flex gap-4">
                       {/* Left Timeline Avatar & Connecting Vertical Line */}
                       <div className="flex flex-col items-center shrink-0">
                         <div className="w-10 h-10 rounded-full border border-slate-200 bg-white flex items-center justify-center text-slate-400 shrink-0 shadow-2xs z-10">
@@ -1700,7 +1818,7 @@ const Lead = () => {
                             REPRESENTATIVE NAME
                           </span>
                           <span className="text-xs text-slate-500 font-medium">
-                            Commented {hist.date ? hist.date : "recently"}
+                            Commented {hist.date ? hist.date : "recently"} {hist.time ? `at ${hist.time}` : ""}
                           </span>
                         </div>
 
@@ -1716,13 +1834,10 @@ const Lead = () => {
                             </svg>
                             <span>{hist.status || "Status Change"}</span>
                           </span>
-                          <span className="text-xs text-slate-400 font-medium">
-                            {hist.date} at {hist.time}
-                          </span>
                         </div>
 
                         {/* Speech Bubble / Remarks Card */}
-                        <div className="mt-3 p-4 rounded-2xl bg-slate-50/80 border border-slate-200/60 shadow-2xs relative space-y-1">
+                        <div className="mt-3 p-4 rounded-2xl bg-slate-50/80 border border-slate-200/60 shadow-2xs relative space-y-2">
                           <div className="text-[10px] font-extrabold text-blue-600 uppercase tracking-wider flex items-center gap-1">
                             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z" />
@@ -1730,19 +1845,18 @@ const Lead = () => {
                             <span>REMARKS</span>
                           </div>
                           <p className="text-sm font-semibold text-slate-700 italic">
-                            "{hist.notes}"
+                            "{hist.notes || "No text remarks provided"}"
                           </p>
+
+                          {/* Media attachments & voice notes */}
+                          {renderMediaFiles(hist.attachments)}
                         </div>
 
                       </div>
                     </div>
                   );
-                })
-              ) : (
-                <div className="text-center py-10 text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200 font-medium text-sm">
-                  No discussion logs or follow-up remarks recorded yet.
-                </div>
-              )}
+                });
+              })()}
             </div>
 
             {/* Modal Footer */}
@@ -1779,29 +1893,102 @@ const Lead = () => {
           return n + (s[(v - 20) % 10] || s[v] || s[0]);
         };
 
-        const historyList = (Array.isArray(followupDetailsModalLead.followupHistory) && followupDetailsModalLead.followupHistory.length > 0)
-          ? [...followupDetailsModalLead.followupHistory].reverse()
-          : (followupDetailsModalLead.notes || followupDetailsModalLead.remark || followupDetailsModalLead.nextFollowupDate || followupDetailsModalLead.isFollowupScheduled)
-          ? [{
-              repDesignation: "Sales Manager",
-              department: "Sales",
+        let rawHistory = [];
+        if (Array.isArray(followupDetailsModalLead.followupHistory) && followupDetailsModalLead.followupHistory.length > 0) {
+          rawHistory = [...followupDetailsModalLead.followupHistory];
+        } else if (Array.isArray(followupDetailsModalLead.statusTimeline) && followupDetailsModalLead.statusTimeline.length > 0) {
+          rawHistory = followupDetailsModalLead.statusTimeline.map((st, sIdx) => {
+            const dt = st.changedAt ? new Date(st.changedAt) : null;
+            const fDate = dt && !isNaN(dt.getTime())
+              ? dt.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' })
+              : (followupDetailsModalLead.createdDate || "Recently");
+            const fTime = dt && !isNaN(dt.getTime())
+              ? dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })
+              : "";
+            const isInitial = sIdx === 0;
+            const isLatest = sIdx === followupDetailsModalLead.statusTimeline.length - 1;
+            const files = (isInitial || isLatest)
+              ? (followupDetailsModalLead.remarksFiles || followupDetailsModalLead.remarkAttachments || followupDetailsModalLead.attachments || [])
+              : [];
+
+            return {
+              rep: (typeof st.changedBy === 'object' ? st.changedBy?.name : null) || followupDetailsModalLead.salesPerson || user?.name || "Sales",
+              repDesignation: user?.role || "",
+              department: loggedInDepartment || "Sales",
               talkToPerson: followupDetailsModalLead.clientName || followupDetailsModalLead.concernPersonName || "--",
-              discussionType: followupDetailsModalLead.channelType || followupDetailsModalLead.type || "Call",
+              discussionType: st.status || "Status Change",
               personDesignation: followupDetailsModalLead.clientDesignation || "--",
-              discussionWithClient: followupDetailsModalLead.notes || followupDetailsModalLead.remark || followupDetailsModalLead.requirement || "--",
-              nextDiscussionTopic: followupDetailsModalLead.nextDiscussionTopic || "--"
-            }]
-          : [];
+              discussionWithClient: st.remarks || st.remark || (isInitial ? (followupDetailsModalLead.remarks || followupDetailsModalLead.remark) : "--"),
+              nextDiscussionTopic: "--",
+              rating: 4,
+              matrix: {},
+              followupRemark: st.remarks || st.remark || (isInitial ? (followupDetailsModalLead.remarks || followupDetailsModalLead.remark) : ""),
+              date: fDate,
+              time: fTime,
+              rawDate: st.changedAt,
+              attachments: {
+                current: [],
+                next: [],
+                remarks: files
+              }
+            };
+          });
+        } else if (followupDetailsModalLead.notes || followupDetailsModalLead.remark || followupDetailsModalLead.remarks || (Array.isArray(followupDetailsModalLead.remarksFiles) && followupDetailsModalLead.remarksFiles.length > 0) || followupDetailsModalLead.nextFollowupDate || followupDetailsModalLead.isFollowupScheduled) {
+          rawHistory = [{
+            rep: user?.name || followupDetailsModalLead.salesPerson || followupDetailsModalLead.assignTo || "",
+            repDesignation: user?.role || "",
+            department: loggedInDepartment || "Sales",
+            talkToPerson: followupDetailsModalLead.clientName || followupDetailsModalLead.concernPersonName || "--",
+            discussionType: followupDetailsModalLead.channelType || followupDetailsModalLead.type || "Call",
+            personDesignation: followupDetailsModalLead.clientDesignation || "--",
+            discussionWithClient: followupDetailsModalLead.notes || followupDetailsModalLead.remark || followupDetailsModalLead.remarks || followupDetailsModalLead.requirement || "--",
+            nextDiscussionTopic: followupDetailsModalLead.nextDiscussionTopic || "--",
+            rating: followupDetailsModalLead.rating || 4,
+            matrix: {},
+            followupRemark: followupDetailsModalLead.remark || followupDetailsModalLead.remarks || "",
+            date: followupDetailsModalLead.createdDate || "Recently",
+            time: followupDetailsModalLead.createdTime || "",
+            rawDate: followupDetailsModalLead.createdAt,
+            attachments: {
+              current: [],
+              next: [],
+              remarks: followupDetailsModalLead.remarksFiles || followupDetailsModalLead.remarkAttachments || followupDetailsModalLead.attachments || []
+            }
+          }];
+        }
+
+        // Ensure descending chronological order (newest at index 0)
+        const historyList = [...rawHistory].sort((a, b) => {
+          const timeA = a.rawDate ? new Date(a.rawDate).getTime() : (a.date ? new Date(a.date).getTime() : 0);
+          const timeB = b.rawDate ? new Date(b.rawDate).getTime() : (b.date ? new Date(b.date).getTime() : 0);
+          if (timeA && timeB && timeA !== timeB) return timeB - timeA;
+          return 0; // preserve newest-first order
+        });
+
+        const totalFollowups = historyList.length;
 
         return (
           <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150">
-            <div className="bg-white rounded-3xl max-w-2xl w-full shadow-2xl border border-slate-100 overflow-hidden my-8 animate-in zoom-in-95 duration-150">
+            <div className="bg-white rounded-3xl max-w-3xl w-full shadow-2xl border border-slate-100 overflow-hidden my-8 animate-in zoom-in-95 duration-150">
               
               {/* Modal Header */}
               <div className="p-5 sm:p-6 pb-4 flex items-center justify-between border-b border-slate-100 bg-white">
-                <h2 className="text-xl font-black text-slate-900 tracking-tight">
-                  Follow-up Details
-                </h2>
+                <div>
+                  <div className="flex items-center gap-2.5">
+                    <h2 className="text-xl font-black text-slate-900 tracking-tight">
+                      Follow-up Details
+                    </h2>
+                    <span className="px-2.5 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-xs font-extrabold">
+                      {totalFollowups} Follow-up{totalFollowups !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+                  <p className="text-xs font-semibold text-slate-500 mt-1">
+                    Client: <span className="text-slate-800 font-bold">{followupDetailsModalLead.clientName || followupDetailsModalLead.concernPersonName || "Client"}</span>
+                    {followupDetailsModalLead.phoneNumber && followupDetailsModalLead.phoneNumber !== "--" && (
+                      <span className="ml-2 text-slate-400">• {followupDetailsModalLead.phoneNumber}</span>
+                    )}
+                  </p>
+                </div>
                 <button
                   type="button"
                   onClick={() => setFollowupDetailsModalLead(null)}
@@ -1813,87 +2000,186 @@ const Lead = () => {
               </div>
 
               {/* Follow-up Cards Body */}
-              <div className="p-5 sm:p-6 max-h-[68vh] overflow-y-auto space-y-6">
-                {historyList.length > 0 ? (
-                  historyList.map((hist, idx) => (
-                    <div key={idx} className="space-y-2">
-                      <h3 className="text-base font-extrabold text-slate-900">
-                        {getOrdinal(idx + 1)} Follow-up
-                      </h3>
+              <div className="p-5 sm:p-6 max-h-[72vh] overflow-y-auto space-y-6 bg-slate-50/50">
+                {totalFollowups > 0 ? (
+                  historyList.map((hist, idx) => {
+                    const followupNumber = totalFollowups - idx;
+                    const currentFiles = hist.attachments?.current || hist.currentDiscussion?.files || [];
+                    const nextFiles = hist.attachments?.next || hist.nextDiscussion?.files || [];
+                    const remarkFiles = hist.attachments?.remarks || hist.followupRemark?.files || [];
 
-                      <div className="rounded-2xl border border-slate-200/90 p-5 bg-white shadow-2xs space-y-4">
-                        {/* Row 1: REPRESENTATIVE DESIGNATION, DEPARTMENT, TALKED TO PERSON */}
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                          <div>
-                            <span className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
-                              REPRESENTATIVE DESIGNATION
+                    const channel = hist.discussionType || hist.type || hist.status || "Call";
+                    const repName = (hist.rep && hist.rep !== "--" && hist.rep !== "Sales Manager")
+                      ? hist.rep
+                      : (user?.name || (typeof followupDetailsModalLead.leadBy === 'object' ? followupDetailsModalLead.leadBy?.name : null) || followupDetailsModalLead.salesPerson || followupDetailsModalLead.assignTo || "--");
+                    const repDesig = (hist.repDesignation && hist.repDesignation !== "--" && hist.repDesignation !== "Sales Manager")
+                      ? hist.repDesignation
+                      : (user?.role || "");
+                    const dept = (hist.department && hist.department !== "--") ? hist.department : (loggedInDepartment || "Sales");
+
+                    const matrixEntries = [
+                      { label: "Revenue", val: hist.matrix?.revenue },
+                      { label: "Satisfaction", val: hist.matrix?.satisfaction },
+                      { label: "Repeat Potential", val: hist.matrix?.repeatPotential },
+                      { label: "Complexity", val: hist.matrix?.complexity },
+                      { label: "Engagement", val: hist.matrix?.engagement },
+                      { label: "Positive Attitude", val: hist.matrix?.positiveAttitude },
+                    ];
+                    const hasMatrix = matrixEntries.some((m) => m.val && m.val.trim() !== "");
+
+                    return (
+                      <div key={idx} className="rounded-2xl border border-slate-200/90 bg-white p-5 shadow-xs space-y-4">
+                        {/* Card Header: Follow-up Ordinal, Date & Time, Discussion Channel */}
+                        <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100">
+                          <div className="flex items-center gap-2.5">
+                            <span className="px-3 py-1 rounded-full text-xs font-black bg-blue-600 text-white shadow-2xs tracking-wide">
+                              {getOrdinal(followupNumber)} Follow-up
                             </span>
-                            <span className="font-bold text-slate-800 text-sm mt-0.5 block">
-                              {hist.repDesignation || hist.rep || "Sales Manager"}
+                            <span className="text-xs font-semibold text-slate-500">
+                              📅 {hist.date || "--"} {hist.time && hist.time !== "--" ? `• ⏰ ${hist.time}` : ""}
                             </span>
                           </div>
+                          <span
+                            className={`px-3 py-1 rounded-full text-xs font-bold border ${
+                              channel === "Call"
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                                : channel === "Meeting"
+                                ? "bg-purple-50 text-purple-700 border-purple-200"
+                                : channel === "WhatsApp"
+                                ? "bg-green-50 text-green-700 border-green-200"
+                                : channel === "Site Visit"
+                                ? "bg-amber-50 text-amber-700 border-amber-200"
+                                : "bg-blue-50 text-blue-700 border-blue-200"
+                            }`}
+                          >
+                            {channel}
+                          </span>
+                        </div>
+
+                        {/* Executive & Client Details Grid */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3.5 bg-slate-50/70 p-3.5 rounded-xl border border-slate-200/60">
+                          <div>
+                            <span className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
+                              REPRESENTATIVE
+                            </span>
+                            <span className="font-extrabold text-slate-900 text-xs sm:text-sm mt-0.5 block truncate">
+                              {repName}
+                            </span>
+                            {repDesig && (
+                              <span className="text-[10px] font-semibold text-slate-500 block truncate">
+                                {repDesig}
+                              </span>
+                            )}
+                          </div>
+
                           <div>
                             <span className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
                               DEPARTMENT
                             </span>
-                            <span className="font-bold text-slate-800 text-sm mt-0.5 block">
-                              {hist.department || "Sales"}
+                            <span className="font-extrabold text-blue-700 text-xs sm:text-sm mt-0.5 block truncate">
+                              {dept}
                             </span>
                           </div>
+
                           <div>
                             <span className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
                               TALKED TO PERSON
                             </span>
-                            <span className="font-bold text-slate-800 text-sm mt-0.5 block">
+                            <span className="font-extrabold text-slate-800 text-xs sm:text-sm mt-0.5 block truncate">
                               {hist.talkToPerson || followupDetailsModalLead.clientName || followupDetailsModalLead.concernPersonName || "--"}
                             </span>
                           </div>
-                        </div>
 
-                        {/* Row 2: DISCUSSION TYPE & TALK TO PERSON DESIGNATION */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div>
                             <span className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
-                              DISCUSSION TYPE
+                              PERSON DESIGNATION
                             </span>
-                            <span className="font-extrabold text-purple-600 text-sm mt-0.5 block">
-                              {hist.discussionType || hist.type || hist.status || "Call"}
-                            </span>
-                          </div>
-                          <div>
-                            <span className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
-                              TALK TO PERSON DESIGNATION
-                            </span>
-                            <span className="font-extrabold text-blue-600 text-sm mt-0.5 block">
+                            <span className="font-extrabold text-purple-700 text-xs sm:text-sm mt-0.5 block truncate">
                               {hist.personDesignation || followupDetailsModalLead.clientDesignation || "--"}
                             </span>
                           </div>
                         </div>
 
-                        {/* Row 3: DISCUSSION WITH CLIENT */}
+                        {/* CURRENT DISCUSSION */}
                         <div>
                           <span className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
-                            DISCUSSION WITH CLIENT
+                            CURRENT DISCUSSION
                           </span>
-                          <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 text-slate-800 text-sm font-medium min-h-[44px]">
+                          <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 text-slate-800 text-sm font-medium leading-relaxed whitespace-pre-wrap">
                             {hist.discussionWithClient || hist.notes || hist.remark || "--"}
                           </div>
+                          {renderMediaFiles(currentFiles)}
                         </div>
 
-                        {/* Row 4: NEXT DISCUSSION TOPIC */}
+                        {/* NEXT DISCUSSION TOPIC */}
                         <div>
                           <span className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
                             NEXT DISCUSSION TOPIC
                           </span>
-                          <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 text-slate-800 text-sm font-medium min-h-[44px]">
+                          <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 text-slate-800 text-sm font-medium leading-relaxed whitespace-pre-wrap">
                             {hist.nextDiscussionTopic || "--"}
                           </div>
+                          {renderMediaFiles(nextFiles)}
                         </div>
+
+                        {/* FOLLOW-UP REMARKS */}
+                        <div>
+                          <span className="block text-[10px] font-extrabold text-slate-400 uppercase tracking-wider mb-1.5">
+                            FOLLOW-UP REMARKS
+                          </span>
+                          <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50/50 text-slate-800 text-sm font-medium leading-relaxed whitespace-pre-wrap">
+                            {hist.followupRemark || "--"}
+                          </div>
+                          {renderMediaFiles(remarkFiles)}
+                        </div>
+
+                        {/* RATING & EVALUATION MATRIX */}
+                        <div className="pt-2 border-t border-slate-100 flex flex-col gap-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">
+                              RATING & EVALUATION MATRIX
+                            </span>
+                            <span className="px-2.5 py-1 rounded-full bg-amber-50 text-amber-800 border border-amber-200 text-xs font-extrabold flex items-center gap-1">
+                              ⭐ Rating: {hist.rating !== undefined ? hist.rating : 4} / 10
+                            </span>
+                          </div>
+
+                          {hasMatrix ? (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2">
+                              {matrixEntries.map((m, mIdx) => {
+                                const val = (m.val || "").toUpperCase();
+                                const isHigh = val === "HIGH";
+                                const isLow = val === "LOW";
+                                return (
+                                  <div key={mIdx} className="p-2 rounded-xl bg-slate-50 border border-slate-200/80 text-center">
+                                    <span className="block text-[9px] font-extrabold text-slate-400 uppercase truncate">
+                                      {m.label}
+                                    </span>
+                                    <span
+                                      className={`inline-block mt-1 px-2 py-0.5 rounded-md text-[10px] font-black ${
+                                        isHigh
+                                          ? "bg-emerald-100 text-emerald-800"
+                                          : isLow
+                                          ? "bg-slate-200 text-slate-700"
+                                          : "bg-blue-100 text-blue-800"
+                                      }`}
+                                    >
+                                      {m.val || "--"}
+                                    </span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-400 italic">No matrix scores recorded</span>
+                          )}
+                        </div>
+
                       </div>
-                    </div>
-                  ))
+                    );
+                  })
                 ) : (
-                  <div className="text-center py-10 text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200 font-medium text-sm">
+                  <div className="text-center py-12 text-slate-400 bg-white rounded-2xl border border-dashed border-slate-200 font-medium text-sm">
                     No follow-up details recorded yet.
                   </div>
                 )}
@@ -1903,113 +2189,6 @@ const Lead = () => {
           </div>
         );
       })()}
-
-      {/* ================= MODAL 3: LEAD DETAIL MODAL ================= */}
-      {detailModalLead && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl max-w-lg w-full shadow-2xl border border-slate-300 overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-150">
-            
-            <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-bold">{detailModalLead.concernPersonName}</h3>
-                <p className="text-xs text-slate-300">Lead ID: {detailModalLead.id} • {detailModalLead.leadSource}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setDetailModalLead(null)}
-                className="text-slate-400 hover:text-white text-lg cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="p-6 space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-3 bg-slate-50 p-3.5 rounded-xl border border-slate-200">
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Phone</span>
-                  <div className="font-mono font-bold text-slate-900 mt-0.5">{detailModalLead.phoneNumber}</div>
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Email</span>
-                  <div className="font-medium text-slate-900 mt-0.5 truncate">{detailModalLead.emailAddress}</div>
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Expected Business</span>
-                  <div className="font-bold text-emerald-600 mt-0.5">₹{Number(detailModalLead.expectedBusiness).toLocaleString("en-IN")}</div>
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-slate-400 uppercase">Pincode & Address</span>
-                  <div className="font-medium text-slate-900 mt-0.5">{detailModalLead.pincode} • {detailModalLead.address}</div>
-                </div>
-              </div>
-
-              <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Requirement:</span>
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-slate-800">
-                  {detailModalLead.requirement}
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const l = detailModalLead;
-                    setDetailModalLead(null);
-                    handleOpenScheduleModal(l);
-                  }}
-                  className="px-4 py-2 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-slate-800 cursor-pointer shadow-xs"
-                >
-                  + Schedule Follow-up
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setDetailModalLead(null)}
-                  className="px-4 py-2 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 font-bold transition-colors cursor-pointer"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-
-          </div>
-        </div>
-      )}
-
-      {/* ================= MODAL 4: COMPLETE ACTIVITY MODAL ================= */}
-      {completeModalLead && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-150 p-6 text-xs">
-            <h3 className="text-sm font-bold text-slate-900 mb-2">Mark Lead as Converted</h3>
-            <p className="text-slate-600 mb-4">
-              Mark deal converted for <span className="font-bold text-slate-800">{completeModalLead.concernPersonName}</span>?
-            </p>
-
-            <div className="flex items-center justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => setCompleteModalLead(null)}
-                className="px-4 py-2 rounded-xl border border-slate-300 text-slate-700 font-bold hover:bg-slate-50 cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const updated = leads.map((l) =>
-                    l.id === completeModalLead.id ? { ...l, status: "CONVERTED" } : l
-                  );
-                  saveLeads(updated);
-                  setCompleteModalLead(null);
-                }}
-                className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold cursor-pointer"
-              >
-                Confirm Converted
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ================= CLIENT STATUS / LEAD DETAILS MODAL ================= */}
       {statusModalLead && (
@@ -2172,16 +2351,26 @@ const Lead = () => {
               </button>
               <button
                 type="button"
-                disabled={isUserObserver}
+                disabled={isStatusSubmitting || isUserObserver}
                 onClick={isUserObserver ? () => toast.info("Observer Mode: Action is disabled.") : handleSendToSalesManagement}
-                className={`px-6 py-2.5 rounded-xl text-sm font-extrabold shadow-md transition-all ${
-                  isUserObserver
+                className={`px-6 py-2.5 rounded-xl text-sm font-extrabold shadow-md transition-all flex items-center justify-center gap-2 ${
+                  isStatusSubmitting || isUserObserver
                     ? "bg-slate-200 text-slate-400 cursor-not-allowed opacity-60 shadow-none"
-                    : "bg-[#ff5722] hover:bg-[#e64a19] text-white shadow-orange-500/20 cursor-pointer"
+                    : "bg-[#ff5722] hover:bg-[#e64a19] text-white shadow-orange-500/20 cursor-pointer active:scale-95"
                 }`}
-                title={isUserObserver ? "Disabled for Observer" : "Submit"}
+                title={isUserObserver ? "Disabled for Observer" : isStatusSubmitting ? "Processing..." : "Submit"}
               >
-                Submit
+                {isStatusSubmitting ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin text-white" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                    </svg>
+                    <span>Processing...</span>
+                  </>
+                ) : (
+                  <span>Submit</span>
+                )}
               </button>
             </div>
 

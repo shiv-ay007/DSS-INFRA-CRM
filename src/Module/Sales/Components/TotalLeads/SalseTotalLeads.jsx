@@ -156,7 +156,7 @@ const SalseTotalLeads = () => {
       const queryParams = {
         page: currentPage,
         limit: rowsPerPage,
-        isLoss: false
+        view: "totalLeads"
       };
 
       if (debouncedSearch && debouncedSearch.trim()) queryParams.search = debouncedSearch.trim();
@@ -173,9 +173,14 @@ const SalseTotalLeads = () => {
         const activeLeads = res.data.leads.filter((backendLead) => {
           const isLost =
             backendLead.isLoss === true ||
+            backendLead.intrestedStatus === "Not Intersted" ||
             ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(backendLead.leadStatus || "").toUpperCase()) ||
             ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(backendLead.status || "").toUpperCase());
-          return !isLost;
+          const isInterested =
+            backendLead.intrestedFromTableLead === true ||
+            backendLead.intrestedStatus === "Intrested" ||
+            backendLead.inLeadManagement === true;
+          return !isLost && !isInterested;
         });
         const mappedLeads = activeLeads.map((backendLead) => {
           const dateObj = new Date(backendLead.createdAt || Date.now());
@@ -446,10 +451,12 @@ const SalseTotalLeads = () => {
   const [customNotInterestedReason, setCustomNotInterestedReason] = useState("");
   const [statusRemark, setStatusRemark] = useState("");
   const [statusRemarkAttachments, setStatusRemarkAttachments] = useState([]);
+  const [isStatusSubmitting, setIsStatusSubmitting] = useState(false);
 
   // Handler to move lead to Lead Management or Lost Leads based on Client Status
   const handleClientStatusSubmit = async () => {
     if (!statusModalLead) return;
+    if (isStatusSubmitting) return;
     if (isUserObserver) {
       toast.info("Observer Mode: Status update is disabled.");
       return;
@@ -471,11 +478,17 @@ const SalseTotalLeads = () => {
       }
     }
 
-    const today = new Date();
+    setIsStatusSubmitting(true);
+    try {
+      const today = new Date();
     const formattedDate = today.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
     const formattedTime = today.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
 
     const finalReason = notInterestedReason === "Other" ? customNotInterestedReason.trim() : notInterestedReason;
+
+    const rawUploadFiles = (statusRemarkAttachments || [])
+      .map((att) => att.file || att.blob || (att instanceof File || att instanceof Blob ? att : null))
+      .filter(Boolean);
 
     const processedAttachments = (statusRemarkAttachments || []).map((item) => ({
       id: item.id || `att-${Date.now()}-${Math.random()}`,
@@ -488,10 +501,11 @@ const SalseTotalLeads = () => {
 
     if (selectedClientStatus === "INTERESTED") {
       // 1. Move to Lead Management (STRICTLY NOT SALES MANAGEMENT)
+      const originalLeadStatus = statusModalLead.leadStatus || statusModalLead.status || "Warm";
       const leadData = {
         ...statusModalLead,
-        leadStatus: "Hot",
-        status: "INTERESTED",
+        leadStatus: originalLeadStatus,
+        status: originalLeadStatus,
         isInterested: true,
         inLeadManagement: true,
         inSalesManagement: false,
@@ -517,25 +531,36 @@ const SalseTotalLeads = () => {
           await markInterestedFromTableApi(targetId, true);
         }
 
-        // 2. Sync fields to Lead Management
-        await updateLeadApi(targetId, {
-          leadStatus: "Hot",
-          status: "INTERESTED",
-          intrestedStatus: "Intrested",
-          isInterested: true,
-          inLeadManagement: true,
-          inSalesManagement: false,
-          isSalesTransferred: false,
-          movedToSalesManagementDate: null,
-          followupCount: 0,
-          followupRemarksCount: 0,
-          followupHistory: [],
-          isFollowupScheduled: false,
-          isFollowup: false,
-          nextFollowupDate: null,
-          nextFollowupTime: "",
-          remark: statusRemark || statusModalLead.remark || ""
-        });
+        // 2. Sync fields to Lead Management & upload any media/audio to Cloudinary
+        const updateRes = await updateLeadApi(
+          targetId,
+          {
+            intrestedStatus: "Intrested",
+            isInterested: true,
+            inLeadManagement: true,
+            inSalesManagement: false,
+            isSalesTransferred: false,
+            movedToSalesManagementDate: null,
+            followupCount: 0,
+            followupRemarksCount: 0,
+            followupHistory: [],
+            isFollowupScheduled: false,
+            isFollowup: false,
+            nextFollowupDate: null,
+            nextFollowupTime: "",
+            remark: statusRemark || statusModalLead.remark || ""
+          },
+          rawUploadFiles
+        );
+
+        if (updateRes && (updateRes.data || updateRes.remarksFiles)) {
+          const updatedBLead = updateRes.data || updateRes;
+          if (updatedBLead.remarksFiles && updatedBLead.remarksFiles.length > 0) {
+            leadData.remarksFiles = updatedBLead.remarksFiles;
+            leadData.remarkAttachments = updatedBLead.remarksFiles;
+            leadData.attachments = updatedBLead.remarksFiles;
+          }
+        }
       } catch (err) {
         console.error("Error syncing INTERESTED lead to backend:", err);
       }
@@ -543,8 +568,9 @@ const SalseTotalLeads = () => {
       removeLeadFromSalesTransfer(targetId);
       updateLeadInStorage(leadData);
       setLeads((prevLeads) =>
-        prevLeads.map((l) => (String(l.id) === String(leadData.id) ? leadData : l))
+        prevLeads.filter((l) => String(l.id || l._id || l.leadId) !== String(targetId))
       );
+      setTotalLeadsCount((prev) => Math.max(0, prev - 1));
       invalidateCache("totalLeads");
       invalidateCache("leadManagement");
       invalidateCache("leadManagement_sheet_all");
@@ -561,11 +587,12 @@ const SalseTotalLeads = () => {
 
       navigate("/sales/leads/all", { state: { newInterestedLead: leadData } });
     } else if (selectedClientStatus === "NOT INTERESTED") {
-      // 2. Move to Lost Leads
+      // 2. Move to Lost Leads (preserve original leadStatus from form)
+      const originalLeadStatus = statusModalLead.leadStatus || statusModalLead.status || "Warm";
       const lostLeadData = {
         ...statusModalLead,
-        leadStatus: "Cold",
-        status: "Cold",
+        leadStatus: originalLeadStatus,
+        status: originalLeadStatus,
         intrestedStatus: "Not Intersted",
         intrestedFromTableLead: false,
         isLoss: true,
@@ -582,14 +609,6 @@ const SalseTotalLeads = () => {
         lostTime: formattedTime
       };
 
-      updateLeadInStorage(lostLeadData);
-      setLeads((prevLeads) =>
-        prevLeads.map((l) => (String(l.id) === String(lostLeadData.id) ? lostLeadData : l))
-      );
-      invalidateCache("totalLeads");
-      invalidateCache("lostLeads");
-      invalidateCache("lostLeads_all");
-
       try {
         const targetId = statusModalLead._id || statusModalLead.id || statusModalLead.leadId;
 
@@ -600,9 +619,38 @@ const SalseTotalLeads = () => {
             lossRemark: statusRemark || statusModalLead.remark || statusModalLead.remarks || ""
           });
         }
+
+        // 2. Upload remarks files/audio to Cloudinary on lead
+        if (rawUploadFiles.length > 0 && targetId) {
+          const updateRes = await updateLeadApi(
+            targetId,
+            {
+              remarks: statusRemark || statusModalLead.remark || "",
+              remark: statusRemark || statusModalLead.remark || ""
+            },
+            rawUploadFiles
+          );
+          if (updateRes && (updateRes.data || updateRes.remarksFiles)) {
+            const updatedBLead = updateRes.data || updateRes;
+            if (updatedBLead.remarksFiles && updatedBLead.remarksFiles.length > 0) {
+              lostLeadData.remarksFiles = updatedBLead.remarksFiles;
+              lostLeadData.remarkAttachments = updatedBLead.remarksFiles;
+              lostLeadData.attachments = updatedBLead.remarksFiles;
+            }
+          }
+        }
       } catch (e) {
         console.error("Error saving to lost leads:", e);
       }
+
+      updateLeadInStorage(lostLeadData);
+      setLeads((prevLeads) =>
+        prevLeads.filter((l) => String(l.id || l._id || l.leadId) !== String(targetId))
+      );
+      setTotalLeadsCount((prev) => Math.max(0, prev - 1));
+      invalidateCache("totalLeads");
+      invalidateCache("lostLeads");
+      invalidateCache("lostLeads_all");
 
       toast.success(`Lead ${statusModalLead.clientName || statusModalLead.concernPersonName || statusModalLead.id} marked as NOT INTERESTED (${finalReason}) and moved to Lost Leads! 📌`);
       setStatusModalLead(null);
@@ -614,7 +662,13 @@ const SalseTotalLeads = () => {
 
       navigate("/sales/leads/lost", { state: { lostLead: lostLeadData } });
     }
-  };
+  } catch (err) {
+    console.error("Error submitting client status:", err);
+    toast.error("Failed to update status. Please try again.");
+  } finally {
+    setIsStatusSubmitting(false);
+  }
+};
 
   // Table Column Configuration matching AddLead form fields in exact sequence
   const columnConfig = useMemo(() => ({
@@ -1743,16 +1797,26 @@ const SalseTotalLeads = () => {
               </button>
               <button
                 type="button"
-                disabled={isUserObserver}
+                disabled={isStatusSubmitting || isUserObserver}
                 onClick={isUserObserver ? () => toast.info("Observer Mode: Action is disabled.") : handleClientStatusSubmit}
-                className={`px-6 py-2.5 rounded-xl text-sm font-extrabold shadow-md transition-all ${
-                  isUserObserver
-                    ? "bg-slate-200 text-slate-400 cursor-not-allowed opacity-60"
-                    : "bg-[#ff5722] hover:bg-[#e64a19] text-white shadow-orange-500/20 cursor-pointer"
+                className={`px-6 py-2.5 rounded-xl text-sm font-extrabold shadow-md transition-all flex items-center justify-center gap-2 ${
+                  isStatusSubmitting || isUserObserver
+                    ? "bg-slate-200 text-slate-400 cursor-not-allowed opacity-60 shadow-none"
+                    : "bg-[#ff5722] hover:bg-[#e64a19] text-white shadow-orange-500/20 cursor-pointer active:scale-95"
                 }`}
-                title={isUserObserver ? "Disabled for Observer" : "Submit"}
+                title={isUserObserver ? "Disabled for Observer" : isStatusSubmitting ? "Processing..." : "Submit"}
               >
-                Submit
+                {isStatusSubmitting ? (
+                  <>
+                    <svg className="w-4 h-4 animate-spin text-white" viewBox="0 0 24 24" fill="none">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                    </svg>
+                    <span>Processing...</span>
+                  </>
+                ) : (
+                  <span>Submit</span>
+                )}
               </button>
             </div>
 

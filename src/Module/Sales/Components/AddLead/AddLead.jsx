@@ -555,6 +555,8 @@ const Addlead = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (isSubmitting) return;
+
     if (isUserObserver) {
       toast.info("Observer Mode: Creating leads is disabled.");
       return;
@@ -566,7 +568,8 @@ const Addlead = () => {
 
     setIsSubmitting(true);
 
-    const processedAttachments = await Promise.all(
+    try {
+      const processedAttachments = await Promise.all(
       (formData.remarkAttachments || []).map(async (att) => {
         const sourceFile = att.file || att.blob;
         const sourcePreview = att.url || att.preview || "";
@@ -706,33 +709,33 @@ const Addlead = () => {
         isFollowupScheduled: false
       };
 
-      try {
-        // Extract raw File / Blob objects to upload to Cloudinary
-        const rawUploadFiles = (formData.remarkAttachments || [])
-          .map((att) => att.file || att.blob || (att instanceof File || att instanceof Blob ? att : null))
-          .filter(Boolean);
+      // Extract raw File / Blob objects to upload to Cloudinary
+      const rawUploadFiles = (formData.remarkAttachments || [])
+        .map((att) => att.file || att.blob || (att instanceof File || att instanceof Blob ? att : null))
+        .filter(Boolean);
 
-        // Save lead to backend MongoDB Atlas Database with Cloudinary file upload
-        const apiRes = await createLeadApi(newLead, rawUploadFiles);
-        if (apiRes && apiRes.success && apiRes.data) {
-          const bLead = apiRes.data;
-          newLead.id = bLead.leadId || bLead._id;
-          newLead.leadId = bLead.leadId || bLead._id;
-          newLead._id = bLead._id;
-          newLead.remarksFile = bLead.remarksFile || "";
-          newLead.remarksFiles = bLead.remarksFiles || [];
-        }
-        notifyLeadChange(newLead);
-      } catch (err) {
-        console.error("Failed to save lead via backend API", err);
+      // Save lead to backend MongoDB Atlas Database with Cloudinary file upload
+      const apiRes = await createLeadApi(newLead, rawUploadFiles);
+      if (apiRes && apiRes.success && apiRes.data) {
+        const bLead = apiRes.data;
+        newLead.id = bLead.leadId || bLead._id;
+        newLead.leadId = bLead.leadId || bLead._id;
+        newLead._id = bLead._id;
+        newLead.remarksFile = bLead.remarksFile || "";
+        newLead.remarksFiles = bLead.remarksFiles || [];
       }
-
-      setIsSubmitting(false);
+      notifyLeadChange(newLead);
       toast.success("Lead Captured Successfully! 🎯", {
         position: "top-right",
         autoClose: 3000,
       });
       navigate("/sales/leads/total");
+    } catch (err) {
+      console.error("Failed to save lead via backend API", err);
+      toast.error("Failed to create lead. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   // Reset Form

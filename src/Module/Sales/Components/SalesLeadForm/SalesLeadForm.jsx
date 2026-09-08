@@ -143,6 +143,7 @@ const SalesLeadForm = () => {
 
   const handleSubmit = async (e) => {
     if (e) e.preventDefault();
+    if (submitting) return;
     if (isUserObserver) {
       toast.info("Observer Mode: Sales Form submission is disabled.");
       return;
@@ -157,7 +158,8 @@ const SalesLeadForm = () => {
     }
 
     setSubmitting(true);
-    const targetId = lead?._id || lead?.id || lead?.leadId || id;
+    try {
+      const targetId = lead?._id || lead?.id || lead?.leadId || id;
     const formattedDate = new Date().toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
     const formattedTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
 
@@ -252,10 +254,15 @@ const SalesLeadForm = () => {
     updateLeadInStorage(finalLeadData);
     notifyLeadChange(finalLeadData);
 
-    setSubmitting(false);
     toast.success(`Sales Management Sheet updated for ${finalLeadData.clientName}! 🚀`);
     navigate("/sales/management-sheet", { state: { lead: finalLeadData } });
-  };
+  } catch (err) {
+    console.error("Error submitting sales form:", err);
+    toast.error("Failed to update sales sheet. Please try again.");
+  } finally {
+    setSubmitting(false);
+  }
+};
 
   const handleSkipToSalesSheet = () => {
     navigate("/sales/management-sheet", { state: { lead: lead || undefined } });
