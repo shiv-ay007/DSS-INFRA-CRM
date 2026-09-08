@@ -13,7 +13,7 @@ export const getFollowupLeadsApi = async (params = {}) => {
 
 export const getAllFollowupsApi = async (params = {}) => {
   try {
-    const finalParams = { limit: 100, ...params };
+    const finalParams = { limit: 10, ...params };
     return await apiClient.get("/followups", { params: finalParams });
   } catch (error) {
     console.error("API getAllFollowupsApi error:", error);

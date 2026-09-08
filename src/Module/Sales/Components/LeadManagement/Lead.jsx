@@ -6,7 +6,7 @@ import Table from "../../../../Common/Components/Table";
 import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
 import { FaUser, FaImage, FaPlay, FaFileAlt } from "react-icons/fa";
 import { getAllLeadsApi, updateLeadApi, markInterestedFromTableApi } from "../../services/totalLeads.api";
-import { getAllFollowupsApi, addFollowupApi, addLeadFollowupApi } from "../../services/followup.api";
+import { addFollowupApi, addLeadFollowupApi } from "../../services/followup.api";
 import {
   useLeadContext,
   subscribeToLeadUpdates,
@@ -96,26 +96,14 @@ const Lead = () => {
     }
 
     try {
-      const [resLeads, resFollowups] = await Promise.allSettled([
-        getAllLeadsApi({ limit: 100 }),
-        getAllFollowupsApi({ limit: 50 })
-      ]);
-
-      const leadsList = (resLeads.status === "fulfilled" && resLeads.value?.success && resLeads.value?.data?.leads)
-        ? resLeads.value.data.leads
-        : [];
-
-      const followupsList = (resFollowups.status === "fulfilled" && resFollowups.value?.success && resFollowups.value?.data?.followups)
-        ? resFollowups.value.data.followups
-        : [];
-
-      const followupMap = new Map();
-      followupsList.forEach((f) => {
-        const leadObj = f.lead || {};
-        const idKey = String(leadObj._id || leadObj.leadId || f.leadId || f._id);
-        if (!followupMap.has(idKey)) followupMap.set(idKey, []);
-        followupMap.get(idKey).push(f);
+      const resLeads = await getAllLeadsApi({
+        intrestedFromTableLead: true,
+        isPending: true,
+        limit: 10
       });
+      const leadsList = (resLeads?.success && resLeads?.data?.leads)
+        ? resLeads.data.leads
+        : [];
 
       if (leadsList.length > 0) {
         const activeBackendLeads = leadsList
@@ -151,9 +139,6 @@ const Lead = () => {
             return isInterested || hasFollowup || l.inLeadManagement === true;
           })
           .map((backendLead) => {
-            const idKey = String(backendLead._id || backendLead.leadId || backendLead.id);
-            const extraFollowups = followupMap.get(idKey) || [];
-
             const dateObj = new Date(backendLead.createdAt || Date.now());
             const formattedDate = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
             const assignee = backendLead.salesPerson || (typeof backendLead.assignedTo === 'object' ? backendLead.assignedTo?.name : backendLead.assignedTo) || backendLead.assignTo || "--";
@@ -212,11 +197,11 @@ const Lead = () => {
             const legacyHistory = Array.isArray(backendLead.followupHistory) ? backendLead.followupHistory : [];
             const combinedHistory = [...mappedSchemaFollowups, ...legacyHistory];
 
-            const count = Math.max(schemaFollowups.length, combinedHistory.length, extraFollowups.length, Number(backendLead.followupRemarksCount) || 0);
+            const count = Math.max(schemaFollowups.length, combinedHistory.length, Number(backendLead.followupRemarksCount) || 0);
 
             // Latest Scheduled Date from new schema or fallback
             const latestFollowup = schemaFollowups[0];
-            const rawNextDate = latestFollowup?.dateTime || backendLead.nextFollowupDate || (extraFollowups.length > 0 ? extraFollowups[0].scheduledDate : null);
+            const rawNextDate = latestFollowup?.dateTime || backendLead.nextFollowupDate || null;
             let formattedNextDate = "";
             let nextTime = "10:00 am";
             if (rawNextDate && rawNextDate !== "--" && rawNextDate !== "Completed" && rawNextDate !== "Invalid Date") {
@@ -947,6 +932,7 @@ const Lead = () => {
               inSalesManagement: true,
               isSalesTransferred: true,
               isLoss: false,
+              remarks: finalRemark,
               remark: finalRemark,
               movedToSalesManagementDate: new Date()
             },

@@ -11,7 +11,13 @@ import {
 } from "../../../../context/LeadContext";
 import { useAuth } from "../../../../context/AuthContext";
 import { workCategoryList } from "../../data/addLeadData";
-import { FaFilter, FaSearch } from "react-icons/fa";
+import {
+  FaFilter,
+  FaSearch,
+  FaImage,
+  FaPlay,
+  FaFileAlt
+} from "react-icons/fa";
 
 const Salse = () => {
   const navigate = useNavigate();
@@ -59,7 +65,7 @@ const Salse = () => {
     }
 
     try {
-      const res = await getAllLeadsApi({ limit: 200, isLoss: false });
+      const res = await getAllLeadsApi({ inSalesManagement: true, limit: 10 });
       if (res && res.success && res.data && res.data.leads) {
         const interestedLeads = res.data.leads
           .filter((item) => {
@@ -336,6 +342,105 @@ const Salse = () => {
             {row.requirement || "--"}
           </div>
         )
+      },
+      remark: {
+        label: "REMARK",
+        align: "center",
+        render: (val, row) => {
+          const rem = row.remarks || row.remark || row.requirement || "--";
+          const attachments = [];
+          if (Array.isArray(row.remarksFiles)) {
+            row.remarksFiles.forEach((f) => {
+              const url = f?.url || f?.preview;
+              if (url && !attachments.some((x) => (x.url || x.preview) === url)) {
+                attachments.push({ ...f, type: f.fileType || f.type || "image" });
+              }
+            });
+          }
+          if (Array.isArray(row.remarkAttachments)) {
+            row.remarkAttachments.forEach((att) => {
+              const url = att?.url || att?.preview;
+              if (url && !attachments.some((x) => (x.url || x.preview) === url)) {
+                attachments.push({ ...att, type: att.type || att.fileType || "image" });
+              }
+            });
+          }
+          if (Array.isArray(row.attachments)) {
+            row.attachments.forEach((att) => {
+              const url = att?.url || att?.preview;
+              if (url && !attachments.some((x) => (x.url || x.preview) === url)) {
+                attachments.push({ ...att, type: att.type || att.fileType || "image" });
+              }
+            });
+          }
+          if (row.remarksFile && typeof row.remarksFile === "string" && !attachments.some((x) => x.url === row.remarksFile)) {
+            attachments.push({ url: row.remarksFile, type: "image", name: "Attachment" });
+          }
+
+          return (
+            <div className="flex items-center justify-center gap-1.5 max-w-[200px] mx-auto text-center">
+              <div className="truncate text-xs text-slate-700 font-medium flex-1" title={rem}>
+                {rem}
+              </div>
+              {attachments.length > 0 && (
+                <div className="flex items-center gap-1 shrink-0">
+                  {attachments.map((att, idx) => {
+                    const url = att.url || att.preview || "";
+                    const type = (att.fileType || att.type || "").toLowerCase();
+                    const isAudio = type === "audio" || /\.(mp3|wav|m4a|aac|ogg|webm)(\?.*)?$/i.test(url);
+                    const isImage = type === "image" || /\.(jpg|jpeg|png|webp|gif|svg)(\?.*)?$/i.test(url);
+
+                    if (isImage) {
+                      return (
+                        <a
+                          key={idx}
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-6 h-6 rounded-md border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 flex items-center justify-center transition-all cursor-pointer shadow-2xs shrink-0"
+                          title={att.name || "View Image"}
+                        >
+                          <FaImage className="w-3 h-3 text-emerald-600" />
+                        </a>
+                      );
+                    }
+
+                    if (isAudio) {
+                      return (
+                        <a
+                          key={idx}
+                          href={url}
+                          target="_blank"
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-6 h-6 rounded-md bg-amber-100 text-amber-800 border border-amber-300 hover:bg-amber-200 flex items-center justify-center transition-all cursor-pointer shadow-2xs shrink-0"
+                          title={att.name || "Play Audio"}
+                        >
+                          <FaPlay className="w-2.5 h-2.5 text-amber-700" />
+                        </a>
+                      );
+                    }
+
+                    return (
+                      <a
+                        key={idx}
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-6 h-6 rounded-md bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs shrink-0"
+                        title={att.name || "View Document"}
+                      >
+                        <FaFileAlt className="w-3 h-3" />
+                      </a>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        }
       },
       address: {
         label: "ADDRESS",

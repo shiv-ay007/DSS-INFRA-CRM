@@ -156,7 +156,8 @@ const SalseTotalLeads = () => {
       const queryParams = {
         page: currentPage,
         limit: rowsPerPage,
-        view: "totalLeads"
+        intrestedStatus: "Pending",
+        intrestedFromTableLead: false
       };
 
       if (debouncedSearch && debouncedSearch.trim()) queryParams.search = debouncedSearch.trim();
@@ -170,18 +171,7 @@ const SalseTotalLeads = () => {
 
       const res = await getAllLeadsApi(queryParams);
       if (res && res.success && res.data && res.data.leads) {
-        const activeLeads = res.data.leads.filter((backendLead) => {
-          const isLost =
-            backendLead.isLoss === true ||
-            backendLead.intrestedStatus === "Not Intersted" ||
-            ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(backendLead.leadStatus || "").toUpperCase()) ||
-            ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(backendLead.status || "").toUpperCase());
-          const isInterested =
-            backendLead.intrestedFromTableLead === true ||
-            backendLead.intrestedStatus === "Intrested" ||
-            backendLead.inLeadManagement === true;
-          return !isLost && !isInterested;
-        });
+        const activeLeads = res.data.leads;
         const mappedLeads = activeLeads.map((backendLead) => {
           const dateObj = new Date(backendLead.createdAt || Date.now());
           const formattedDate = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });

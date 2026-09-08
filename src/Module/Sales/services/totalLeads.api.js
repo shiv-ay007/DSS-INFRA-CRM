@@ -90,7 +90,8 @@ export const createLeadApi = async (leadData, files = null) => {
 // ========================================================
 export const getAllLeadsApi = async (params = {}) => {
   try {
-    const response = await api.get("/leads", { params });
+    const finalParams = { limit: 10, ...params };
+    const response = await api.get("/leads", { params: finalParams });
     return response;
   } catch (error) {
     console.error("getAllLeadsApi Error:", error);

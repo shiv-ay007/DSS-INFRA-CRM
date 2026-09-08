@@ -79,40 +79,19 @@ export const isLeadTransferredToSales = (lead) => {
   return ids.includes(idStr);
 };
 
-// Helper to load session cache on initial mount
-const loadSessionCache = () => {
-  try {
-    const raw = sessionStorage.getItem(SESSION_CACHE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      return new Map(Object.entries(parsed));
-    }
-  } catch (e) {
-    console.warn("Error loading lead session cache:", e);
-  }
-  return new Map();
-};
-
-// Helper to persist session cache
-const saveSessionCache = (cacheMap) => {
-  try {
-    const obj = {};
-    for (const [k, v] of cacheMap.entries()) {
-      obj[k] = v;
-    }
-    sessionStorage.setItem(SESSION_CACHE_KEY, JSON.stringify(obj));
-  } catch (e) {
-    // Quota exceeded or disabled
-  }
-};
+// Clear any legacy sessionStorage cache if present
+try {
+  sessionStorage.removeItem("dss_lead_session_cache_v4");
+  sessionStorage.removeItem("dss_lead_session_cache_v2");
+  sessionStorage.removeItem(SESSION_CACHE_KEY);
+} catch (e) {}
 
 export const LeadProvider = ({ children }) => {
-  // In-memory cache backed by sessionStorage for 0ms initial render even on F5 reload
-  const cacheRef = useRef(loadSessionCache());
+  // Pure in-memory cache only (No sessionStorage)
+  const cacheRef = useRef(new Map());
 
   /**
-   * Retrieves data from cache if it exists (Unlimited cache - no auto-expiry).
-   * Data remains instant until manually refreshed or updated.
+   * Retrieves data from in-memory cache if it exists.
    */
   const getCachedData = useCallback((key) => {
     if (!cacheRef.current.has(key)) return null;
@@ -120,7 +99,7 @@ export const LeadProvider = ({ children }) => {
   }, []);
 
   /**
-   * Saves data and pagination into memory and session cache.
+   * Saves data and pagination into in-memory cache only.
    */
   const setCachedData = useCallback((key, data, pagination = null) => {
     cacheRef.current.set(key, {
@@ -128,19 +107,14 @@ export const LeadProvider = ({ children }) => {
       pagination,
       timestamp: Date.now()
     });
-    saveSessionCache(cacheRef.current);
   }, []);
 
   /**
    * Invalidates cache by prefix or clears all cache.
-   * e.g., invalidateCache("totalLeads") clears all totalLeads_* queries.
    */
   const invalidateCache = useCallback((prefix = "") => {
     if (!prefix) {
       cacheRef.current.clear();
-      try {
-        sessionStorage.removeItem(SESSION_CACHE_KEY);
-      } catch {}
       return;
     }
     for (const key of cacheRef.current.keys()) {
@@ -148,17 +122,13 @@ export const LeadProvider = ({ children }) => {
         cacheRef.current.delete(key);
       }
     }
-    saveSessionCache(cacheRef.current);
   }, []);
 
   /**
-   * Invalidate all lead-related caches on any global lead mutation.
+   * Invalidate all lead-related in-memory caches.
    */
   const invalidateAllLeadCaches = useCallback(() => {
     cacheRef.current.clear();
-    try {
-      sessionStorage.removeItem(SESSION_CACHE_KEY);
-    } catch {}
   }, []);
 
   // Subscribe to live lead mutations across components

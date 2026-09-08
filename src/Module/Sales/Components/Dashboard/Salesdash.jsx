@@ -43,8 +43,8 @@ const Salesdash = () => {
       try {
         // Temporarily commented out getFollowupLeadsApi until backend route is ready
         const [leadsRes] = await Promise.allSettled([
-          getAllLeadsApi({ limit: 100, isLoss: false })
-          // getFollowupLeadsApi({ limit: 20, isLoss: false })
+          getAllLeadsApi({ limit: 10, isLoss: false })
+          // getFollowupLeadsApi({ limit: 10, isLoss: false })
         ]);
 
         if (leadsRes.status === "fulfilled" && leadsRes.value && leadsRes.value.success && leadsRes.value.data?.leads) {

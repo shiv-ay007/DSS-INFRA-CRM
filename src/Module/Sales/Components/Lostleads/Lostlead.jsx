@@ -30,22 +30,12 @@ const Lostlead = () => {
     }
     return [];
   });
-  const { getCachedData, setCachedData, invalidateCache } = useLeadContext();
-
-  const fetchBackendLossLeads = React.useCallback(async (forceRefresh = false) => {
-    const cacheKey = "lostLeads_all";
-    if (!forceRefresh) {
-      const cached = getCachedData(cacheKey);
-      if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
-        setLeads(cached.data);
-        return;
-      }
-    }
+  const fetchBackendLossLeads = React.useCallback(async () => {
     try {
       let rawData = [];
 
       // Direct backend API call matching schema's intrestedStatus: "Not Intersted"
-      const res = await getAllLeadsApi({ intrestedStatus: "Not Intersted", limit: 200 });
+      const res = await getAllLeadsApi({ intrestedStatus: "Not Intersted", limit: 10 });
       if (res && res.success && res.data) {
         rawData = Array.isArray(res.data.leads)
           ? res.data.leads
@@ -171,11 +161,10 @@ const Lostlead = () => {
       });
 
       setLeads(uniqueProcessed);
-      setCachedData(cacheKey, uniqueProcessed);
     } catch (err) {
       console.error("Error fetching loss leads from API:", err);
     }
-  }, [getCachedData, setCachedData]);
+  }, []);
 
   React.useEffect(() => {
     if (location.state?.lostLead) {
