@@ -23,12 +23,14 @@ import {
   FaTable,
   FaSpinner,
   FaSave,
-  FaArrowLeft
+  FaArrowLeft,
+  FaCheckCircle
 } from "react-icons/fa";
 import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
-import { workCategoryList } from "../../data/addLeadData";
+import { workCategoryList, indianStatesList } from "../../data/addLeadData";
 import { getLeadByIdApi, updateLeadApi } from "../../services/totalLeads.api";
+import { createLeadProjectApi } from "../../services/leadProject.api";
 import {
   useLeadContext,
   updateLeadInStorage,
@@ -58,6 +60,8 @@ const SalesLeadForm = () => {
   const [loading, setLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [lead, setLead] = useState(location.state?.lead || null);
+  const [isFetchingPincode, setIsFetchingPincode] = useState(false);
+  const [errors, setErrors] = useState({});
 
   const [formData, setFormData] = useState({
     clientName: "",
@@ -78,7 +82,9 @@ const SalesLeadForm = () => {
     requirement: "",
     transferRemark: "",
     clientRating: 4.5,
-    assignedTo: "Admin"
+    assignedTo: "Admin",
+    nextPersonName: "",
+    designation: ""
   });
 
   // Populate form data whenever lead is resolved
@@ -107,11 +113,185 @@ const SalesLeadForm = () => {
       requirement: leadData.requirement || "",
       transferRemark: initialRemark || leadData.remark || leadData.transferRemark || "",
       clientRating: Number(leadData.clientRating || 4.5),
-      assignedTo: leadData.assignTo || leadData.salesPerson || leadData.assignedTo || "Admin"
+      assignedTo: leadData.assignTo || leadData.salesPerson || leadData.assignedTo || "Admin",
+      nextPersonName: leadData.nextPersonName || leadData.nextConcernPerson || "",
+      designation: leadData.designation || leadData.nextPersonDesignation || ""
     });
   };
 
+  // Handle generic input change and clear field errors
+  const handleInputChange = (field, value) => {
+    // Prevent typing numbers in name and location text fields
+    if (field === "clientName" || field === "nextPersonName" || field === "city" || field === "state") {
+      value = value.replace(/[0-9]/g, "");
+    }
+    setFormData((prev) => ({ ...prev, [field]: value }));
+    if (errors[field]) {
+      setErrors((prev) => ({ ...prev, [field]: "" }));
+    }
+  };
+
+  // Handle Pincode change and auto-fetch City & State
+  const handlePincodeChange = async (e) => {
+    const val = e.target.value.replace(/\D/g, "").slice(0, 6);
+    setFormData((prev) => ({
+      ...prev,
+      pincode: val
+    }));
+
+    if (errors.pincode) {
+      setErrors((prev) => ({ ...prev, pincode: "" }));
+    }
+
+    if (val.length === 6) {
+      setIsFetchingPincode(true);
+      try {
+        const response = await fetch(`https://api.postalpincode.in/pincode/${val}`);
+        const data = await response.json();
+
+        if (data && data[0] && data[0].Status === "Success" && data[0].PostOffice?.length > 0) {
+          const po = data[0].PostOffice[0];
+          const apiDistrict = po.District || po.Block || po.Circle || "";
+          const apiState = po.State || "";
+
+          // Match state in indianStatesList
+          const matchedState = indianStatesList?.find(
+            (st) => st.toLowerCase() === apiState.toLowerCase() ||
+                    (apiState.toLowerCase() === "delhi" && st === "Delhi NCR") ||
+                    st.toLowerCase().includes(apiState.toLowerCase())
+          ) || apiState;
+
+          setFormData((prev) => ({
+            ...prev,
+            city: apiDistrict,
+            state: matchedState
+          }));
+
+          setErrors((prev) => ({
+            ...prev,
+            city: "",
+            state: "",
+            pincode: ""
+          }));
+          toast.success(`Location detected: ${apiDistrict}, ${matchedState}`);
+        } else {
+          toast.info("Could not fetch city/state for this pincode. You can enter manually.");
+        }
+      } catch (err) {
+        console.error("Error fetching pincode details:", err);
+      } finally {
+        setIsFetchingPincode(false);
+      }
+    }
+  };
+
+  // Form Validation logic
+  const validateForm = () => {
+    const newErrors = {};
+
+    if (!formData.clientName.trim()) {
+      newErrors.clientName = "Client name is required";
+    } else if (/[0-9]/.test(formData.clientName)) {
+      newErrors.clientName = "Numbers are not allowed in client name";
+    }
+
+    if (formData.nextPersonName && /[0-9]/.test(formData.nextPersonName)) {
+      newErrors.nextPersonName = "Numbers are not allowed in next person name";
+    }
+
+    if (formData.city && /[0-9]/.test(formData.city)) {
+      newErrors.city = "Numbers are not allowed in city";
+    }
+
+    if (formData.state && /[0-9]/.test(formData.state)) {
+      newErrors.state = "Numbers are not allowed in state";
+    }
+
+    const phoneRegex = /^[6-9]\d{9}$/;
+    if (!formData.phoneNumber.trim()) {
+      newErrors.phoneNumber = "Primary phone number is required";
+    } else if (!phoneRegex.test(formData.phoneNumber.trim())) {
+      newErrors.phoneNumber = "Must start with 6, 7, 8, or 9 and be 10 digits";
+    }
+
+    if (formData.whatsappNumber && formData.whatsappNumber.trim() && !phoneRegex.test(formData.whatsappNumber.trim())) {
+      newErrors.whatsappNumber = "Must start with 6, 7, 8, or 9 and be 10 digits";
+    }
+
+    if (formData.alternateNumber && formData.alternateNumber.trim() && !phoneRegex.test(formData.alternateNumber.trim())) {
+      newErrors.alternateNumber = "Must start with 6, 7, 8, or 9 and be 10 digits";
+    }
+
+    if (formData.emailAddress && formData.emailAddress.trim() && !/\S+@\S+\.\S+/.test(formData.emailAddress.trim())) {
+      newErrors.emailAddress = "Please enter a valid email address";
+    }
+
+    if (formData.expectedBusiness === "" || Number(formData.expectedBusiness) < 0) {
+      newErrors.expectedBusiness = "Expected Business amount must be a positive number";
+    }
+
+    if (formData.pincode && formData.pincode.trim() && !/^\d{6}$/.test(formData.pincode.trim())) {
+      newErrors.pincode = "Pincode must be 6 digits";
+    }
+
+    setErrors(newErrors);
+
+    const errorKeys = Object.keys(newErrors);
+    if (errorKeys.length > 0) {
+      const firstErrorKey = errorKeys[0];
+      const targetElement = document.getElementById(`field-${firstErrorKey}`);
+      if (targetElement) {
+        targetElement.scrollIntoView({ behavior: "smooth", block: "center" });
+        const inputEl = targetElement.querySelector("input, select, textarea");
+        if (inputEl && typeof inputEl.focus === "function") {
+          inputEl.focus();
+        }
+      }
+      toast.error(newErrors[firstErrorKey]);
+      return false;
+    }
+
+    return true;
+  };
+
+  const [editingProjectId, setEditingProjectId] = useState(
+    location.state?.project?._id || location.state?.project?.id || null
+  );
+
   useEffect(() => {
+    // If an existing project was passed for editing
+    if (location.state?.project) {
+      const proj = location.state.project;
+      setEditingProjectId(proj._id || proj.id || null);
+      setFormData({
+        clientName: proj.clientName || "",
+        phoneNumber: proj.phoneNumber || "",
+        alternateNumber: proj.alternateNumber || "",
+        whatsappNumber: proj.whatsappNumber || proj.phoneNumber || "",
+        emailAddress: proj.emailAddress || "",
+        companyName: proj.companyName || "",
+        businessType: proj.businessType || "Information Technology",
+        clientDesignation: proj.clientDesignation || "Managing Director",
+        expectedBusiness: Number(proj.expectedBusiness || 50000),
+        priority: proj.priority || "high",
+        jobType: proj.jobType || "NEW",
+        city: proj.city || "",
+        state: proj.state || "",
+        pincode: proj.pincode || "",
+        address: proj.address || "",
+        requirement: proj.requirement || "",
+        transferRemark: proj.transferRemark || "",
+        clientRating: Number(proj.clientRating || 4.5),
+        assignedTo: proj.assignedTo || "Admin",
+        nextPersonName: proj.nextPersonName || "",
+        designation: proj.designation || ""
+      });
+      if (location.state?.lead) {
+        setLead(location.state.lead);
+      }
+      return;
+    }
+
     if (location.state?.lead) {
       setLead(location.state.lead);
       populateFormData(location.state.lead, location.state.initialRemark || "");
@@ -148,12 +328,9 @@ const SalesLeadForm = () => {
       toast.info("Observer Mode: Sales Form submission is disabled.");
       return;
     }
-    if (!formData.clientName.trim()) {
-      toast.error("Client Name is required!");
-      return;
-    }
-    if (!formData.phoneNumber.trim()) {
-      toast.error("Primary Phone Number is required!");
+    
+    // Validate inputs
+    if (!validateForm()) {
       return;
     }
 
@@ -194,6 +371,9 @@ const SalesLeadForm = () => {
       clientRating: Number(formData.clientRating) || 4.5,
       assignTo: formData.assignedTo,
       salesPerson: formData.assignedTo,
+      nextPersonName: formData.nextPersonName,
+      designation: formData.designation,
+      nextPersonDesignation: formData.designation,
       createdAt: lead?.createdDate || lead?.createdAt || formattedDate,
       createdTime: lead?.createdTime || formattedTime,
       clientId: lead?.clientId || lead?.leadId || `DSS${Math.floor(10000 + Math.random() * 90000)}`,
@@ -204,46 +384,16 @@ const SalesLeadForm = () => {
       updatedAt: new Date().toISOString()
     };
 
-    try {
-      if (targetId) {
-        await updateLeadApi(targetId, {
-          status: "INTERESTED",
-          leadStatus: "INTERESTED",
-          isInterested: true,
-          inSalesManagement: true,
-          isSalesTransferred: true,
-          isLoss: false,
-          clientName: formData.clientName,
-          concernPersonName: formData.clientName,
-          phoneNumber: formData.phoneNumber,
-          phone: formData.phoneNumber,
-          alternateNumber: formData.alternateNumber,
-          whatsappNumber: formData.whatsappNumber,
-          emailAddress: formData.emailAddress,
-          email: formData.emailAddress,
-          companyName: formData.companyName,
-          businessType: formData.businessType,
-          clientDesignation: formData.clientDesignation,
-          amount: Number(formData.expectedBusiness) || 0,
-          expectedBusiness: Number(formData.expectedBusiness) || 0,
-          budget: Number(formData.expectedBusiness) || 0,
-          priority: formData.priority,
-          jobType: formData.jobType,
-          city: formData.city,
-          state: formData.state,
-          pincode: formData.pincode,
-          address: formData.address,
-          requirement: formData.requirement,
-          remark: formData.transferRemark || lead?.remark || "",
-          clientRating: Number(formData.clientRating) || 4.5,
-          assignTo: formData.assignedTo,
-          salesPerson: formData.assignedTo,
-          movedToSalesManagementDate: new Date()
+      // Save project data ONLY to leadsproject collection
+      try {
+        await createLeadProjectApi({
+          ...formData,
+          leadId: finalLeadData.leadId,
+          projectId: editingProjectId || undefined
         });
+      } catch (saveErr) {
+        console.error("Error saving to leadsproject collection:", saveErr);
       }
-    } catch (err) {
-      console.error("Error updating lead in API:", err);
-    }
 
     // Invalidate caches & notify
     invalidateCache("sales_management_sheet");
@@ -254,8 +404,19 @@ const SalesLeadForm = () => {
     updateLeadInStorage(finalLeadData);
     notifyLeadChange(finalLeadData);
 
-    toast.success(`Sales Management Sheet updated for ${finalLeadData.clientName}! 🚀`);
-    navigate("/sales/management-sheet", { state: { lead: finalLeadData } });
+    const successMsg = editingProjectId
+      ? `Project updated for ${finalLeadData.clientName}! 🚀`
+      : `New project added for ${finalLeadData.clientName}! 🚀`;
+    toast.success(successMsg);
+
+    // If opened from Lead Details page, return back to Lead Details page so user sees their new project record
+    if (location.state?.returnToLeadDetails) {
+      navigate(`/sales/leads/details/${targetId}`, {
+        state: { lead: finalLeadData, from: "salesManagement" }
+      });
+    } else {
+      navigate("/sales/management-sheet", { state: { lead: finalLeadData } });
+    }
   } catch (err) {
     console.error("Error submitting sales form:", err);
     toast.error("Failed to update sales sheet. Please try again.");
@@ -265,7 +426,14 @@ const SalesLeadForm = () => {
 };
 
   const handleSkipToSalesSheet = () => {
-    navigate("/sales/management-sheet", { state: { lead: lead || undefined } });
+    if (location.state?.returnToLeadDetails) {
+      const targetId = lead?._id || lead?.id || lead?.leadId || id;
+      navigate(`/sales/leads/details/${targetId}`, {
+        state: { lead: lead || undefined, from: "salesManagement" }
+      });
+    } else {
+      navigate("/sales/management-sheet", { state: { lead: lead || undefined } });
+    }
   };
 
   if (loading) {
@@ -378,7 +546,7 @@ const SalesLeadForm = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-x-3 sm:gap-x-4 gap-y-3">
-            <div>
+            <div id="field-clientName">
               <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
                 Client Name <span className="text-red-500">*</span>
               </label>
@@ -390,14 +558,17 @@ const SalesLeadForm = () => {
                   type="text"
                   required
                   value={formData.clientName}
-                  onChange={(e) => setFormData({ ...formData, clientName: e.target.value })}
+                  onChange={(e) => handleInputChange("clientName", e.target.value)}
                   placeholder="Enter Client Name"
-                  className="w-full pl-9 pr-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400"
+                  className={`w-full pl-9 pr-3 py-2 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400 ${
+                    errors.clientName ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
+                  }`}
                 />
               </div>
+              {errors.clientName && <p className="text-xs text-red-500 font-medium mt-1">{errors.clientName}</p>}
             </div>
 
-            <div>
+            <div id="field-phoneNumber">
               <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
                 Primary Phone Number <span className="text-red-500">*</span>
               </label>
@@ -410,14 +581,17 @@ const SalesLeadForm = () => {
                   required
                   maxLength={10}
                   value={formData.phoneNumber}
-                  onChange={(e) => setFormData({ ...formData, phoneNumber: e.target.value.replace(/\D/g, "") })}
+                  onChange={(e) => handleInputChange("phoneNumber", e.target.value.replace(/\D/g, "").slice(0, 10))}
                   placeholder="Enter 10-digit Phone Number"
-                  className="w-full pl-9 pr-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium font-mono focus:outline-none transition-all placeholder:text-slate-400"
+                  className={`w-full pl-9 pr-3 py-2 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium font-mono focus:outline-none transition-all placeholder:text-slate-400 ${
+                    errors.phoneNumber ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
+                  }`}
                 />
               </div>
+              {errors.phoneNumber && <p className="text-xs text-red-500 font-medium mt-1">{errors.phoneNumber}</p>}
             </div>
 
-            <div>
+            <div id="field-whatsappNumber">
               <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
                 WhatsApp / Alternate Number
               </label>
@@ -429,16 +603,19 @@ const SalesLeadForm = () => {
                   type="tel"
                   maxLength={10}
                   value={formData.whatsappNumber}
-                  onChange={(e) => setFormData({ ...formData, whatsappNumber: e.target.value.replace(/\D/g, "") })}
+                  onChange={(e) => handleInputChange("whatsappNumber", e.target.value.replace(/\D/g, "").slice(0, 10))}
                   placeholder="Enter WhatsApp / Alternate Number"
-                  className="w-full pl-9 pr-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium font-mono focus:outline-none transition-all placeholder:text-slate-400"
+                  className={`w-full pl-9 pr-3 py-2 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium font-mono focus:outline-none transition-all placeholder:text-slate-400 ${
+                    errors.whatsappNumber ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
+                  }`}
                 />
               </div>
+              {errors.whatsappNumber && <p className="text-xs text-red-500 font-medium mt-1">{errors.whatsappNumber}</p>}
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-x-3 sm:gap-x-4 gap-y-3 pt-1">
-            <div>
+            <div id="field-emailAddress">
               <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
                 Email Address
               </label>
@@ -449,11 +626,14 @@ const SalesLeadForm = () => {
                 <input
                   type="email"
                   value={formData.emailAddress}
-                  onChange={(e) => setFormData({ ...formData, emailAddress: e.target.value })}
+                  onChange={(e) => handleInputChange("emailAddress", e.target.value)}
                   placeholder="Enter Email Address"
-                  className="w-full pl-9 pr-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400"
+                  className={`w-full pl-9 pr-3 py-2 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400 ${
+                    errors.emailAddress ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
+                  }`}
                 />
               </div>
+              {errors.emailAddress && <p className="text-xs text-red-500 font-medium mt-1">{errors.emailAddress}</p>}
             </div>
 
             <div>
@@ -467,7 +647,7 @@ const SalesLeadForm = () => {
                 <input
                   type="text"
                   value={formData.clientDesignation}
-                  onChange={(e) => setFormData({ ...formData, clientDesignation: e.target.value })}
+                  onChange={(e) => handleInputChange("clientDesignation", e.target.value)}
                   placeholder="e.g. Managing Director, Owner"
                   className="w-full pl-9 pr-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400"
                 />
@@ -484,7 +664,7 @@ const SalesLeadForm = () => {
                 </span>
                 <select
                   value={formData.clientRating}
-                  onChange={(e) => setFormData({ ...formData, clientRating: parseFloat(e.target.value) })}
+                  onChange={(e) => handleInputChange("clientRating", parseFloat(e.target.value))}
                   className="w-full pl-9 pr-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all cursor-pointer"
                 >
                   <option value={5}>5.0 ★ (Highest Potential)</option>
@@ -519,7 +699,7 @@ const SalesLeadForm = () => {
                 <input
                   type="text"
                   value={formData.companyName}
-                  onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
+                  onChange={(e) => handleInputChange("companyName", e.target.value)}
                   placeholder="Enter Company Name"
                   className="w-full pl-9 pr-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400"
                 />
@@ -536,7 +716,7 @@ const SalesLeadForm = () => {
                 </span>
                 <select
                   value={formData.businessType}
-                  onChange={(e) => setFormData({ ...formData, businessType: e.target.value })}
+                  onChange={(e) => handleInputChange("businessType", e.target.value)}
                   className="w-full pl-9 pr-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all cursor-pointer"
                 >
                   {workCategoryList.map((cat) => (
@@ -548,7 +728,7 @@ const SalesLeadForm = () => {
               </div>
             </div>
 
-            <div>
+            <div id="field-expectedBusiness">
               <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
                 Expected Business (₹ Amount) <span className="text-red-500">*</span>
               </label>
@@ -561,11 +741,14 @@ const SalesLeadForm = () => {
                   required
                   min={0}
                   value={formData.expectedBusiness}
-                  onChange={(e) => setFormData({ ...formData, expectedBusiness: e.target.value })}
+                  onChange={(e) => handleInputChange("expectedBusiness", e.target.value)}
                   placeholder="Enter Amount (₹)"
-                  className="w-full pl-9 pr-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-emerald-700 text-xs sm:text-sm font-bold font-mono focus:outline-none transition-all"
+                  className={`w-full pl-9 pr-3 py-2 rounded-lg border bg-white text-emerald-700 text-xs sm:text-sm font-bold font-mono focus:outline-none transition-all ${
+                    errors.expectedBusiness ? "border-red-500 bg-red-50/20 focus:border-red-500" : "border-black/20 focus:border-black/50"
+                  }`}
                 />
               </div>
+              {errors.expectedBusiness && <p className="text-xs text-red-500 font-medium mt-1">{errors.expectedBusiness}</p>}
             </div>
 
             <div>
@@ -578,7 +761,7 @@ const SalesLeadForm = () => {
                 </span>
                 <select
                   value={formData.priority}
-                  onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+                  onChange={(e) => handleInputChange("priority", e.target.value)}
                   className="w-full pl-9 pr-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all cursor-pointer"
                 >
                   <option value="high">🔴 High Priority</option>
@@ -589,7 +772,7 @@ const SalesLeadForm = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 sm:gap-x-4 gap-y-3 pt-1">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-x-3 sm:gap-x-4 gap-y-3 pt-1">
             <div>
               <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
                 Job Type
@@ -600,7 +783,7 @@ const SalesLeadForm = () => {
                 </span>
                 <select
                   value={formData.jobType}
-                  onChange={(e) => setFormData({ ...formData, jobType: e.target.value })}
+                  onChange={(e) => handleInputChange("jobType", e.target.value)}
                   className="w-full pl-9 pr-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all cursor-pointer"
                 >
                   <option value="NEW">NEW Client / Job</option>
@@ -611,23 +794,37 @@ const SalesLeadForm = () => {
 
             <div>
               <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-                Assigned Sales Executive
+                Next Person Name
               </label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs sm:text-sm">
-                  <FaUserTie />
+                  <FaUser />
                 </span>
-                <select
-                  value={formData.assignedTo}
-                  onChange={(e) => setFormData({ ...formData, assignedTo: e.target.value })}
-                  className="w-full pl-9 pr-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all cursor-pointer"
-                >
-                  {teamMembers.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
+                <input
+                  type="text"
+                  value={formData.nextPersonName}
+                  onChange={(e) => handleInputChange("nextPersonName", e.target.value)}
+                  placeholder="Enter Next Person Name"
+                  className="w-full pl-9 pr-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
+                Designation
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs sm:text-sm">
+                  <FaBriefcase />
+                </span>
+                <input
+                  type="text"
+                  value={formData.designation}
+                  onChange={(e) => handleInputChange("designation", e.target.value)}
+                  placeholder="e.g. Project Manager, Site Engineer"
+                  className="w-full pl-9 pr-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400"
+                />
               </div>
             </div>
           </div>
@@ -643,7 +840,36 @@ const SalesLeadForm = () => {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-x-3 sm:gap-x-4 gap-y-3">
-            <div>
+            {/* PINCODE FIELD (FIRST FOR AUTO-FETCH) */}
+            <div id="field-pincode">
+              <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1 flex items-center justify-between">
+                <span>Pincode</span>
+                {isFetchingPincode && (
+                  <span className="text-[11px] text-blue-600 animate-pulse font-normal flex items-center gap-1">
+                    <FaSpinner className="animate-spin text-[10px]" /> Auto-fetching City & State...
+                  </span>
+                )}
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs sm:text-sm">
+                  <FaMapPin />
+                </span>
+                <input
+                  type="text"
+                  maxLength={6}
+                  value={formData.pincode}
+                  onChange={handlePincodeChange}
+                  placeholder="Enter 6-digit Pincode"
+                  className={`w-full pl-9 pr-3 py-2 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium font-mono focus:outline-none transition-all placeholder:text-slate-400 ${
+                    errors.pincode ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
+                  }`}
+                />
+              </div>
+              {errors.pincode && <p className="text-xs text-red-500 font-medium mt-1">{errors.pincode}</p>}
+            </div>
+
+            {/* CITY (AUTO-FETCHED OR MANUAL) */}
+            <div id="field-city">
               <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
                 City
               </label>
@@ -654,14 +880,18 @@ const SalesLeadForm = () => {
                 <input
                   type="text"
                   value={formData.city}
-                  onChange={(e) => setFormData({ ...formData, city: e.target.value })}
+                  onChange={(e) => handleInputChange("city", e.target.value)}
                   placeholder="Enter City"
-                  className="w-full pl-9 pr-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400"
+                  className={`w-full pl-9 pr-3 py-2 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400 ${
+                    errors.city ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
+                  }`}
                 />
               </div>
+              {errors.city && <p className="text-xs text-red-500 font-medium mt-1">{errors.city}</p>}
             </div>
 
-            <div>
+            {/* STATE (AUTO-FETCHED OR SELECT) */}
+            <div id="field-state">
               <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
                 State
               </label>
@@ -672,34 +902,18 @@ const SalesLeadForm = () => {
                 <input
                   type="text"
                   value={formData.state}
-                  onChange={(e) => setFormData({ ...formData, state: e.target.value })}
-                  placeholder="Enter State"
-                  className="w-full pl-9 pr-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400"
+                  onChange={(e) => handleInputChange("state", e.target.value)}
+                  placeholder="Enter or select State"
+                  className={`w-full pl-9 pr-3 py-2 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400 ${
+                    errors.state ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
+                  }`}
                 />
               </div>
-            </div>
-
-            <div>
-              <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-                Pincode
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs sm:text-sm">
-                  <FaMapPin />
-                </span>
-                <input
-                  type="text"
-                  maxLength={6}
-                  value={formData.pincode}
-                  onChange={(e) => setFormData({ ...formData, pincode: e.target.value })}
-                  placeholder="Enter 6-digit Pincode"
-                  className="w-full pl-9 pr-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium font-mono focus:outline-none transition-all placeholder:text-slate-400"
-                />
-              </div>
+              {errors.state && <p className="text-xs text-red-500 font-medium mt-1">{errors.state}</p>}
             </div>
           </div>
 
-          <div>
+          <div id="field-address">
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
               Complete Site / Office Address
             </label>
@@ -710,7 +924,7 @@ const SalesLeadForm = () => {
               <textarea
                 rows={2}
                 value={formData.address}
-                onChange={(e) => setFormData({ ...formData, address: e.target.value })}
+                onChange={(e) => handleInputChange("address", e.target.value)}
                 placeholder="Enter complete plot/site address, landmarks..."
                 className="w-full pl-9 pr-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400 resize-y"
               />

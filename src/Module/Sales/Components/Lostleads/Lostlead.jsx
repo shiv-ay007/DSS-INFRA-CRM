@@ -154,7 +154,15 @@ const Lostlead = () => {
           leadSource: item.leadSource || item.leadMode || leadObj.leadSource || leadObj.leadMode || "Business networking",
           leadType: item.leadType || leadObj.leadType || "FRESH",
           leadStatus: (item.leadStatus === "CLOSED_LOST" || item.status === "CLOSED_LOST" || !item.leadStatus) ? "LOST" : item.leadStatus,
-          status: (item.status === "CLOSED_LOST" || !item.status) ? "LOST" : item.status
+          status: (item.status === "CLOSED_LOST" || !item.status) ? "LOST" : item.status,
+          remarksFile: item.remarksFile || leadObj.remarksFile || "",
+          remarksFiles: item.remarksFiles || leadObj.remarksFiles || [],
+          remarkAttachments: (Array.isArray(item.remarksFiles) && item.remarksFiles.length > 0)
+            ? item.remarksFiles
+            : (item.remarkAttachments || leadObj.remarkAttachments || item.attachments || leadObj.attachments || []),
+          attachments: (Array.isArray(item.remarksFiles) && item.remarksFiles.length > 0)
+            ? item.remarksFiles
+            : (item.attachments || leadObj.attachments || item.remarkAttachments || leadObj.remarkAttachments || [])
         };
 
         uniqueProcessed.push(processed);
@@ -291,7 +299,16 @@ const Lostlead = () => {
           {/* View Lost Lead Details Eye Button */}
           <button
             type="button"
-            onClick={() => setSelectedLead(row)}
+            onClick={() => {
+              const targetId = row.id || row._id || row.leadId;
+              navigate(`/sales/leads/details/${targetId}`, {
+                state: {
+                  lead: row,
+                  from: "lostLeads",
+                  allowEdit: false
+                }
+              });
+            }}
             className="w-7 h-7 rounded-lg border border-orange-200 bg-orange-50/70 text-orange-600 hover:bg-orange-100 hover:border-orange-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
             title="View Lost Lead Details"
           >
@@ -363,7 +380,16 @@ const Lostlead = () => {
               <span
                 className="font-extrabold text-emerald-900 bg-emerald-50 px-1.5 py-0.5 rounded-md border border-emerald-200 shadow-2xs inline-block truncate max-w-full text-xs cursor-pointer hover:text-blue-600"
                 title={name}
-                onClick={() => setSelectedLead(row)}
+                onClick={() => {
+                  const targetId = row.id || row._id || row.leadId;
+                  navigate(`/sales/leads/details/${targetId}`, {
+                    state: {
+                      lead: row,
+                      from: "lostLeads",
+                      allowEdit: false
+                    }
+                  });
+                }}
               >
                 {name}
               </span>
@@ -857,30 +883,6 @@ const Lostlead = () => {
         }}
         itemsPerPageOptions={[10, 25, 50, 100]}
       />
-
-      {/* ================= 4. DETAIL VIEW MODAL ================= */}
-      {selectedLead && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-100 space-y-4">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <h3 className="text-base font-extrabold text-slate-900">Lost Lead Details</h3>
-              <button type="button" onClick={() => setSelectedLead(null)} className="w-7 h-7 rounded-full bg-slate-100 text-slate-500 font-bold hover:bg-slate-200 text-xs cursor-pointer">✕</button>
-            </div>
-            <div className="space-y-2 text-xs text-slate-700">
-              <p><strong>Client Name:</strong> {selectedLead.clientName || selectedLead.concernPersonName}</p>
-              <p><strong>Phone:</strong> {selectedLead.phoneNumber || selectedLead.contact}</p>
-              <p><strong>Email:</strong> {selectedLead.emailAddress || selectedLead.email || "--"}</p>
-              <p><strong>Lost Reason:</strong> <span className="text-rose-700 font-bold">{selectedLead.lostReason || selectedLead.lossReason || selectedLead.reason || "Client Not Interested"}</span></p>
-              <p><strong>Expected Business:</strong> ₹{Number(selectedLead.expectedBusiness || selectedLead.expectedBusinessAmount || 0).toLocaleString("en-IN")}</p>
-              <p><strong>Remarks:</strong> {selectedLead.remark || selectedLead.remarks || selectedLead.lossRemark || "--"}</p>
-            </div>
-            <div className="pt-2 flex justify-end">
-              <button type="button" onClick={() => setSelectedLead(null)} className="px-4 py-2 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 cursor-pointer">Close</button>
-            </div>
-          </div>
-        </div>
-      )}
-
     </div>
   );
 };

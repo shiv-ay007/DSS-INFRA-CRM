@@ -10,6 +10,7 @@ import LeadManagement from '../Pages/LeadManagement'
 import SalseManagment from '../Pages/SalseManagment'
 import LeadDetails from '../Pages/LeadDetails'
 import SalesLeadForm from '../Pages/SalesLeadForm'
+import Presales from '../Pages/Presales'
 
 const SalesRoutes = () => {
   return (
@@ -30,6 +31,8 @@ const SalesRoutes = () => {
         <Route path="leads/sales-form" element={<SalesLeadForm />} />
         <Route path="leads/sales-form/:id" element={<SalesLeadForm />} />
         <Route path="management-sheet" element={<SalseManagment />} />
+        <Route path="presales" element={<Presales />} />
+        <Route path="presales/:id" element={<Presales />} />
       </Route>
     </Routes>
   )

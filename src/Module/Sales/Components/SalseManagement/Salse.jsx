@@ -142,9 +142,9 @@ const Salse = () => {
 
   useEffect(() => {
     // Always force fresh fetch on mount to prevent showing un-transferred leads
-    fetchSalesLeads(true);
+    fetchSalesLeads(false);
     const unsubscribe = subscribeToLeadUpdates(() => {
-      fetchSalesLeads(true);
+      fetchSalesLeads(false);
     });
     return () => unsubscribe();
   }, [fetchSalesLeads]);
@@ -179,28 +179,16 @@ const Salse = () => {
           <div className="flex items-center justify-center gap-1.5 mx-auto">
             <button
               type="button"
-              onClick={() => navigate(`/sales/leads/details/${row.id}`, { state: { lead: row, from: "salesManagement", allowEdit: false } })}
+              onClick={() => {
+                const targetId = row.id || row._id || row.leadId;
+                navigate(`/sales/leads/details/${targetId}`, { state: { lead: row, from: "salesManagement", allowEdit: false } });
+              }}
               className="w-7 h-7 rounded-lg border border-orange-200 bg-orange-50/70 text-orange-600 hover:bg-orange-100 hover:border-orange-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
               title="View Lead Details"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-            </button>
-            <button
-              type="button"
-              disabled={isUserObserver}
-              onClick={isUserObserver ? () => toast.info("Observer Mode: Sales Form editing is disabled.") : () => navigate(`/sales/leads/sales-form/${row._id || row.id || row.leadId}`, { state: { lead: row } })}
-              className={`w-7 h-7 rounded-lg border flex items-center justify-center transition-all shadow-2xs ${
-                isUserObserver
-                  ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed opacity-50"
-                  : "border-emerald-200 bg-emerald-50/70 text-emerald-600 hover:bg-emerald-100 hover:border-emerald-300 cursor-pointer active:scale-95"
-              }`}
-              title={isUserObserver ? "Disabled for Observer (View Only)" : "Edit Sales Form"}
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
               </svg>
             </button>
           </div>
@@ -245,28 +233,6 @@ const Salse = () => {
             )}
           </div>
         )
-      },
-      priority: {
-        label: "PRIORITY",
-        align: "center",
-        render: (val, row) => {
-          const p = (val || row.priority || row.leadLabel || "LOW").toUpperCase();
-          const isHigh = p === "HIGH" || p === "HOT";
-          const isMedium = p === "MEDIUM" || p === "WARM";
-          return (
-            <span
-              className={`px-2.5 py-0.5 rounded-full text-xs font-extrabold uppercase border ${
-                isHigh
-                  ? "bg-rose-50 text-rose-700 border-rose-200"
-                  : isMedium
-                  ? "bg-amber-50 text-amber-700 border-amber-200"
-                  : "bg-emerald-50 text-emerald-700 border-emerald-200"
-              }`}
-            >
-              {isHigh ? "🔴 High" : isMedium ? "🟡 Medium" : "🟢 Low"}
-            </span>
-          );
-        }
       },
       status: {
         label: "STATUS",
@@ -334,12 +300,12 @@ const Salse = () => {
         align: "center",
         render: (val, row) => <span className="font-mono text-slate-600 text-xs">{row.pincode || "--"}</span>
       },
-      requirement: {
-        label: "REQUIREMENT",
+      address: {
+        label: "ADDRESS",
         align: "center",
         render: (val, row) => (
-          <div className="max-w-[160px] truncate text-xs text-slate-700 font-medium mx-auto text-center" title={row.requirement}>
-            {row.requirement || "--"}
+          <div className="max-w-[150px] truncate text-xs text-slate-600 font-medium mx-auto text-center" title={row.address}>
+            {row.address || "--"}
           </div>
         )
       },
@@ -347,7 +313,7 @@ const Salse = () => {
         label: "REMARK",
         align: "center",
         render: (val, row) => {
-          const rem = row.remarks || row.remark || row.requirement || "--";
+          const rem = row.remarks || row.remark || "--";
           const attachments = [];
           if (Array.isArray(row.remarksFiles)) {
             row.remarksFiles.forEach((f) => {
@@ -441,15 +407,6 @@ const Salse = () => {
             </div>
           );
         }
-      },
-      address: {
-        label: "ADDRESS",
-        align: "center",
-        render: (val, row) => (
-          <div className="max-w-[150px] truncate text-xs text-slate-600 font-medium mx-auto text-center" title={row.address}>
-            {row.address || "--"}
-          </div>
-        )
       }
     }),
     [navigate, currentPage, rowsPerPage, isUserObserver]

@@ -146,6 +146,18 @@ const RequirementAddressCard = ({ lead }) => {
           </p>
         </div>
 
+        {/* LOST REASON (IF LEAD IS LOST) */}
+        {(lead?.lostReason || lead?.lossReason || lead?.reason || lead?.status === "LOST" || lead?.leadStatus === "LOST") && (
+          <div className="p-4 rounded-xl bg-rose-50/80 border border-rose-200/90 space-y-1.5 shadow-2xs">
+            <span className="text-rose-600 text-xs font-black uppercase tracking-wider block">
+              Lost Reason
+            </span>
+            <p className="text-rose-900 font-extrabold text-xs sm:text-sm leading-relaxed">
+              {lead?.lostReason || lead?.lossReason || lead?.reason || "Client Not Interested"}
+            </p>
+          </div>
+        )}
+
         {/* REMARKS & MEDIA ATTACHMENTS */}
         {(remarksText || attachments.length > 0) && (
           <div className="p-4 rounded-xl bg-amber-50/70 border border-amber-200/80 space-y-3">

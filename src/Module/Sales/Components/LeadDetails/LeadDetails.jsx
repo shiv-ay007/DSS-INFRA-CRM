@@ -6,13 +6,17 @@ import LeadOverviewCard from "./LeadOverviewCard";
 import RequirementAddressCard from "./RequirementAddressCard";
 import FollowupTimelineCard from "./FollowupTimelineCard";
 import EditLeadModal from "./EditLeadModal";
+import SalesProjectDetailsTable from "./SalesProjectDetailsTable";
 import { getLeadByIdApi } from "../../services/totalLeads.api";
+import { getAllLeadProjectsApi } from "../../services/leadProject.api";
 import { updateLeadInStorage, subscribeToLeadUpdates } from "../../../../context/LeadContext";
 import { useAuth } from "../../../../context/AuthContext";
+import { useNavigate } from "react-router-dom";
 
 const LeadDetails = () => {
   const { id } = useParams();
   const location = useLocation();
+  const navigate = useNavigate();
   const { role, isObserver } = useAuth();
   const currentRole = role || "Worker";
   const isUserObserver = isObserver || String(currentRole).toLowerCase() === "observer";
@@ -23,6 +27,34 @@ const LeadDetails = () => {
 
   // Edit Lead option is strictly only allowed when navigated from Total Leads and user is NOT Observer
   const allowEdit = Boolean((location.state?.allowEdit === true || location.state?.from === "totalLeads") && !isUserObserver);
+
+  // Add Project & View Sales Project Details are strictly only allowed when navigated from Sales Management Sheet
+  const allowAddProject = Boolean(location.state?.from === "salesManagement");
+  const isFromSalesManagement = Boolean(
+    location.state?.from === "salesManagement" || lead?.inSalesManagement || allowAddProject
+  );
+
+  const [projectsList, setProjectsList] = useState([]);
+
+  // Fetch project from leadsproject collection strictly for Sales Management views
+  const fetchProjectDetails = useCallback(async (currentLead) => {
+    if (!currentLead) return;
+    try {
+      const leadIdentifier = currentLead.leadId || currentLead.id || currentLead._id || id;
+      const res = await getAllLeadProjectsApi({ leadId: leadIdentifier });
+      const list = res?.data?.projects || res?.projects || (Array.isArray(res?.data) ? res.data : []);
+      if (list.length > 0) {
+        setProjectsList(list);
+        return;
+      }
+      // Fallback search by client name or phone if leadId differs slightly
+      const searchRes = await getAllLeadProjectsApi({ search: currentLead.phoneNumber || currentLead.clientName });
+      const fallbackList = searchRes?.data?.projects || searchRes?.projects || (Array.isArray(searchRes?.data) ? searchRes.data : []);
+      setProjectsList(fallbackList);
+    } catch (err) {
+      console.error("Error fetching project details from leadsproject collection:", err);
+    }
+  }, [id]);
 
   const fetchLeadData = useCallback(async () => {
     // 1. Check location state
@@ -50,8 +82,8 @@ const LeadDetails = () => {
             phoneNumber: backendLead.phoneNumber || backendLead.phone || "--",
             alternateNumber: backendLead.alternateNumber || "--",
             emailAddress: backendLead.emailAddress || backendLead.email || "--",
-            status: backendLead.leadStatus || backendLead.status || "Warm",
-            leadStatus: backendLead.leadStatus || backendLead.status || "Warm",
+            status: (backendLead.isLoss || backendLead.intrestedStatus === "Not Intersted" || backendLead.leadStatus === "CLOSED_LOST" || backendLead.status === "CLOSED_LOST") ? "LOST" : (backendLead.leadStatus || backendLead.status || "Warm"),
+            leadStatus: (backendLead.isLoss || backendLead.intrestedStatus === "Not Intersted" || backendLead.leadStatus === "CLOSED_LOST" || backendLead.status === "CLOSED_LOST") ? "LOST" : (backendLead.leadStatus || backendLead.status || "Warm"),
             leadMode: backendLead.leadMode || backendLead.leadSource || "Business networking",
             workCategory: backendLead.workCategory || "Design",
             workType: Array.isArray(backendLead.workType) ? backendLead.workType : (backendLead.workType ? [backendLead.workType] : ["Concept Drawing"]),
@@ -61,8 +93,12 @@ const LeadDetails = () => {
             date: formattedDate,
             address: backendLead.address || "--",
             projectDetail: backendLead.projectDetail || backendLead.remark || "",
-            remarks: backendLead.remarks || backendLead.remark || "",
-            remark: backendLead.remarks || backendLead.remark || "",
+            remarks: backendLead.remarks || backendLead.remark || backendLead.lossRemark || "",
+            remark: backendLead.remarks || backendLead.remark || backendLead.lossRemark || "",
+            lossRemark: backendLead.lossRemark || backendLead.remarks || backendLead.remark || "",
+            reason: backendLead.lossReason || backendLead.lostReason || backendLead.reason || "",
+            lostReason: backendLead.lossReason || backendLead.lostReason || backendLead.reason || "",
+            lossReason: backendLead.lossReason || backendLead.lostReason || backendLead.reason || "",
             remarksFile: backendLead.remarksFile || "",
             remarksFiles: backendLead.remarksFiles || [],
             statusTimeline: backendLead.statusTimeline || [],
@@ -71,7 +107,9 @@ const LeadDetails = () => {
               : (backendLead.remarkAttachments || backendLead.attachments || []),
             attachments: (Array.isArray(backendLead.remarksFiles) && backendLead.remarksFiles.length > 0)
               ? backendLead.remarksFiles
-              : (backendLead.attachments || backendLead.remarkAttachments || [])
+              : (backendLead.attachments || backendLead.remarkAttachments || []),
+            inSalesManagement: Boolean(backendLead.inSalesManagement || backendLead.isSalesTransferred),
+            isSalesTransferred: Boolean(backendLead.inSalesManagement || backendLead.isSalesTransferred)
           });
         }
       } catch (err) {
@@ -95,6 +133,13 @@ const LeadDetails = () => {
     });
     return () => unsubscribe();
   }, [id, fetchLeadData]);
+
+  // Fetch project from leadsproject collection strictly for Sales Management views
+  useEffect(() => {
+    if (lead && isFromSalesManagement) {
+      fetchProjectDetails(lead);
+    }
+  }, [lead, isFromSalesManagement, fetchProjectDetails]);
 
   const handleAddRemark = (remarkData) => {
     if (!lead) return;
@@ -171,6 +216,7 @@ const LeadDetails = () => {
           <LeadHeaderBanner
             lead={lead}
             allowEdit={allowEdit}
+            allowAddProject={allowAddProject}
             onOpenFollowupModal={() => setShowFollowupModal(true)}
             onOpenEditModal={() => setIsEditModalOpen(true)}
           />
@@ -190,6 +236,20 @@ const LeadDetails = () => {
             <LeadOverviewCard lead={lead} />
           </div>
         </div>
+
+        {/* 3. ONLY FOR SALES MANAGEMENT: FULL-WIDTH LEAD PROJECT RECORDS TABLE */}
+        {isFromSalesManagement && (
+          <SalesProjectDetailsTable
+            lead={lead}
+            projects={projectsList}
+            onAddProjectClick={() => {
+              const targetId = lead?._id || lead?.id || lead?.leadId || id;
+              navigate(`/sales/leads/sales-form/${targetId}`, {
+                state: { lead, returnToLeadDetails: true, from: "salesManagement" }
+              });
+            }}
+          />
+        )}
 
         {/* EDIT LEAD MODAL (Only when allowed from Total Leads) */}
         {allowEdit && (
