@@ -38,19 +38,15 @@ const LeadDetails = () => {
 
   // Fetch project from leadsproject collection strictly for Sales Management views
   const fetchProjectDetails = useCallback(async (currentLead) => {
-    if (!currentLead) return;
+    const mongoId = (currentLead?._id && String(currentLead._id).length === 24)
+      ? currentLead._id
+      : (id && String(id).length === 24 ? id : null);
+    if (!mongoId) return;
+
     try {
-      const leadIdentifier = currentLead.leadId || currentLead.id || currentLead._id || id;
-      const res = await getAllLeadProjectsApi({ leadId: leadIdentifier });
+      const res = await getAllLeadProjectsApi({ leadId: mongoId });
       const list = res?.data?.projects || res?.projects || (Array.isArray(res?.data) ? res.data : []);
-      if (list.length > 0) {
-        setProjectsList(list);
-        return;
-      }
-      // Fallback search by client name or phone if leadId differs slightly
-      const searchRes = await getAllLeadProjectsApi({ search: currentLead.phoneNumber || currentLead.clientName });
-      const fallbackList = searchRes?.data?.projects || searchRes?.projects || (Array.isArray(searchRes?.data) ? searchRes.data : []);
-      setProjectsList(fallbackList);
+      setProjectsList(list);
     } catch (err) {
       console.error("Error fetching project details from leadsproject collection:", err);
     }
@@ -212,7 +208,7 @@ const LeadDetails = () => {
     <div className="w-full min-h-screen bg-[#F8FAFC] pb-16 font-sans">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* 1. HEADER BANNER */}
-        <div className="sticky top-0 z-30 bg-[#F8FAFC] pt-1 pb-2">
+        <div className="w-full">
           <LeadHeaderBanner
             lead={lead}
             allowEdit={allowEdit}

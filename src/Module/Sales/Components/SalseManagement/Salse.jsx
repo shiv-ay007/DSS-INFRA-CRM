@@ -206,33 +206,52 @@ const Salse = () => {
           );
         }
       },
-      clientId: {
-        label: "CLIENT ID",
-        align: "center",
+      clientName: {
+        label: "CLIENT DETAILS",
+        align: "left",
         render: (val, row) => {
-          const cid = row.clientId || row.leadId || row.id || (row._id && !String(row._id).match(/^[0-9a-fA-F]{24}$/) ? row._id : `LD-${String(row._id || '').slice(-4).toUpperCase()}`);
+          const targetId = row.id || row._id || row.leadId;
+          const phone = row.phoneNumber || row.contact || row.whatsappNumber || "--";
+          const email = row.emailAddress || row.email || "";
+
           return (
-            <span className="font-mono font-bold text-slate-700 text-xs">{cid || "--"}</span>
+            <div className="text-left font-medium text-slate-800 text-xs space-y-0.5 max-w-[180px]">
+              <div>
+                <span
+                  className="font-bold text-slate-900 cursor-pointer hover:text-blue-600 hover:underline block truncate"
+                  onClick={() => navigate(`/sales/leads/details/${targetId}`, { state: { lead: row, from: "salesManagement", allowEdit: false } })}
+                  title={row.clientName || row.concernPersonName || "--"}
+                >
+                  {row.clientName || row.concernPersonName || "--"}
+                </span>
+              </div>
+              {phone && phone !== "--" ? (
+                <div>
+                  <a
+                    href={`tel:${phone}`}
+                    className="text-xs text-blue-600 hover:text-blue-800 hover:underline font-mono font-medium block truncate cursor-pointer"
+                    title={`Call ${phone}`}
+                  >
+                    {phone}
+                  </a>
+                </div>
+              ) : (
+                <div className="text-xs text-slate-400 font-mono">--</div>
+              )}
+              {email && email !== "--" && email.trim() !== "" ? (
+                <div>
+                  <a
+                    href={`mailto:${email}`}
+                    className="text-xs text-blue-600 hover:text-blue-800 hover:underline font-mono truncate max-w-[160px] block cursor-pointer"
+                    title={`Email ${email}`}
+                  >
+                    {email}
+                  </a>
+                </div>
+              ) : null}
+            </div>
           );
         }
-      },
-      clientName: {
-        label: "CLIENT",
-        align: "left",
-        render: (val, row) => (
-          <div className="text-left font-medium text-slate-800 text-xs">
-            <div
-              className="font-bold text-slate-900 cursor-pointer hover:text-blue-600 hover:underline"
-              onClick={() => navigate(`/sales/leads/details/${row.id}`, { state: { lead: row, from: "salesManagement", allowEdit: false } })}
-            >
-              {row.clientName || row.concernPersonName || "--"}
-            </div>
-            <div className="text-xs text-slate-600 font-mono font-medium">{row.phoneNumber || row.contact || "--"}</div>
-            {row.emailAddress && row.emailAddress !== "--" && (
-              <div className="text-xs text-slate-400 truncate max-w-[160px]">{row.emailAddress}</div>
-            )}
-          </div>
-        )
       },
       status: {
         label: "STATUS",

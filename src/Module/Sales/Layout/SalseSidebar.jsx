@@ -2,6 +2,8 @@ import React, { useState, useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import salesLogo from "../../../assets/SalesLogo.png";
 import { useAuth } from "../../../context/AuthContext";
+import { FaWpforms, FaBoxes, FaHardHat } from "react-icons/fa";
+import { HiOutlineTemplate } from "react-icons/hi";
 
 // 1. Worker (Admin / Staff) Menu Items - Has "Add Lead"
 const workerMenuItems = [
@@ -72,6 +74,39 @@ const workerMenuItems = [
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
       </svg>
     )
+  },
+  {
+    id: "master_form",
+    label: "MasterForm",
+    activeGradient: "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-md shadow-violet-600/30",
+    iconColor: "text-violet-400 group-hover:text-violet-300",
+    icon: <FaWpforms className="w-4 h-4 shrink-0" />,
+    subItems: [
+      { 
+        id: "pms_template", 
+        label: "PMS Template", 
+        path: "/sales/master/pms-template", 
+        badge: "PMS",
+        icon: <HiOutlineTemplate className="w-3.5 h-3.5 text-cyan-400" />,
+        badgeStyle: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30"
+      },
+      { 
+        id: "material", 
+        label: "Material", 
+        path: "/sales/master/material", 
+        badge: "Items",
+        icon: <FaBoxes className="w-3.5 h-3.5 text-emerald-400" />,
+        badgeStyle: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+      },
+      { 
+        id: "suplire_contractor", 
+        label: "Suplire and Contractor", 
+        path: "/sales/master/suplire-and-contractor", 
+        badge: "Vendors",
+        icon: <FaHardHat className="w-3.5 h-3.5 text-amber-400" />,
+        badgeStyle: "bg-amber-500/20 text-amber-300 border-amber-500/30"
+      }
+    ]
   }
 ];
 
@@ -131,6 +166,39 @@ const observerMenuItems = [
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
       </svg>
     )
+  },
+  {
+    id: "master_form",
+    label: "MasterForm",
+    activeGradient: "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-md shadow-violet-600/30",
+    iconColor: "text-violet-400 group-hover:text-violet-300",
+    icon: <FaWpforms className="w-4 h-4 shrink-0" />,
+    subItems: [
+      { 
+        id: "pms_template", 
+        label: "PMS Template", 
+        path: "/sales/master/pms-template", 
+        badge: "PMS",
+        icon: <HiOutlineTemplate className="w-3.5 h-3.5 text-cyan-400" />,
+        badgeStyle: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30"
+      },
+      { 
+        id: "material", 
+        label: "Material", 
+        path: "/sales/master/material", 
+        badge: "Items",
+        icon: <FaBoxes className="w-3.5 h-3.5 text-emerald-400" />,
+        badgeStyle: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+      },
+      { 
+        id: "suplire_contractor", 
+        label: "Suplire and Contractor", 
+        path: "/sales/master/suplire-and-contractor", 
+        badge: "Vendors",
+        icon: <FaHardHat className="w-3.5 h-3.5 text-amber-400" />,
+        badgeStyle: "bg-amber-500/20 text-amber-300 border-amber-500/30"
+      }
+    ]
   }
 ];
 
@@ -149,21 +217,29 @@ const SalseSidebar = ({ isOpen = true, setIsOpen }) => {
   // Dynamic menu list based on role
   const activeMenuList = isUserObserver ? observerMenuItems : workerMenuItems;
 
-  // Active check only for Lead Management sub-items
-  const isLeadSubActive = [
-    "/sales/leads/total",
-    "/sales/leads/lost",
-    "/sales/leads/all"
-  ].includes(location.pathname);
+  // Check if any sub-item in this item is currently active
+  const isSubActive = (subItems = []) =>
+    subItems.some((sub) => location.pathname === sub.path || location.pathname.startsWith(sub.path + "/"));
+
+  // Track expanded state for any sub-item dropdowns
+  const [openSubMenus, setOpenSubMenus] = useState(() => {
+    const initial = {};
+    [...workerMenuItems, ...observerMenuItems].forEach(item => {
+      if (item.subItems) {
+        initial[item.id] = isSubActive(item.subItems);
+      }
+    });
+    return initial;
+  });
 
   // Auto expand when active sub-route is visited
-  const [isLeadOpen, setIsLeadOpen] = useState(isLeadSubActive);
-
   useEffect(() => {
-    if (isLeadSubActive) {
-      setIsLeadOpen(true);
-    }
-  }, [isLeadSubActive]);
+    activeMenuList.forEach(item => {
+      if (item.subItems && isSubActive(item.subItems)) {
+        setOpenSubMenus(prev => ({ ...prev, [item.id]: true }));
+      }
+    });
+  }, [location.pathname]);
 
   return (
     <aside
@@ -208,8 +284,11 @@ const SalseSidebar = ({ isOpen = true, setIsOpen }) => {
         {activeMenuList.map((item) => {
           const hasSubItems = Array.isArray(item.subItems) && item.subItems.length > 0;
 
-          // If item has dropdown sub-items (e.g. Lead Management)
+          // If item has dropdown sub-items (e.g. Lead Management, MasterForm)
           if (hasSubItems) {
+            const isDropdownActive = isSubActive(item.subItems);
+            const isDropdownOpen = !!openSubMenus[item.id];
+
             return (
               <div key={item.id} className="relative group">
                 <button
@@ -219,20 +298,23 @@ const SalseSidebar = ({ isOpen = true, setIsOpen }) => {
                       if (setIsOpen) setIsOpen(true);
                       else setInternalOpen(true);
                     }
-                    setIsLeadOpen(!isLeadOpen);
+                    setOpenSubMenus(prev => ({
+                      ...prev,
+                      [item.id]: !prev[item.id]
+                    }));
                   }}
                   className={`w-full flex items-center transition-all duration-200 cursor-pointer ${
                     isSidebarOpen ? "px-3 py-2 rounded-lg justify-between" : "p-2 rounded-lg justify-center"
                   } ${
-                    isLeadSubActive && !isLeadOpen
+                    isDropdownActive && !isDropdownOpen
                       ? item.activeGradient + " font-bold"
-                      : isLeadSubActive
+                      : isDropdownActive
                       ? "bg-slate-800/90 text-white font-bold"
                       : "text-slate-300 hover:text-white hover:bg-slate-800/60 font-medium"
                   }`}
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
-                    <div className={isLeadSubActive ? "text-amber-400" : item.iconColor}>
+                    <div className={isDropdownActive ? "text-amber-400" : item.iconColor}>
                       {item.icon}
                     </div>
                     {isSidebarOpen && (
@@ -246,7 +328,7 @@ const SalseSidebar = ({ isOpen = true, setIsOpen }) => {
                   {isSidebarOpen && (
                     <svg
                       className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 shrink-0 ${
-                        isLeadOpen ? "rotate-0 text-amber-400" : "rotate-180"
+                        isDropdownOpen ? "rotate-0 text-amber-400" : "rotate-180"
                       }`}
                       fill="none"
                       stroke="currentColor"
@@ -266,7 +348,7 @@ const SalseSidebar = ({ isOpen = true, setIsOpen }) => {
                 )}
 
                 {/* Sub-items list */}
-                {isSidebarOpen && isLeadOpen && (
+                {isSidebarOpen && isDropdownOpen && (
                   <div className="mt-1 ml-3 pl-2 border-l border-slate-800 space-y-0.5 py-0.5">
                     {item.subItems.map((sub) => (
                       <NavLink
@@ -282,13 +364,21 @@ const SalseSidebar = ({ isOpen = true, setIsOpen }) => {
                       >
                         {({ isActive }) => (
                           <>
-                            <div className="flex items-center gap-1.5 truncate">
-                              <span className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-emerald-400" : "bg-slate-600"}`} />
+                            <div className="flex items-center gap-2 truncate">
+                              {sub.icon ? (
+                                <span className="shrink-0">{sub.icon}</span>
+                              ) : (
+                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? "bg-emerald-400" : "bg-slate-600"}`} />
+                              )}
                               <span className="truncate">{sub.label}</span>
                             </div>
-                            {isActive && (
-                              <span className="text-[9px] uppercase font-mono font-bold px-1 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                                Active
+                            {sub.badge && (
+                              <span className={`text-[9px] uppercase font-mono font-bold px-1.5 py-0.5 rounded border shrink-0 ${
+                                isActive
+                                  ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                                  : sub.badgeStyle || "bg-slate-800 text-slate-400 border-slate-700"
+                              }`}>
+                                {sub.badge}
                               </span>
                             )}
                           </>

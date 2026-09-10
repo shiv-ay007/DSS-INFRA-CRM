@@ -25,10 +25,15 @@ import {
   FaSearch,
   FaFilter,
   FaTable,
-  FaStream
+  FaStream,
+  FaSpinner
 } from "react-icons/fa";
 import { toast } from "react-toastify";
-import { getAllLeadProjectsApi } from "../../services/leadProject.api";
+import {
+  getAllLeadProjectsApi,
+  createLeadProjectApi,
+  updateLeadProjectApi
+} from "../../services/leadProject.api";
 
 // 11 Pipeline Stages Definition (As per Functional Spec)
 const PIPELINE_STAGES = [
@@ -56,127 +61,76 @@ const isStageApplicable = (stageId, scope) => {
   return true;
 };
 
-// Initial default clients data matching user's spec
-const DEFAULT_PRESALES = [
-  {
-    id: "PRESALE-001",
-    clientName: "ABC Infra",
-    contactNo: "9876543210",
-    emailAddress: "abcinfra@gmail.com",
-    engagementScope: "Design + Construction",
-    projectDetails: "Residential Work",
-    expectedRevenue: 850000,
-    activePerson: "Shivam",
-    workTypes: ["3D View", "Concept Drawing", "Elevation"],
-    city: "Lucknow",
-    currentStageId: 5,
-    status: "OPEN",
-    closureStatus: "Open",
-    stagesData: {
-      1: { requestDate: "2026-08-25", visitCompletedDate: "2026-08-26" },
-      2: { requestInitiatedDate: "2026-08-28", completionDate: "2026-08-30" },
-      3: { requestReceivingDate: "2026-09-01", workStartDate: "2026-09-02", completionDate: "2026-09-04" },
-      4: { acceptanceStatus: "Accepted", lastNegotiationDate: "2026-09-06", finalisationDate: "2026-09-07", constructionRate: 1850 },
-      5: {
-        wantsItem: true,
-        requestDate: "2026-09-09",
-        optionDate: "2026-09-10",
-        optionsCount: 3,
-        finalOptionDate: "2026-09-12",
-        modDate: "2026-09-13",
-        finalDrawingDate: "2026-09-15"
-      }
-    },
-    remarks: [
-      {
-        id: "rem-1",
-        author: "Shivam",
-        dateTime: "09 Sep 2026, 11:30 AM",
-        text: "Client requested modification in elevation."
-      }
-    ],
-    createdAt: "2026-09-01T10:00:00.000Z"
-  }
-];
-
 const Presales = () => {
   const navigate = useNavigate();
 
   // Active View Mode: "table" (default Table form) vs "pipeline"
   const [viewMode, setViewMode] = useState("table");
+  const [loading, setLoading] = useState(true);
 
-  // Presales List state
-  const [presalesList, setPresalesList] = useState(() => {
+  // Presales List state (directly from backend API)
+  const [presalesList, setPresalesList] = useState([]);
+
+  // Fetch all projects directly from backend lead-projects API
+  const fetchBackendProjects = async () => {
     try {
-      const saved = localStorage.getItem("crm_presales_data_v3");
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {
-      console.error(e);
-    }
-    return DEFAULT_PRESALES;
-  });
+      setLoading(true);
+      const res = await getAllLeadProjectsApi();
+      const backendProjects =
+        res?.data?.projects || res?.projects || (Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : []);
 
-  // Also fetch any projects from backend leadsproject collection and merge
-  useEffect(() => {
-    const fetchBackendProjects = async () => {
-      try {
-        const res = await getAllLeadProjectsApi();
-        const backendProjects = res?.data?.projects || res?.projects || (Array.isArray(res?.data) ? res.data : []);
-        if (backendProjects.length > 0) {
-          setPresalesList((prev) => {
-            const merged = [...prev];
-            backendProjects.forEach((bp) => {
-              const cleanId = bp.leadId || bp._id;
-              if (!merged.some((p) => p.id === cleanId || p.clientName === bp.clientName)) {
-                merged.push({
-                  id: cleanId,
-                  clientName: bp.clientName,
-                  contactNo: bp.phoneNumber || bp.contactNo || "--",
-                  emailAddress: bp.emailAddress || "",
-                  engagementScope: bp.businessType?.includes("Consultancy")
-                    ? "Consultancy Only"
-                    : bp.businessType?.includes("Design")
-                    ? "Design Only"
-                    : "Design + Construction",
-                  projectDetails: bp.requirement || bp.projectDetails || "Interior / Architectural Work",
-                  expectedRevenue: Number(bp.expectedBusiness || 0),
-                  activePerson: bp.assignedTo || "Admin",
-                  workTypes: Array.isArray(bp.workTypes) && bp.workTypes.length > 0 ? bp.workTypes : ["3D View", "Concept Drawing"],
-                  city: bp.city || "Lucknow",
-                  currentStageId: bp.currentStageId || 5,
-                  status: bp.status || "OPEN",
-                  closureStatus: "Open",
-                  stagesData: {},
-                  remarks: [],
-                  createdAt: bp.createdAt || new Date().toISOString()
-                });
-              }
-            });
-            return merged;
-          });
-        }
-      } catch (err) {
-        console.error("Error fetching backend projects for Presales:", err);
+      const formatted = backendProjects.map((bp) => {
+        const cleanId = bp._id || bp.leadId || bp.id;
+        const leadObj = typeof bp.leadId === "object" && bp.leadId !== null ? bp.leadId : null;
+        return {
+          id: cleanId,
+          _id: bp._id || cleanId,
+          leadId: leadObj?._id || bp.leadId || cleanId,
+          clientName: bp.clientName || bp.concernPersonName || leadObj?.clientName || leadObj?.concernPersonName || "Unnamed Client",
+          contactNo: bp.phoneNumber || bp.contactNo || bp.whatsappNumber || leadObj?.phoneNumber || leadObj?.contactNo || "--",
+          emailAddress: bp.emailAddress || bp.email || leadObj?.emailAddress || leadObj?.email || "",
+          engagementScope: bp.businessType?.includes("Consultancy")
+            ? "Consultancy Only"
+            : bp.businessType?.includes("Design")
+            ? "Design Only"
+            : "Design + Construction",
+          projectDetails: bp.requirement || bp.projectDetails || "Interior / Architectural Work",
+          expectedRevenue: Number(bp.expectedBusiness || bp.expectedRevenue || 0),
+          activePerson: bp.assignedTo || bp.activePerson || "Admin",
+          workTypes:
+            Array.isArray(bp.workTypes) && bp.workTypes.length > 0
+              ? bp.workTypes
+              : ["3D View", "Concept Drawing"],
+          city: bp.city || leadObj?.city || "Lucknow",
+          currentStageId: bp.currentStageId || 1,
+          status: bp.status || "OPEN",
+          closureStatus: bp.closureStatus || "Open",
+          stagesData: bp.stagesData || {},
+          remarks: Array.isArray(bp.remarks) ? bp.remarks : [],
+          createdAt: bp.createdAt || bp.created_at || bp.date || leadObj?.createdAt || leadObj?.date || null
+        };
+      });
+
+      setPresalesList(formatted);
+      if (formatted.length > 0) {
+        setSelectedPresaleId((prev) => (prev && formatted.some((p) => p.id === prev) ? prev : formatted[0].id));
+        setActiveStageId((prev) => prev || formatted[0].currentStageId || 1);
       }
-    };
+    } catch (err) {
+      console.error("Error fetching backend projects for Presales:", err);
+      toast.error("Failed to load presales data from server");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchBackendProjects();
   }, []);
 
-  // Sync to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem("crm_presales_data_v3", JSON.stringify(presalesList));
-    } catch (e) {
-      console.error(e);
-    }
-  }, [presalesList]);
-
   // Selected Presale for Detail / Pipeline View
-  const [selectedPresaleId, setSelectedPresaleId] = useState(DEFAULT_PRESALES[0].id);
-  const [activeStageId, setActiveStageId] = useState(5);
+  const [selectedPresaleId, setSelectedPresaleId] = useState(null);
+  const [activeStageId, setActiveStageId] = useState(1);
   const [newRemarkText, setNewRemarkText] = useState("");
 
   // Search and Filters for Table
@@ -192,24 +146,25 @@ const Presales = () => {
 
   // Current active presale item
   const currentPresale = useMemo(() => {
-    return presalesList.find((p) => p.id === selectedPresaleId) || presalesList[0] || DEFAULT_PRESALES[0];
+    return presalesList.find((p) => p.id === selectedPresaleId) || presalesList[0] || null;
   }, [presalesList, selectedPresaleId]);
 
   // Check if active stage is applicable
   const isCurrentStageApplicable = useMemo(() => {
+    if (!currentPresale) return false;
     return isStageApplicable(activeStageId, currentPresale.engagementScope);
-  }, [activeStageId, currentPresale.engagementScope]);
+  }, [activeStageId, currentPresale]);
 
   // Active stage configuration
   const activeStageConfig = useMemo(() => {
-    return PIPELINE_STAGES.find((s) => s.id === activeStageId) || PIPELINE_STAGES[4];
+    return PIPELINE_STAGES.find((s) => s.id === activeStageId) || PIPELINE_STAGES[0];
   }, [activeStageId]);
 
   // Form State for Active Stage
   const [stageFormData, setStageFormData] = useState({});
 
   useEffect(() => {
-    const saved = currentPresale.stagesData?.[activeStageId] || {};
+    const saved = currentPresale?.stagesData?.[activeStageId] || {};
     setStageFormData(saved);
   }, [activeStageId, currentPresale]);
 
@@ -231,76 +186,124 @@ const Presales = () => {
     return calculateDaysInMod(stageFormData.modDate, stageFormData.finalContractSignDate);
   }, [stageFormData.modDate, stageFormData.finalContractSignDate]);
 
+  const [savingStage, setSavingStage] = useState(false);
+  const [creatingPresale, setCreatingPresale] = useState(false);
+
   // Update Engagement Scope
-  const handleScopeChange = (newScope) => {
+  const handleScopeChange = async (newScope) => {
+    if (!currentPresale) return;
+    const targetId = currentPresale._id || currentPresale.id;
     setPresalesList((prev) =>
       prev.map((item) => (item.id === currentPresale.id ? { ...item, engagementScope: newScope } : item))
     );
-    toast.info(`Engagement Scope updated to "${newScope}"!`);
+    try {
+      if (targetId) {
+        await updateLeadProjectApi(targetId, {
+          businessType: newScope,
+          engagementScope: newScope
+        });
+      }
+      toast.info(`Engagement Scope updated to "${newScope}"!`);
+    } catch (err) {
+      console.error("Error updating scope:", err);
+      toast.error("Failed to update engagement scope on server");
+    }
   };
 
   // Save Stage Action
-  const handleSaveStage = () => {
+  const handleSaveStage = async () => {
+    if (!currentPresale) return;
+    const targetId = currentPresale._id || currentPresale.id;
+    const updatedStages = {
+      ...(currentPresale.stagesData || {}),
+      [activeStageId]: { ...stageFormData }
+    };
+    const newStageId = Math.max(currentPresale.currentStageId || 1, activeStageId);
+
+    setSavingStage(true);
     setPresalesList((prev) =>
       prev.map((item) => {
         if (item.id === currentPresale.id) {
-          const updatedStages = {
-            ...(item.stagesData || {}),
-            [activeStageId]: { ...stageFormData }
-          };
-          return { ...item, stagesData: updatedStages };
+          return { ...item, stagesData: updatedStages, currentStageId: newStageId };
         }
         return item;
       })
     );
-    toast.success(`Stage ${activeStageId} (${activeStageConfig.name}) saved successfully! 🚀`);
+
+    try {
+      if (targetId) {
+        await updateLeadProjectApi(targetId, {
+          stagesData: updatedStages,
+          currentStageId: newStageId
+        });
+      }
+      toast.success(`Stage ${activeStageId} (${activeStageConfig.name}) saved successfully! 🚀`);
+    } catch (err) {
+      console.error("Error saving stage:", err);
+      toast.error("Failed to save stage details on server");
+    } finally {
+      setSavingStage(false);
+    }
   };
 
   // Add Remark Action
-  const handleAddRemark = (e) => {
+  const handleAddRemark = async (e) => {
     e.preventDefault();
     if (!newRemarkText.trim()) {
       toast.error("Please enter a remark first!");
       return;
     }
+    if (!currentPresale) return;
 
+    const targetId = currentPresale._id || currentPresale.id;
     const now = new Date();
     const formattedDate = now.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
     const formattedTime = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true });
 
     const newRemark = {
       id: `rem-${Date.now()}`,
-      author: currentPresale.activePerson || "Shivam",
+      author: currentPresale.activePerson || "Admin",
       dateTime: `${formattedDate}, ${formattedTime}`,
       text: newRemarkText.trim()
     };
 
+    const updatedRemarks = [newRemark, ...(currentPresale.remarks || [])];
+
     setPresalesList((prev) =>
       prev.map((item) => {
         if (item.id === currentPresale.id) {
-          return { ...item, remarks: [newRemark, ...(item.remarks || [])] };
+          return { ...item, remarks: updatedRemarks };
         }
         return item;
       })
     );
-
     setNewRemarkText("");
-    toast.success("Remark added to discussion log!");
+
+    try {
+      if (targetId) {
+        await updateLeadProjectApi(targetId, { remarks: updatedRemarks });
+      }
+      toast.success("Remark added to discussion log!");
+    } catch (err) {
+      console.error("Error saving remark:", err);
+      toast.error("Failed to save remark on server");
+    }
   };
 
   // Move to Active Project Rule Check
   const isMoveToActiveEnabled = useMemo(() => {
-    if (currentPresale.engagementScope !== "Design + Construction") return false;
+    if (!currentPresale || currentPresale.engagementScope !== "Design + Construction") return false;
     const stage11 = currentPresale.stagesData?.[11];
     return Boolean(stage11 && stage11.finalContractSignDate);
   }, [currentPresale]);
 
-  const handleMoveToActive = () => {
-    if (!isMoveToActiveEnabled) {
+  const handleMoveToActive = async () => {
+    if (!isMoveToActiveEnabled || !currentPresale) {
       toast.warning("Move to Active Project requires Scope = 'Design + Construction' and Stage 11 Contract signed!");
       return;
     }
     if (window.confirm("Confirm: Move this client to Active Project (Construction Phase)?")) {
+      const targetId = currentPresale._id || currentPresale.id;
       setPresalesList((prev) =>
         prev.map((item) =>
           item.id === currentPresale.id
@@ -308,18 +311,42 @@ const Presales = () => {
             : item
         )
       );
-      toast.success("Presale successfully moved to Active Project! 🎉");
+      try {
+        if (targetId) {
+          await updateLeadProjectApi(targetId, {
+            status: "ACTIVE_PROJECT",
+            closureStatus: "Converted to Construction"
+          });
+        }
+        toast.success("Presale successfully moved to Active Project! 🎉");
+      } catch (err) {
+        console.error("Error moving to active project:", err);
+        toast.error("Failed to update status on server");
+      }
     }
   };
 
-  const handleConfirmClose = () => {
+  const handleConfirmClose = async () => {
+    if (!currentPresale) return;
+    const targetId = currentPresale._id || currentPresale.id;
     setPresalesList((prev) =>
       prev.map((item) =>
         item.id === currentPresale.id ? { ...item, status: "CLOSED", closureStatus: closureOption } : item
       )
     );
     setIsCloseModalOpen(false);
-    toast.info(`Record marked as "${closureOption}".`);
+    try {
+      if (targetId) {
+        await updateLeadProjectApi(targetId, {
+          status: "CLOSED",
+          closureStatus: closureOption
+        });
+      }
+      toast.info(`Record marked as "${closureOption}".`);
+    } catch (err) {
+      console.error("Error closing presale:", err);
+      toast.error("Failed to update closure status on server");
+    }
   };
 
   // Filtered Table Records
@@ -330,6 +357,7 @@ const Presales = () => {
         !searchTerm ||
         item.clientName?.toLowerCase().includes(q) ||
         item.contactNo?.includes(q) ||
+        item.emailAddress?.toLowerCase().includes(q) ||
         item.city?.toLowerCase().includes(q) ||
         item.activePerson?.toLowerCase().includes(q);
 
@@ -348,7 +376,7 @@ const Presales = () => {
   // View Pipeline of a specific Presale
   const handleOpenPipelineForClient = (client) => {
     setSelectedPresaleId(client.id);
-    setActiveStageId(client.currentStageId || 5);
+    setActiveStageId(client.currentStageId || 1);
     setIsPipelineModalOpen(true);
   };
 
@@ -356,15 +384,16 @@ const Presales = () => {
   const [newPresaleForm, setNewPresaleForm] = useState({
     clientName: "",
     contactNo: "",
+    emailAddress: "",
     engagementScope: "Design + Construction",
     projectDetails: "Residential Work",
     expectedRevenue: 850000,
-    activePerson: "Shivam",
+    activePerson: "Admin",
     city: "Lucknow",
     workTypes: "3D View, Concept Drawing, Elevation"
   });
 
-  const handleCreateNewPresale = (e) => {
+  const handleCreateNewPresale = async (e) => {
     e.preventDefault();
     if (!newPresaleForm.clientName.trim()) {
       toast.error("Client Name is required!");
@@ -375,29 +404,74 @@ const Presales = () => {
       return;
     }
 
-    const newPresale = {
-      id: `PRESALE-${Date.now().toString().slice(-4)}`,
+    setCreatingPresale(true);
+    const payload = {
       clientName: newPresaleForm.clientName.trim(),
+      phoneNumber: newPresaleForm.contactNo.trim(),
       contactNo: newPresaleForm.contactNo.trim(),
-      engagementScope: newPresaleForm.engagementScope,
-      projectDetails: newPresaleForm.projectDetails,
-      expectedRevenue: Number(newPresaleForm.expectedRevenue) || 0,
-      activePerson: newPresaleForm.activePerson,
-      workTypes: newPresaleForm.workTypes.split(",").map((w) => w.trim()).filter(Boolean),
+      emailAddress: newPresaleForm.emailAddress.trim(),
+      email: newPresaleForm.emailAddress.trim(),
+      businessType: newPresaleForm.engagementScope,
+      requirement: newPresaleForm.projectDetails,
+      expectedBusiness: Number(newPresaleForm.expectedRevenue) || 0,
+      assignedTo: newPresaleForm.activePerson,
       city: newPresaleForm.city.trim(),
+      workTypes: newPresaleForm.workTypes.split(",").map((w) => w.trim()).filter(Boolean),
       currentStageId: 1,
       status: "OPEN",
       closureStatus: "Open",
       stagesData: {},
-      remarks: [],
-      createdAt: new Date().toISOString()
+      remarks: []
     };
 
-    setPresalesList([newPresale, ...presalesList]);
-    setSelectedPresaleId(newPresale.id);
-    setActiveStageId(1);
-    setIsAddModalOpen(false);
-    toast.success(`Presale created for ${newPresale.clientName}! 🚀`);
+    try {
+      const res = await createLeadProjectApi(payload);
+      const savedDoc = res?.data?.project || res?.project || res?.data || res;
+      const cleanId = savedDoc?._id || savedDoc?.leadId || `PRESALE-${Date.now().toString().slice(-4)}`;
+
+      const newPresaleItem = {
+        id: cleanId,
+        _id: savedDoc?._id || cleanId,
+        leadId: savedDoc?.leadId || cleanId,
+        clientName: payload.clientName,
+        contactNo: payload.contactNo,
+        emailAddress: payload.emailAddress || "",
+        engagementScope: payload.businessType,
+        projectDetails: payload.requirement,
+        expectedRevenue: payload.expectedBusiness,
+        activePerson: payload.assignedTo,
+        workTypes: payload.workTypes,
+        city: payload.city,
+        currentStageId: 1,
+        status: "OPEN",
+        closureStatus: "Open",
+        stagesData: {},
+        remarks: [],
+        createdAt: savedDoc?.createdAt || new Date().toISOString()
+      };
+
+      setPresalesList((prev) => [newPresaleItem, ...prev]);
+      setSelectedPresaleId(cleanId);
+      setActiveStageId(1);
+      setIsAddModalOpen(false);
+      setNewPresaleForm({
+        clientName: "",
+        contactNo: "",
+        emailAddress: "",
+        engagementScope: "Design + Construction",
+        projectDetails: "Residential Work",
+        expectedRevenue: 850000,
+        activePerson: "Admin",
+        city: "Lucknow",
+        workTypes: "3D View, Concept Drawing, Elevation"
+      });
+      toast.success(`Presale created for ${newPresaleItem.clientName}! 🚀`);
+    } catch (err) {
+      console.error("Error creating presale:", err);
+      toast.error("Failed to create presale on server");
+    } finally {
+      setCreatingPresale(false);
+    }
   };
 
   // Reusable Negotiation Block
@@ -1058,8 +1132,7 @@ const Presales = () => {
                   <th className="py-3 px-3 text-center w-12 border-r border-slate-800 whitespace-nowrap">SR. NO.</th>
                   <th className="py-3 px-3 text-center w-28 border-r border-slate-800 whitespace-nowrap">ACTIONS</th>
                   <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">REVENUE</th>
-                  <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">PRESALE ID</th>
-                  <th className="py-3 px-3 text-left border-r border-slate-800 whitespace-nowrap">CLIENT</th>
+                  <th className="py-3 px-3 text-left border-r border-slate-800 whitespace-nowrap">CLIENT DETAILS</th>
                   <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">ENGAGEMENT SCOPE</th>
                   <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">CURRENT STAGE</th>
                   <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">PROJECT DETAILS</th>
@@ -1070,19 +1143,34 @@ const Presales = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
-                {filteredPresales.length === 0 ? (
+                {loading ? (
                   <tr>
-                    <td colSpan={12} className="py-12 text-center text-slate-500 font-medium">
-                      No Presale records match your filters.
+                    <td colSpan={11} className="py-12 text-center text-slate-500 font-medium">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <FaSpinner className="animate-spin text-blue-600 text-xl" />
+                        <span className="text-xs font-semibold">Loading presales data from server...</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : filteredPresales.length === 0 ? (
+                  <tr>
+                    <td colSpan={11} className="py-12 text-center text-slate-500 font-medium">
+                      {presalesList.length === 0
+                        ? "No Presale projects found in database. Click \"+ Add Presale\" to create one."
+                        : "No Presale records match your filters."}
                     </td>
                   </tr>
                 ) : (
                   filteredPresales.map((item, idx) => {
-                    const stageObj = PIPELINE_STAGES.find((s) => s.id === (item.currentStageId || 5)) || PIPELINE_STAGES[4];
-                    const dateObj = new Date(item.createdAt || Date.now());
-                    const formattedDate = !isNaN(dateObj.getTime())
+                    const stageObj = PIPELINE_STAGES.find((s) => s.id === (item.currentStageId || 1)) || PIPELINE_STAGES[0];
+                    const dateObj = item.createdAt ? new Date(item.createdAt) : null;
+                    const isValidDate = dateObj && !isNaN(dateObj.getTime());
+                    const formattedDate = isValidDate
                       ? dateObj.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
                       : "--";
+                    const formattedTime = isValidDate
+                      ? dateObj.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true })
+                      : "";
 
                     return (
                       <tr key={item.id || idx} className="hover:bg-slate-50/80 transition-colors">
@@ -1124,25 +1212,61 @@ const Presales = () => {
                           </span>
                         </td>
 
-                        {/* 4. ID */}
-                        <td className="py-2.5 px-3 text-center font-mono font-bold text-slate-700 border-r border-slate-100 whitespace-nowrap">
-                          {item.id}
-                        </td>
-
-                        {/* 5. CLIENT */}
+                        {/* 4. CLIENT DETAILS */}
                         <td className="py-2.5 px-3 text-left border-r border-slate-100">
-                          <div className="font-bold text-slate-900">{item.clientName}</div>
-                          <div className="text-[11px] text-slate-500 font-mono">{item.contactNo}</div>
+                          <div className="space-y-0.5 max-w-[180px]">
+                            {/* Client Name (Clickable to open pipeline) */}
+                            <div>
+                              <button
+                                type="button"
+                                onClick={() => handleOpenPipelineForClient(item)}
+                                className="font-bold text-slate-900 hover:text-blue-600 hover:underline cursor-pointer text-left block truncate max-w-full"
+                                title={`Open Pipeline: ${item.clientName}`}
+                              >
+                                {item.clientName}
+                              </button>
+                            </div>
+
+                            {/* Phone Number (Clickable link) */}
+                            {item.contactNo && item.contactNo !== "--" ? (
+                              <div>
+                                <a
+                                  href={`tel:${item.contactNo}`}
+                                  className="text-[11px] font-mono text-blue-600 hover:text-blue-800 hover:underline block truncate cursor-pointer"
+                                  title={`Call ${item.contactNo}`}
+                                >
+                                  {item.contactNo}
+                                </a>
+                              </div>
+                            ) : (
+                              <div className="text-[11px] text-slate-400 font-mono">--</div>
+                            )}
+
+                            {/* Email Address (Clickable link) */}
+                            {item.emailAddress && item.emailAddress !== "--" && item.emailAddress.trim() !== "" ? (
+                              <div>
+                                <a
+                                  href={`mailto:${item.emailAddress}`}
+                                  className="text-[11px] font-mono text-blue-600 hover:text-blue-800 hover:underline block truncate cursor-pointer"
+                                  title={`Email ${item.emailAddress}`}
+                                >
+                                  {item.emailAddress}
+                                </a>
+                              </div>
+                            ) : (
+                              <div className="text-[11px] text-slate-400 font-mono">--</div>
+                            )}
+                          </div>
                         </td>
 
-                        {/* 6. ENGAGEMENT SCOPE */}
+                        {/* 5. ENGAGEMENT SCOPE */}
                         <td className="py-2.5 px-3 text-center border-r border-slate-100 whitespace-nowrap">
                           <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
                             {item.engagementScope}
                           </span>
                         </td>
 
-                        {/* 7. CURRENT STAGE */}
+                        {/* 6. CURRENT STAGE */}
                         <td className="py-2.5 px-3 text-center border-r border-slate-100 whitespace-nowrap">
                           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-extrabold bg-amber-50 text-amber-800 border border-amber-200">
                             <span className="w-2 h-2 rounded-full bg-amber-500"></span>
@@ -1150,19 +1274,19 @@ const Presales = () => {
                           </span>
                         </td>
 
-                        {/* 8. PROJECT DETAILS */}
+                        {/* 7. PROJECT DETAILS */}
                         <td className="py-2.5 px-3 text-center border-r border-slate-100 max-w-[160px]">
                           <div className="truncate text-xs text-slate-700 font-medium" title={item.projectDetails}>
                             {item.projectDetails || "--"}
                           </div>
                         </td>
 
-                        {/* 9. CITY */}
+                        {/* 8. CITY */}
                         <td className="py-2.5 px-3 text-center font-semibold text-slate-800 border-r border-slate-100 whitespace-nowrap">
                           {item.city || "--"}
                         </td>
 
-                        {/* 10. ACTIVE PERSON */}
+                        {/* 9. ACTIVE PERSON */}
                         <td className="py-2.5 px-3 text-center border-r border-slate-100 whitespace-nowrap">
                           <span className="font-medium text-slate-800 flex items-center justify-center gap-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
@@ -1170,7 +1294,7 @@ const Presales = () => {
                           </span>
                         </td>
 
-                        {/* 11. STATUS */}
+                        {/* 10. STATUS */}
                         <td className="py-2.5 px-3 text-center border-r border-slate-100 whitespace-nowrap">
                           {item.status === "CLOSED" ? (
                             <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
@@ -1187,9 +1311,18 @@ const Presales = () => {
                           )}
                         </td>
 
-                        {/* 12. CREATED AT */}
-                        <td className="py-2.5 px-3 text-center font-mono text-slate-600 whitespace-nowrap">
-                          {formattedDate}
+                        {/* 11. CREATED AT */}
+                        <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                          {isValidDate ? (
+                            <div className="inline-flex flex-col items-center px-2 py-0.5 rounded-md bg-slate-50 text-slate-700 border border-slate-200 shadow-2xs">
+                              <span className="font-bold text-xs whitespace-nowrap">{formattedDate}</span>
+                              {formattedTime && (
+                                <span className="font-mono text-[10px] text-slate-500 whitespace-nowrap">{formattedTime}</span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="font-mono text-xs text-slate-400">--</span>
+                          )}
                         </td>
                       </tr>
                     );
@@ -1208,47 +1341,63 @@ const Presales = () => {
         <div className={isPipelineModalOpen ? "fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto" : "space-y-5"}>
           <div className={isPipelineModalOpen ? "bg-[#F8FAFC] border border-slate-200 rounded-3xl max-w-6xl w-full p-5 sm:p-6 shadow-2xl space-y-5 max-h-[92vh] overflow-y-auto" : "space-y-5"}>
             
-            {/* MODAL HEADER */}
-            <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200 bg-white p-4 rounded-xl">
-              <div className="flex items-center gap-3">
+            {!currentPresale ? (
+              <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center space-y-3">
+                <p className="text-sm font-semibold text-slate-600">No Presale record selected or available.</p>
                 <button
                   type="button"
                   onClick={() => {
                     if (isPipelineModalOpen) setIsPipelineModalOpen(false);
                     else setViewMode("table");
                   }}
-                  className="w-8 h-8 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 flex items-center justify-center transition-all cursor-pointer shadow-2xs"
-                  title="Close Pipeline View"
+                  className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold cursor-pointer"
                 >
-                  <FaTimes className="text-xs" />
+                  Back to Table View
                 </button>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h2 className="text-base sm:text-lg font-bold text-slate-900">
-                      11-Stage Design Pipeline: {currentPresale.clientName}
-                    </h2>
-                    <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                      {currentPresale.id}
-                    </span>
+              </div>
+            ) : (
+              <>
+                {/* MODAL HEADER */}
+                <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200 bg-white p-4 rounded-xl">
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (isPipelineModalOpen) setIsPipelineModalOpen(false);
+                        else setViewMode("table");
+                      }}
+                      className="w-8 h-8 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 flex items-center justify-center transition-all cursor-pointer shadow-2xs"
+                      title="Close Pipeline View"
+                    >
+                      <FaTimes className="text-xs" />
+                    </button>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h2 className="text-base sm:text-lg font-bold text-slate-900">
+                          11-Stage Design Pipeline: {currentPresale.clientName}
+                        </h2>
+                        <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                          {currentPresale.id}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500">
+                        Engagement Scope: <span className="font-bold text-blue-700">{currentPresale.engagementScope}</span> • City: {currentPresale.city}
+                      </p>
+                    </div>
                   </div>
-                  <p className="text-xs text-slate-500">
-                    Engagement Scope: <span className="font-bold text-blue-700">{currentPresale.engagementScope}</span> • City: {currentPresale.city}
-                  </p>
-                </div>
-              </div>
 
-              <div className="flex items-center gap-2">
-                <select
-                  value={currentPresale.engagementScope}
-                  onChange={(e) => handleScopeChange(e.target.value)}
-                  className="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-2.5 py-1.5 focus:outline-none cursor-pointer"
-                >
-                  <option value="Consultancy Only">Consultancy Only (Stages 1-2)</option>
-                  <option value="Design Only">Design Only (Stages 1-10)</option>
-                  <option value="Design + Construction">Design + Construction (Stages 1-11)</option>
-                </select>
-              </div>
-            </div>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={currentPresale.engagementScope}
+                      onChange={(e) => handleScopeChange(e.target.value)}
+                      className="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-2.5 py-1.5 focus:outline-none cursor-pointer"
+                    >
+                      <option value="Consultancy Only">Consultancy Only (Stages 1-2)</option>
+                      <option value="Design Only">Design Only (Stages 1-10)</option>
+                      <option value="Design + Construction">Design + Construction (Stages 1-11)</option>
+                    </select>
+                  </div>
+                </div>
 
             {/* PIPELINE STEPPER (11 STAGES) */}
             <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-6">
@@ -1266,10 +1415,10 @@ const Presales = () => {
                 <div className="absolute top-4 left-4 right-4 h-0.5 bg-slate-200 -z-0"></div>
                 <div className="grid grid-cols-9 gap-1 relative z-10">
                   {PIPELINE_STAGES.slice(0, 9).map((stage) => {
-                    const applicable = isStageApplicable(stage.id, currentPresale.engagementScope);
-                    const isCurrent = stage.id === (currentPresale.currentStageId || 5);
+                    const applicable = isStageApplicable(stage.id, currentPresale?.engagementScope);
+                    const isCurrent = stage.id === (currentPresale?.currentStageId || 1);
                     const isSelected = stage.id === activeStageId;
-                    const isCompleted = stage.id < (currentPresale.currentStageId || 5) && applicable;
+                    const isCompleted = stage.id < (currentPresale?.currentStageId || 1) && applicable;
 
                     return (
                       <div
@@ -1312,10 +1461,10 @@ const Presales = () => {
                   <div className="grid grid-cols-2 gap-8 relative">
                     <div className="absolute top-4 left-6 right-6 h-0.5 bg-slate-200 -z-0"></div>
                     {PIPELINE_STAGES.slice(9, 11).map((stage) => {
-                      const applicable = isStageApplicable(stage.id, currentPresale.engagementScope);
-                      const isCurrent = stage.id === (currentPresale.currentStageId || 5);
+                      const applicable = isStageApplicable(stage.id, currentPresale?.engagementScope);
+                      const isCurrent = stage.id === (currentPresale?.currentStageId || 1);
                       const isSelected = stage.id === activeStageId;
-                      const isCompleted = stage.id < (currentPresale.currentStageId || 5) && applicable;
+                      const isCompleted = stage.id < (currentPresale?.currentStageId || 1) && applicable;
 
                       return (
                         <div
@@ -1365,10 +1514,11 @@ const Presales = () => {
                   <button
                     type="button"
                     onClick={handleSaveStage}
-                    className="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+                    disabled={savingStage}
+                    className="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
                   >
-                    <FaSave className="text-xs" />
-                    <span>Save Stage</span>
+                    {savingStage ? <FaSpinner className="animate-spin text-xs" /> : <FaSave className="text-xs" />}
+                    <span>{savingStage ? "Saving..." : "Save Stage"}</span>
                   </button>
                 )}
               </div>
@@ -1383,10 +1533,10 @@ const Presales = () => {
                   <FaCommentDots className="text-blue-600" /> Discussion Log / Remarks
                 </h4>
                 <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
-                  {(currentPresale.remarks || []).length === 0 ? (
+                  {(currentPresale?.remarks || []).length === 0 ? (
                     <p className="text-xs text-slate-400 italic">No remarks logged yet.</p>
                   ) : (
-                    (currentPresale.remarks || []).map((r) => (
+                    (currentPresale?.remarks || []).map((r) => (
                       <div key={r.id} className="p-2.5 rounded-lg border border-slate-200 bg-slate-50 text-xs">
                         <span className="font-bold text-slate-700">{r.author} • {r.dateTime}:</span>
                         <p className="text-slate-800 mt-0.5">{r.text}</p>
@@ -1439,6 +1589,8 @@ const Presales = () => {
                 </div>
               </div>
             </div>
+            </>
+          )}
 
           </div>
         </div>
@@ -1487,15 +1639,26 @@ const Presales = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">City</label>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Email Address</label>
                   <input
-                    type="text"
-                    value={newPresaleForm.city}
-                    onChange={(e) => setNewPresaleForm({ ...newPresaleForm, city: e.target.value })}
-                    placeholder="e.g. Lucknow"
+                    type="email"
+                    value={newPresaleForm.emailAddress}
+                    onChange={(e) => setNewPresaleForm({ ...newPresaleForm, emailAddress: e.target.value })}
+                    placeholder="e.g. client@example.com"
                     className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-medium focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">City</label>
+                <input
+                  type="text"
+                  value={newPresaleForm.city}
+                  onChange={(e) => setNewPresaleForm({ ...newPresaleForm, city: e.target.value })}
+                  placeholder="e.g. Lucknow"
+                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-medium focus:ring-2 focus:ring-blue-500"
+                />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -1556,9 +1719,11 @@ const Presales = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs cursor-pointer"
+                  disabled={creatingPresale}
+                  className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold shadow-xs cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
                 >
-                  Save & Add to Table
+                  {creatingPresale && <FaSpinner className="animate-spin text-xs" />}
+                  <span>{creatingPresale ? "Saving..." : "Save & Add to Table"}</span>
                 </button>
               </div>
             </form>

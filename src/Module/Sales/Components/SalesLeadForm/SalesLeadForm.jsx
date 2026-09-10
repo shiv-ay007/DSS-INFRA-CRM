@@ -384,11 +384,12 @@ const SalesLeadForm = () => {
       updatedAt: new Date().toISOString()
     };
 
-      // Save project data ONLY to leadsproject collection
+      // Save project data ONLY to leadsproject collection with Lead ObjectId reference
       try {
+        const leadMongoId = lead?._id || (targetId && String(targetId).length === 24 ? targetId : finalLeadData._id || finalLeadData.leadId);
         await createLeadProjectApi({
           ...formData,
-          leadId: finalLeadData.leadId,
+          leadId: leadMongoId,
           projectId: editingProjectId || undefined
         });
       } catch (saveErr) {

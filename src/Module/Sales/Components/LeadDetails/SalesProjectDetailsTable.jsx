@@ -93,9 +93,6 @@ const SalesProjectDetailsTable = ({ lead, projects = [], onAddProjectClick }) =>
               <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">
                 AMOUNT
               </th>
-              <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">
-                PROJECT ID
-              </th>
               <th className="py-3 px-3 text-left border-r border-slate-800 whitespace-nowrap">
                 CLIENT
               </th>
@@ -134,7 +131,7 @@ const SalesProjectDetailsTable = ({ lead, projects = [], onAddProjectClick }) =>
           <tbody className="divide-y divide-slate-100 bg-white">
             {projects.length === 0 ? (
               <tr>
-                <td colSpan={15} className="py-10 text-center text-slate-500 font-medium">
+                <td colSpan={14} className="py-10 text-center text-slate-500 font-medium">
                   <div className="flex flex-col items-center justify-center gap-2">
                     <FaBuilding className="text-3xl text-slate-300" />
                     <p className="text-sm font-bold text-slate-700">No Project Records Found</p>
@@ -207,12 +204,7 @@ const SalesProjectDetailsTable = ({ lead, projects = [], onAddProjectClick }) =>
                       </span>
                     </td>
 
-                    {/* 4. PROJECT / LEAD ID */}
-                    <td className="py-2.5 px-3 text-center font-mono font-bold text-slate-700 border-r border-slate-100 whitespace-nowrap">
-                      {proj.leadId || "--"}
-                    </td>
-
-                    {/* 5. CLIENT NAME */}
+                    {/* 4. CLIENT NAME */}
                     <td className="py-2.5 px-3 text-left border-r border-slate-100">
                       <div className="font-bold text-slate-900">{proj.clientName || "--"}</div>
                       <div className="text-[11px] text-slate-500 font-mono">{proj.phoneNumber || "--"}</div>

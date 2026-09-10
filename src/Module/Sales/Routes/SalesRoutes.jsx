@@ -11,6 +11,11 @@ import SalseManagment from '../Pages/SalseManagment'
 import LeadDetails from '../Pages/LeadDetails'
 import SalesLeadForm from '../Pages/SalesLeadForm'
 import Presales from '../Pages/Presales'
+import PmsTemplate from '../Pages/Master/PmsTemplate'
+import MaterialMaster from '../Pages/Master/MaterialMaster'
+import SuplireContractor from '../Pages/Master/SuplireContractor'
+import AddSupplierPage from '../Pages/Master/AddSupplierPage'
+import AddContractorPage from '../Pages/Master/AddContractorPage'
 
 const SalesRoutes = () => {
   return (
@@ -33,6 +38,13 @@ const SalesRoutes = () => {
         <Route path="management-sheet" element={<SalseManagment />} />
         <Route path="presales" element={<Presales />} />
         <Route path="presales/:id" element={<Presales />} />
+        {/* MasterForm Routes */}
+        <Route path="master/pms-template" element={<PmsTemplate />} />
+        <Route path="master/material" element={<MaterialMaster />} />
+        <Route path="master/suplire-and-contractor" element={<SuplireContractor />} />
+        <Route path="master/suplire-and-contractor/add-supplier" element={<AddSupplierPage />} />
+        <Route path="master/suplire-and-contractor/add-contractor" element={<AddContractorPage />} />
+        <Route path="master/supplier-contractor" element={<Navigate to="/sales/master/suplire-and-contractor" replace />} />
       </Route>
     </Routes>
   )
