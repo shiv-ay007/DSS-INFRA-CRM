@@ -65,7 +65,7 @@ const workerMenuItems = [
   },
   {
     id: "presales",
-    label: "Presalse",
+    label: "Presales",
     path: "/sales/presales",
     activeGradient: "bg-gradient-to-r from-teal-600 to-cyan-600 text-white shadow-md shadow-teal-600/30",
     iconColor: "text-teal-400 group-hover:text-teal-300",

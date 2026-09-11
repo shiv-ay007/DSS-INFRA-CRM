@@ -16,6 +16,7 @@ import MaterialMaster from '../Pages/Master/MaterialMaster'
 import SuplireContractor from '../Pages/Master/SuplireContractor'
 import AddSupplierPage from '../Pages/Master/AddSupplierPage'
 import AddContractorPage from '../Pages/Master/AddContractorPage'
+import SupplierContractorDetailsPage from '../Pages/Master/SupplierContractorDetailsPage'
 
 const SalesRoutes = () => {
   return (
@@ -43,7 +44,10 @@ const SalesRoutes = () => {
         <Route path="master/material" element={<MaterialMaster />} />
         <Route path="master/suplire-and-contractor" element={<SuplireContractor />} />
         <Route path="master/suplire-and-contractor/add-supplier" element={<AddSupplierPage />} />
+        <Route path="master/suplire-and-contractor/edit-supplier/:id" element={<AddSupplierPage />} />
         <Route path="master/suplire-and-contractor/add-contractor" element={<AddContractorPage />} />
+        <Route path="master/suplire-and-contractor/edit-contractor/:id" element={<AddContractorPage />} />
+        <Route path="master/suplire-and-contractor/details/:type/:id" element={<SupplierContractorDetailsPage />} />
         <Route path="master/supplier-contractor" element={<Navigate to="/sales/master/suplire-and-contractor" replace />} />
       </Route>
     </Routes>

@@ -12,4 +12,8 @@ export * from "./upload.api";
 // Export entity services
 export { userService } from "./userService";
 export { branchService } from "./branchService";
-export { departmentService } from "./departmentService";
+export { departmentService } from "./departmentService";
+export { supplierService } from "./supplierService";
+export { contractorService } from "./contractorService";
+
+

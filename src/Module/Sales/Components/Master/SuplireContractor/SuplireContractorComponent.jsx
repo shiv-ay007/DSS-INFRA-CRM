@@ -1,283 +1,596 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import {
   FaPlus,
   FaSearch,
   FaFilter,
-  FaStar,
   FaPhoneAlt,
   FaEnvelope,
   FaMapMarkerAlt,
   FaTrashAlt,
-  FaTimes,
   FaHandshake,
-  FaHardHat,
   FaTruck,
+  FaHardHat,
   FaUsersCog,
-  FaCheckCircle,
-  FaClock
+  FaEye,
+  FaEdit,
+  FaSpinner,
+  FaTimes
 } from "react-icons/fa";
 import { HiSparkles, HiShieldCheck } from "react-icons/hi2";
 import Table from "../../../../../Common/Components/Table";
+import { supplierService } from "../../../services/supplierService";
+import { contractorService } from "../../../services/contractorService";
 
-const initialSuppliersContractors = [
-  {
-    id: 1,
-    code: "VEN-SUP-01",
-    name: "Apex Steel & Cement Distributors",
-    type: "Supplier",
-    trade: "TMT Rebars & 53G Cement",
-    contactPerson: "Ramesh Sharma",
-    phone: "+91 98765 43210",
-    email: "apex.materials@gmail.com",
-    city: "Mumbai, MH",
-    rating: 4.8,
-    projectsDone: 42,
-    status: "Verified",
-    gstin: "27AAACA1234A1Z5"
-  },
-  {
-    id: 2,
-    code: "VEN-CON-02",
-    name: "Shree Ram Civil & Structure Contractors",
-    type: "Contractor",
-    trade: "RCC Framing, Shuttering & Masonry",
-    contactPerson: "Vikram Chauhan",
-    phone: "+91 98230 11223",
-    email: "shreeram.civil@outlook.com",
-    city: "Pune, MH",
-    rating: 4.9,
-    projectsDone: 28,
-    status: "Verified",
-    gstin: "27AABCS5678B2Z1"
-  },
-  {
-    id: 3,
-    code: "VEN-SUP-03",
-    name: "Surya Electricals & MEP Solutions",
-    type: "Supplier",
-    trade: "Electrical Supply & High-Tension Cabling",
-    contactPerson: "Deepak Patel",
-    phone: "+91 94055 88990",
-    email: "surya.mep@domain.com",
-    city: "Thane, MH",
-    rating: 4.6,
-    projectsDone: 19,
-    status: "Verified",
-    gstin: "27AACCS9988D1Z9"
-  },
-  {
-    id: 4,
-    code: "VEN-CON-04",
-    name: "Krishna Waterproofing & Coating",
-    type: "Contractor",
-    trade: "Terrace, Basement & Wet Area Waterproofing",
-    contactPerson: "Sunil Verma",
-    phone: "+91 91234 56789",
-    email: "krishna.waterproof@gmail.com",
-    city: "Navi Mumbai, MH",
-    rating: 4.4,
-    projectsDone: 15,
-    status: "Pending",
-    gstin: "27AABCV3344E1Z4"
-  },
-  {
-    id: 5,
-    code: "VEN-SUP-05",
-    name: "Classic Marble & Italian Granite Mart",
-    type: "Supplier",
-    trade: "Imported Marble, Granite & Tiles",
-    contactPerson: "Manish Agarwal",
-    phone: "+91 99887 76655",
-    email: "classic.marble@gmail.com",
-    city: "Mumbai, MH",
-    rating: 4.7,
-    projectsDone: 34,
-    status: "Verified",
-    gstin: "27AAACM1122F1Z8"
-  }
-];
 
-// ❌ "All" हटा दिया गया है
 const supplierContractorTypes = ["Supplier", "Contractor"];
 
 const SuplireContractorComponent = () => {
   const navigate = useNavigate();
-  const [suppliersContractors, setSuppliersContractors] = useState(initialSuppliersContractors);
-  const [searchTerm, setSearchTerm] = useState("");
-  // Default को "Supplier" कर दिया है ताकि "All" की जरूरत न पड़े
+
+  // Active Type Tab: "Supplier" or "Contractor"
   const [selectedType, setSelectedType] = useState("Supplier");
+
+  // Suppliers & Contractors state from Database
+  const [suppliers, setSuppliers] = useState([]);
+  const [contractors, setContractors] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
+
+  // Selected item for Quick View modal/drawer
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [viewType, setViewType] = useState("Supplier");
+
+  // Fetch data from backend API
+  const fetchData = useCallback(async () => {
+    try {
+      setLoading(true);
+      if (selectedType === "Supplier") {
+        const res = await supplierService.getAllSuppliers({
+          search: searchTerm,
+          status: statusFilter
+        });
+        if (res && res.success) {
+          setSuppliers(res.data || []);
+        } else {
+          setSuppliers([]);
+        }
+      } else {
+        const res = await contractorService.getAllContractors({
+          search: searchTerm,
+          status: statusFilter
+        });
+        if (res && res.success) {
+          setContractors(res.data || []);
+        } else {
+          setContractors([]);
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      toast.error(`Failed to load ${selectedType.toLowerCase()}s from database`);
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedType, searchTerm, statusFilter]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // Delete handler
+  const handleDelete = async (id, name, type) => {
+    if (!window.confirm(`Are you sure you want to delete "${name}"?`)) return;
+
+    try {
+      if (type === "Supplier") {
+        const res = await supplierService.deleteSupplier(id);
+        if (res && res.success) {
+          toast.success(`Supplier "${name}" deleted successfully`);
+          setSuppliers((prev) => prev.filter((item) => item._id !== id));
+        } else {
+          toast.error(res?.message || "Failed to delete supplier");
+        }
+      } else {
+        const res = await contractorService.deleteContractor(id);
+        if (res && res.success) {
+          toast.success(`Contractor "${name}" deleted successfully`);
+          setContractors((prev) => prev.filter((item) => item._id !== id));
+        } else {
+          toast.error(res?.message || "Failed to delete contractor");
+        }
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error("Failed to delete entry");
+    }
+  };
+
+  // Active current dataset
+  const currentData = selectedType === "Supplier" ? suppliers : contractors;
 
   // KPI calculations
   const stats = useMemo(() => {
-    const total = suppliersContractors.length;
-    const suppliers = suppliersContractors.filter(v => v.type === "Supplier").length;
-    const contractors = suppliersContractors.filter(v => v.type === "Contractor").length;
-    const verified = suppliersContractors.filter(v => v.status === "Verified").length;
-    return { total, suppliers, contractors, verified };
-  }, [suppliersContractors]);
-
-  // Filter logic - "All" वाला कंडीशन हटा दिया
-  const filteredSuppliersContractors = useMemo(() => {
-    return suppliersContractors.filter(v => {
-      const q = searchTerm.toLowerCase();
-      const matchSearch =
-        v.name.toLowerCase().includes(q) ||
-        v.contactPerson.toLowerCase().includes(q) ||
-        v.trade.toLowerCase().includes(q) ||
-        v.city.toLowerCase().includes(q) ||
-        v.code.toLowerCase().includes(q);
-
-      const matchType = v.type === selectedType; // Strict matching
-      const matchStatus = statusFilter === "All" || v.status === statusFilter;
-
-      return matchSearch && matchType && matchStatus;
-    });
-  }, [suppliersContractors, searchTerm, selectedType, statusFilter]);
+    const total = currentData.length;
+    const active = currentData.filter((v) => v.status === "Active").length;
+    const inactive = currentData.filter((v) => v.status === "Inactive").length;
+    const blocked = currentData.filter((v) => v.status === "Blocked").length;
+    return { total, active, inactive, blocked };
+  }, [currentData]);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
-  const paginatedSuppliersContractors = useMemo(() => {
+  const paginatedData = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
-    return filteredSuppliersContractors.slice(start, start + itemsPerPage);
-  }, [filteredSuppliersContractors, currentPage, itemsPerPage]);
+    return currentData.slice(start, start + itemsPerPage);
+  }, [currentData, currentPage, itemsPerPage]);
 
-  const columnConfig = useMemo(() => ({
-    name: {
-      label: "Supplier / Contractor",
-      align: "left",
-      headerClass: "min-w-[240px]",
-      render: (val, row) => {
-        const avatarBg =
-          row.type === "Supplier"
-            ? "bg-gradient-to-br from-emerald-500 to-teal-600"
-            : "bg-gradient-to-br from-blue-500 to-indigo-600";
-
-        return (
-          <div className="flex items-center gap-2.5 py-1">
-            <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-black text-[10px] text-white shrink-0 shadow-xs ${avatarBg}`}>
-              {row.name.substring(0, 2).toUpperCase()}
-            </div>
-            <div>
-              <span className="font-mono text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 inline-block">
-                {row.code}
-              </span>
-              <h4 className="font-bold text-slate-900 mt-0.5 text-xs">{row.name}</h4>
-              <span className="text-[9px] text-slate-400 font-mono">GST: {row.gstin}</span>
-            </div>
+  // 10 Table Heads for Supplier
+  const supplierColumnConfig = useMemo(
+    () => ({
+      // 1. Action Column (Right next to SR NO)
+      actions: {
+        label: "Action",
+        align: "center",
+        headerClass: "w-32 min-w-[125px]",
+        render: (_, row) => (
+          <div className="flex items-center justify-center gap-1.5">
+            <button
+              onClick={() => navigate(`/sales/master/suplire-and-contractor/details/supplier/${row._id}`)}
+              title="View Complete Details"
+              className="px-2 py-1 rounded-md flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 transition-all cursor-pointer shadow-xs"
+            >
+              <FaEye className="w-3.5 h-3.5 text-emerald-600" />
+              <span>View</span>
+            </button>
+            <button
+              onClick={() => navigate(`/sales/master/suplire-and-contractor/edit-supplier/${row._id}`)}
+              title="Edit Supplier Details"
+              className="px-2 py-1 rounded-md flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-300 transition-all cursor-pointer shadow-xs"
+            >
+              <FaEdit className="w-3.5 h-3.5 text-amber-600" />
+              <span>Edit</span>
+            </button>
           </div>
-        );
-      }
-    },
-    type: {
-      label: "Type",
-      align: "center",
-      render: (val) => (
-        <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded border whitespace-nowrap ${
-          val === "Supplier" ? "bg-emerald-50 text-emerald-700 border-emerald-200" : "bg-blue-50 text-blue-700 border-blue-200"
-        }`}>
-          {val}
-        </span>
-      )
-    },
-    trade: {
-      label: "Trade / Specialization",
-      align: "center",
-      render: (val, row) => (
-        <div>
-          <span className="text-[11px] font-semibold text-slate-800 line-clamp-2">
-            {val}
-          </span>
-          <p className="text-[9px] text-slate-400 mt-0.5">{row.projectsDone} Projects</p>
-        </div>
-      )
-    },
-    contact: {
-      label: "Contact Info",
-      align: "center",
-      render: (_, row) => (
-        <div>
-          <p className="font-bold text-slate-800 text-[11px]">{row.contactPerson}</p>
-          <a
-            href={`tel:${row.phone}`}
-            className="text-[10px] text-slate-500 hover:text-amber-600 inline-flex items-center justify-center gap-1 mt-0.5"
-          >
-            <FaPhoneAlt className="w-2 h-2 text-slate-400" />
-            {row.phone}
-          </a>
-        </div>
-      )
-    },
-    city: {
-      label: "Location",
-      align: "center",
-      render: (val) => (
-        <span className="text-[11px] font-semibold text-slate-700 inline-flex items-center justify-center gap-1 whitespace-nowrap">
-          <FaMapMarkerAlt className="w-2.5 h-2.5 text-slate-400" />
-          {val}
-        </span>
-      )
-    },
-    rating: {
-      label: "Rating",
-      align: "center",
-      render: (val) => (
-        <div className="inline-flex items-center gap-1 text-[10px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
-          <FaStar className="w-2.5 h-2.5 text-amber-500" />
-          {val}
-        </div>
-      )
-    },
-    status: {
-      label: "Status",
-      align: "center",
-      render: (val) => (
-        <span className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full whitespace-nowrap ${
-          val === "Verified"
-            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-            : "bg-amber-50 text-amber-700 border border-amber-200"
-        }`}>
-          {val === "Verified"
-            ? <FaCheckCircle className="w-2.5 h-2.5" />
-            : <FaClock className="w-2.5 h-2.5" />}
-          {val}
-        </span>
-      )
-    },
-    actions: {
-      label: "Actions",
-      align: "right",
-      render: (_, row) => (
-        <div className="flex items-center justify-end gap-1.5">
-          <a
-            href={`mailto:${row.email}`}
-            title="Send Email"
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-blue-600 hover:bg-blue-50 border border-slate-200 hover:border-blue-200 transition-all cursor-pointer"
-          >
-            <FaEnvelope className="w-3 h-3" />
-          </a>
-          <button
-            onClick={() => handleDelete(row.id, row.name)}
-            title="Delete Entry"
-            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-500 hover:text-red-600 hover:bg-red-50 border border-slate-200 hover:border-red-200 transition-all cursor-pointer"
-          >
-            <FaTrashAlt className="w-3 h-3" />
-          </button>
-        </div>
-      )
-    }
-  }), []);
+        )
+      },
 
-  const handleDelete = (id, name) => {
-    if (window.confirm(`Remove "${name}" from directory?`)) {
-      setSuppliersContractors(prev => prev.filter(v => v.id !== id));
-      toast.info(`Removed "${name}"`);
-    }
-  };
+      // 2. Supplier Name & Code (Name on top, Code below, center aligned)
+      supplier: {
+        label: "Supplier Name & Code",
+        align: "center",
+        headerClass: "min-w-[220px]",
+        render: (_, row) => (
+          <div className="py-1 flex flex-col items-center justify-center text-center">
+            <h4 className="font-bold text-slate-900 text-sm leading-snug">{row.name}</h4>
+            <span className="font-mono text-[11px] font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded border border-emerald-200 inline-block mt-1">
+              {row.code}
+            </span>
+          </div>
+        )
+      },
+
+      // 3. Contact Details (Phone, WhatsApp, Alternate No, Email) - Right next to Name & Code
+      contactInfo: {
+        label: "Contact & Email",
+        align: "center",
+        headerClass: "min-w-[190px]",
+        render: (_, row) => (
+          <div className="space-y-1 text-left inline-block py-1">
+            {row.phone ? (
+              <a
+                href={`tel:${row.phone}`}
+                className="text-xs sm:text-sm font-semibold text-slate-800 hover:text-emerald-600 flex items-center gap-1.5 transition-colors"
+                title="Primary Contact Phone"
+              >
+                <FaPhoneAlt className="w-2.5 h-2.5 text-emerald-600 shrink-0" />
+                <span>{row.phone}</span>
+              </a>
+            ) : (
+              <span className="text-xs text-slate-400">—</span>
+            )}
+
+            {row.whatsappNo && (
+              <a
+                href={`https://wa.me/${row.whatsappNo.replace(/\D/g, "")}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[11px] font-medium text-emerald-600 hover:text-emerald-700 flex items-center gap-1.5 transition-colors"
+                title="WhatsApp"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                <span>WA: {row.whatsappNo}</span>
+              </a>
+            )}
+
+            {row.alternatePhone && (
+              <a
+                href={`tel:${row.alternatePhone}`}
+                className="text-[11px] font-medium text-slate-600 hover:text-slate-900 flex items-center gap-1.5 transition-colors"
+                title="Alternate Number"
+              >
+                <span className="text-[10px] font-bold text-slate-400 shrink-0">Alt:</span>
+                <span>{row.alternatePhone}</span>
+              </a>
+            )}
+
+            {row.email && (
+              <a
+                href={`mailto:${row.email}`}
+                className="text-[11px] font-medium text-blue-600 hover:text-blue-800 flex items-center gap-1.5 transition-colors truncate max-w-[180px]"
+                title={row.email}
+              >
+                <FaEnvelope className="w-2.5 h-2.5 text-blue-500 shrink-0" />
+                <span className="truncate">{row.email}</span>
+              </a>
+            )}
+          </div>
+        )
+      },
+
+      // 4. Contact Person & Designation
+      contactPerson: {
+        label: "Contact Person",
+        align: "left",
+        headerClass: "min-w-[160px]",
+        render: (val, row) => (
+          <div>
+            <p className="font-bold text-slate-900 text-xs sm:text-sm">{val || "—"}</p>
+            {row.designation && (
+              <p className="text-[11px] text-slate-500 mt-0.5 font-medium">{row.designation}</p>
+            )}
+          </div>
+        )
+      },
+
+      // 5. Supplier Type
+      supplierType: {
+        label: "Supplier Type",
+        align: "center",
+        headerClass: "min-w-[150px]",
+        render: (val) => (
+          <span className="inline-block text-xs font-semibold text-slate-700 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded whitespace-nowrap">
+            {val || "—"}
+          </span>
+        )
+      },
+
+      // 6. Location (City, State)
+      location: {
+        label: "Location",
+        align: "center",
+        headerClass: "min-w-[140px]",
+        render: (_, row) => (
+          <div className="text-xs sm:text-sm font-semibold text-slate-700 flex items-center justify-center gap-1.5 whitespace-nowrap">
+            <FaMapMarkerAlt className="w-3 h-3 text-slate-400 shrink-0" />
+            <span>{row.city ? `${row.city}${row.state ? `, ${row.state}` : ""}` : "—"}</span>
+          </div>
+        )
+      },
+
+      // 7. Materials / Services Supplied
+      materials: {
+        label: "Materials Supplied",
+        align: "left",
+        headerClass: "min-w-[220px]",
+        render: (_, row) => {
+          const list = row.materialsSupplied || [];
+          if (list.length === 0) return <span className="text-slate-400 text-xs">—</span>;
+          const firstTwo = list.slice(0, 2);
+          const remaining = list.length - 2;
+
+          return (
+            <div className="flex flex-wrap gap-1.5">
+              {firstTwo.map((mat, i) => (
+                <span
+                  key={i}
+                  className="bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-medium px-2 py-0.5 rounded truncate max-w-[150px]"
+                >
+                  {mat}
+                </span>
+              ))}
+              {remaining > 0 && (
+                <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-1.5 py-0.5 rounded border border-slate-200">
+                  +{remaining} more
+                </span>
+              )}
+            </div>
+          );
+        }
+      },
+
+      // 8. GSTIN / PAN
+      taxInfo: {
+        label: "GSTIN / PAN",
+        align: "center",
+        headerClass: "min-w-[160px]",
+        render: (_, row) => (
+          <div className="space-y-0.5 text-center">
+            {row.gstin ? (
+              <p className="font-mono text-xs font-semibold text-slate-800">
+                GST: {row.gstin}
+              </p>
+            ) : (
+              <p className="text-xs text-slate-400 font-mono">No GST</p>
+            )}
+            {row.pan && (
+              <p className="font-mono text-[11px] text-slate-500">
+                PAN: {row.pan}
+              </p>
+            )}
+          </div>
+        )
+      },
+
+      // 9. Payment Terms
+      paymentTerms: {
+        label: "Payment Terms",
+        align: "center",
+        headerClass: "min-w-[140px]",
+        render: (val) => (
+          <span className="text-xs font-medium text-slate-700 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded whitespace-nowrap">
+            {val || "Immediate / Advance"}
+          </span>
+        )
+      },
+
+      // 10. Status
+      status: {
+        label: "Status",
+        align: "center",
+        headerClass: "min-w-[110px]",
+        render: (val) => {
+          const isAct = val === "Active";
+          const isBlk = val === "Blocked";
+          return (
+            <span
+              className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap ${
+                isAct
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                  : isBlk
+                  ? "bg-red-50 text-red-700 border border-red-200"
+                  : "bg-slate-100 text-slate-600 border border-slate-200"
+              }`}
+            >
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  isAct ? "bg-emerald-500" : isBlk ? "bg-red-500" : "bg-slate-400"
+                }`}
+              />
+              {val || "Active"}
+            </span>
+          );
+        }
+      }
+    }),
+    []
+  );
+
+  // 10 Table Heads for Contractor
+  const contractorColumnConfig = useMemo(
+    () => ({
+      actions: {
+        label: "Action",
+        align: "center",
+        headerClass: "w-32 min-w-[125px]",
+        render: (_, row) => (
+          <div className="flex items-center justify-center gap-1.5">
+            <button
+              onClick={() => navigate(`/sales/master/suplire-and-contractor/details/contractor/${row._id}`)}
+              title="View Complete Details"
+              className="px-2 py-1 rounded-md flex items-center gap-1 text-xs font-bold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-300 transition-all cursor-pointer shadow-xs"
+            >
+              <FaEye className="w-3.5 h-3.5 text-blue-600" />
+              <span>View</span>
+            </button>
+            <button
+              onClick={() => navigate(`/sales/master/suplire-and-contractor/edit-contractor/${row._id}`)}
+              title="Edit Contractor Details"
+              className="px-2 py-1 rounded-md flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-300 transition-all cursor-pointer shadow-xs"
+            >
+              <FaEdit className="w-3.5 h-3.5 text-amber-600" />
+              <span>Edit</span>
+            </button>
+          </div>
+        )
+      },
+      // 2. Contractor Name & Code (Name on top, Code below, center aligned)
+      contractor: {
+        label: "Contractor Name & Code",
+        align: "center",
+        headerClass: "min-w-[220px]",
+        render: (_, row) => (
+          <div className="py-1 flex flex-col items-center justify-center text-center">
+            <h4 className="font-bold text-slate-900 text-sm leading-snug">{row.name}</h4>
+            <span className="font-mono text-[11px] font-bold text-blue-800 bg-blue-50 px-2.5 py-0.5 rounded border border-blue-200 inline-block mt-1">
+              {row.code}
+            </span>
+          </div>
+        )
+      },
+
+      // 3. Contact Details (Phone, WhatsApp, Alternate No, Email) - Right next to Name & Code
+      contactInfo: {
+        label: "Contact & Email",
+        align: "center",
+        headerClass: "min-w-[190px]",
+        render: (_, row) => (
+          <div className="space-y-1 text-left inline-block py-1">
+            {row.phone ? (
+              <a
+                href={`tel:${row.phone}`}
+                className="text-xs sm:text-sm font-semibold text-slate-800 hover:text-blue-600 flex items-center gap-1.5 transition-colors"
+                title="Primary Contact Phone"
+              >
+                <FaPhoneAlt className="w-2.5 h-2.5 text-blue-600 shrink-0" />
+                <span>{row.phone}</span>
+              </a>
+            ) : (
+              <span className="text-xs text-slate-400">—</span>
+            )}
+
+            {row.whatsappNo && (
+              <a
+                href={`https://wa.me/${row.whatsappNo.replace(/\D/g, "")}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[11px] font-medium text-emerald-600 hover:text-emerald-700 flex items-center gap-1.5 transition-colors"
+                title="WhatsApp"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+                <span>WA: {row.whatsappNo}</span>
+              </a>
+            )}
+
+            {row.alternatePhone && (
+              <a
+                href={`tel:${row.alternatePhone}`}
+                className="text-[11px] font-medium text-slate-600 hover:text-slate-900 flex items-center gap-1.5 transition-colors"
+                title="Alternate Number"
+              >
+                <span className="text-[10px] font-bold text-slate-400 shrink-0">Alt:</span>
+                <span>{row.alternatePhone}</span>
+              </a>
+            )}
+
+            {row.email && (
+              <a
+                href={`mailto:${row.email}`}
+                className="text-[11px] font-medium text-blue-600 hover:text-blue-800 flex items-center gap-1.5 transition-colors truncate max-w-[180px]"
+                title={row.email}
+              >
+                <FaEnvelope className="w-2.5 h-2.5 text-blue-500 shrink-0" />
+                <span className="truncate">{row.email}</span>
+              </a>
+            )}
+          </div>
+        )
+      },
+
+      // 4. Contact Person
+      contactPerson: {
+        label: "Contact Person",
+        align: "left",
+        headerClass: "min-w-[160px]",
+        render: (val, row) => (
+          <div>
+            <p className="font-bold text-slate-900 text-xs sm:text-sm">{val || "—"}</p>
+            {row.designation && (
+              <p className="text-[11px] text-slate-500 mt-0.5 font-medium">{row.designation}</p>
+            )}
+          </div>
+        )
+      },
+
+      // 5. Contractor Type
+      contractorType: {
+        label: "Contractor Type",
+        align: "center",
+        headerClass: "min-w-[150px]",
+        render: (val) => (
+          <span className="inline-block text-xs font-semibold text-blue-700 bg-blue-50 border border-blue-200 px-2.5 py-1 rounded whitespace-nowrap">
+            {val || "—"}
+          </span>
+        )
+      },
+      location: {
+        label: "Location",
+        align: "center",
+        headerClass: "min-w-[140px]",
+        render: (_, row) => (
+          <div className="text-xs sm:text-sm font-semibold text-slate-700 flex items-center justify-center gap-1.5 whitespace-nowrap">
+            <FaMapMarkerAlt className="w-3 h-3 text-slate-400 shrink-0" />
+            <span>{row.city ? `${row.city}${row.state ? `, ${row.state}` : ""}` : "—"}</span>
+          </div>
+        )
+      },
+      workCategories: {
+        label: "Work Categories",
+        align: "left",
+        headerClass: "min-w-[220px]",
+        render: (_, row) => {
+          const list = row.workCategories || [];
+          if (list.length === 0) return <span className="text-slate-400 text-xs">—</span>;
+          const firstTwo = list.slice(0, 2);
+          const remaining = list.length - 2;
+
+          return (
+            <div className="flex flex-wrap gap-1.5">
+              {firstTwo.map((w, i) => (
+                <span
+                  key={i}
+                  className="bg-amber-50 text-amber-800 border border-amber-200 text-xs font-medium px-2 py-0.5 rounded truncate max-w-[150px]"
+                >
+                  {w}
+                </span>
+              ))}
+              {remaining > 0 && (
+                <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-1.5 py-0.5 rounded border border-slate-200">
+                  +{remaining} more
+                </span>
+              )}
+            </div>
+          );
+        }
+      },
+      availability: {
+        label: "Availability",
+        align: "center",
+        headerClass: "min-w-[130px]",
+        render: (val) => (
+          <span className="text-xs font-semibold text-slate-700 bg-slate-100 border border-slate-200 px-2.5 py-1 rounded whitespace-nowrap">
+            {val || "Available"}
+          </span>
+        )
+      },
+      commercialTerms: {
+        label: "Commercial Terms",
+        align: "center",
+        headerClass: "min-w-[140px]",
+        render: (val) => (
+          <span className="text-xs font-medium text-slate-700 bg-purple-50 border border-purple-200 px-2.5 py-1 rounded whitespace-nowrap">
+            {val || "As per Quotation"}
+          </span>
+        )
+      },
+      status: {
+        label: "Status",
+        align: "center",
+        headerClass: "min-w-[110px]",
+        render: (val) => {
+          const isAct = val === "Active";
+          const isBlk = val === "Blocked";
+          return (
+            <span
+              className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1 rounded-full whitespace-nowrap ${
+                isAct
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                  : isBlk
+                  ? "bg-red-50 text-red-700 border border-red-200"
+                  : "bg-slate-100 text-slate-600 border border-slate-200"
+              }`}
+            >
+              <span
+                className={`w-2 h-2 rounded-full ${
+                  isAct ? "bg-emerald-500" : isBlk ? "bg-red-500" : "bg-slate-400"
+                }`}
+              />
+              {val || "Active"}
+            </span>
+          );
+        }
+      }
+    }),
+    []
+  );
+
+  const activeColumnConfig =
+    selectedType === "Supplier" ? supplierColumnConfig : contractorColumnConfig;
+
 
   // KPI Card Component
   const KpiCard = ({ gradient, icon, label, value, subtitle, IconBg }) => (
@@ -291,55 +604,51 @@ const SuplireContractorComponent = () => {
           <h3 className="text-3xl font-black mt-1 leading-none">{value}</h3>
           <p className="text-[10px] opacity-80 mt-1 font-medium">{subtitle}</p>
         </div>
-        <div className="p-2.5 bg-white/20 rounded-lg backdrop-blur-sm shadow-inner">
-          {icon}
-        </div>
+        <div className="p-2.5 bg-white/20 rounded-lg backdrop-blur-sm shadow-inner">{icon}</div>
       </div>
     </div>
   );
 
   return (
     <div className="space-y-4 pb-12 px-1 sm:px-0 font-sans">
+      {/* ================= HEADER BANNER ================= */}
+      <div className="sticky top-0 z-40 bg-gradient-to-r from-emerald-950 via-teal-950 to-slate-900 text-white rounded-xl px-4 py-2.5 shadow-md border border-teal-700/50 overflow-hidden mb-2">
+        <div className="absolute top-0 right-0 -mt-8 -mr-8 w-48 h-48 bg-emerald-500/20 rounded-full blur-2xl pointer-events-none" />
 
-      {/* ================= STICKY & THIN HEADER BANNER ================= */}
-      <div className="sticky top-0 z-50 bg-gradient-to-r from-amber-900 via-orange-950 to-slate-900 text-white rounded-xl p-4 shadow-lg border border-orange-700/50 overflow-hidden mb-2">
-        <div className="absolute top-0 right-0 -mt-8 -mr-8 w-48 h-48 bg-amber-500/20 rounded-full blur-2xl pointer-events-none" />
-        <div className="absolute bottom-0 left-1/3 -mb-8 w-48 h-48 bg-orange-500/20 rounded-full blur-2xl pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div className="flex items-start gap-3">
-            <div className="p-2.5 bg-gradient-to-br from-amber-400 to-orange-600 rounded-lg shadow-md flex items-center justify-center shrink-0">
-              <FaUsersCog className="w-6 h-6 text-white" />
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 bg-gradient-to-br from-emerald-400 to-teal-600 rounded-lg shadow-sm flex items-center justify-center shrink-0">
+              <FaUsersCog className="w-4 h-4 text-white" />
             </div>
             <div>
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white">
-                  Supplier & Contractor
+                <h1 className="text-base sm:text-lg font-black tracking-tight text-white leading-tight">
+                  Supplier Master Directory
                 </h1>
-                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-400/30 flex items-center gap-1">
-                  <HiSparkles className="w-3 h-3 text-amber-300" /> Master Form
+                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 flex items-center gap-1">
+                  <HiSparkles className="w-2.5 h-2.5 text-emerald-300" /> Database Live
                 </span>
               </div>
-              <p className="text-xs text-amber-200/90 mt-1 max-w-xl font-normal">
-                Approved master directory of material suppliers, civil subcontractors, and MEP specialists.
+              <p className="text-[11px] text-teal-200/90 mt-0.5 leading-none font-normal">
+                Approved master directory of registered material suppliers, distributors, and vendors.
               </p>
             </div>
           </div>
 
-          {/* 🔥 TWO SEPARATE BUTTONS FOR SUPPLIER & CONTRACTOR */}
+          {/* TWO SEPARATE ADD BUTTONS */}
           <div className="flex items-center gap-2 flex-wrap">
             <button
               onClick={() => navigate("/sales/master/suplire-and-contractor/add-supplier")}
-              className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold rounded-lg shadow-md shadow-emerald-500/30 transition-all duration-200 flex items-center gap-2 cursor-pointer transform hover:-translate-y-0.5 active:scale-95 text-xs w-fit"
+              className="px-3 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer text-xs"
             >
-              <FaPlus className="w-3.5 h-3.5" />
+              <FaPlus className="w-3 h-3" />
               <span>Add Supplier</span>
             </button>
             <button
               onClick={() => navigate("/sales/master/suplire-and-contractor/add-contractor")}
-              className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-bold rounded-lg shadow-md shadow-blue-500/30 transition-all duration-200 flex items-center gap-2 cursor-pointer transform hover:-translate-y-0.5 active:scale-95 text-xs w-fit"
+              className="px-3 py-1.5 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer text-xs"
             >
-              <FaPlus className="w-3.5 h-3.5" />
+              <FaPlus className="w-3 h-3" />
               <span>Add Contractor</span>
             </button>
           </div>
@@ -349,37 +658,64 @@ const SuplireContractorComponent = () => {
       {/* ================= COMPACT KPI CARDS ================= */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <KpiCard
-          gradient="bg-gradient-to-br from-amber-500 to-orange-600"
-          label="Total Suppliers & Contractors"
+          gradient="bg-gradient-to-br from-slate-800 to-slate-900"
+          label={`Total ${selectedType}s`}
           value={stats.total}
-          subtitle="Registered in directory"
+          subtitle={`Saved in ${selectedType} directory`}
           icon={<FaHandshake className="w-5 h-5 text-white" />}
           IconBg={<FaHandshake className="w-20 h-20" />}
         />
         <KpiCard
           gradient="bg-gradient-to-br from-emerald-600 to-teal-700"
-          label="Material Suppliers"
-          value={stats.suppliers}
-          subtitle="Raw material vendors"
+          label={`Active ${selectedType}s`}
+          value={stats.active}
+          subtitle="Ready for engagement"
           icon={<FaTruck className="w-5 h-5 text-white" />}
           IconBg={<FaTruck className="w-20 h-20" />}
         />
         <KpiCard
-          gradient="bg-gradient-to-br from-blue-600 to-indigo-700"
-          label="Contractors"
-          value={stats.contractors}
-          subtitle="Civil & MEP specialists"
-          icon={<FaHardHat className="w-5 h-5 text-white" />}
-          IconBg={<FaHardHat className="w-20 h-20" />}
-        />
-        <KpiCard
-          gradient="bg-gradient-to-br from-purple-600 to-pink-600"
-          label="Verified Entries"
-          value={stats.verified}
-          subtitle="GST & KYC compliant"
+          gradient="bg-gradient-to-br from-amber-600 to-orange-700"
+          label={`Inactive ${selectedType}s`}
+          value={stats.inactive}
+          subtitle="Temporarily on hold"
           icon={<HiShieldCheck className="w-5 h-5 text-white" />}
           IconBg={<HiShieldCheck className="w-20 h-20" />}
         />
+        <KpiCard
+          gradient="bg-gradient-to-br from-rose-600 to-red-700"
+          label={`Blocked ${selectedType}s`}
+          value={stats.blocked}
+          subtitle="Restricted accounts"
+          icon={<HiShieldCheck className="w-5 h-5 text-white" />}
+          IconBg={<HiShieldCheck className="w-20 h-20" />}
+        />
+      </div>
+
+      {/* ================= TYPE SWITCHER TABS ================= */}
+      <div className="flex items-center gap-2">
+        {supplierContractorTypes.map((type) => {
+          const active = selectedType === type;
+          const isSupplier = type === "Supplier";
+          return (
+            <button
+              key={type}
+              onClick={() => {
+                setSelectedType(type);
+                setCurrentPage(1);
+              }}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
+                active
+                  ? isSupplier
+                    ? "bg-emerald-600 text-white border-emerald-700 shadow-sm"
+                    : "bg-blue-600 text-white border-blue-700 shadow-sm"
+                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+              }`}
+            >
+              {isSupplier ? <FaTruck className="w-3.5 h-3.5" /> : <FaHardHat className="w-3.5 h-3.5" />}
+              <span>{type} Directory</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* ================= SEARCH & FILTER BAR ================= */}
@@ -388,7 +724,7 @@ const SuplireContractorComponent = () => {
           <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs" />
           <input
             type="text"
-            placeholder="Search supplier or contractor..."
+            placeholder={`Search ${selectedType.toLowerCase()} by name, code, contact person, phone...`}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-9 pr-16 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition-all placeholder:text-slate-400"
@@ -396,7 +732,7 @@ const SuplireContractorComponent = () => {
           {searchTerm && (
             <button
               onClick={() => setSearchTerm("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 hover:text-red-500 transition-colors"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
             >
               Clear
             </button>
@@ -412,61 +748,213 @@ const SuplireContractorComponent = () => {
               onChange={(e) => setStatusFilter(e.target.value)}
               className="text-[11px] font-bold bg-transparent text-slate-700 focus:outline-none cursor-pointer"
             >
-              <option value="All">All</option>
-              <option value="Verified">Verified</option>
-              <option value="Pending">Pending</option>
+              <option value="All">All Status</option>
+              <option value="Active">Active</option>
+              <option value="Inactive">Inactive</option>
+              <option value="Blocked">Blocked</option>
             </select>
           </div>
-          <span className="text-[11px] font-black text-amber-800 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200 whitespace-nowrap">
-            {filteredSuppliersContractors.length} Found
+          <span className="text-[11px] font-black text-slate-800 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 whitespace-nowrap">
+            {currentData.length} Found
           </span>
         </div>
       </div>
 
-      {/* ================= TYPE FILTER PILLS (No "All") ================= */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-        {supplierContractorTypes.map(type => {
-          const active = selectedType === type;
-          const iconMap = {
-            Supplier: <FaTruck className="w-3 h-3" />,
-            Contractor: <FaHardHat className="w-3 h-3" />
-          };
-          return (
-            <button
-              key={type}
-              onClick={() => setSelectedType(type)}
-              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer shrink-0 border ${
-                active
-                  ? type === "Supplier"
-                    ? "bg-emerald-600 text-white border-emerald-700 shadow-sm shadow-emerald-500/30"
-                    : "bg-blue-600 text-white border-blue-700 shadow-sm shadow-blue-500/30"
-                  : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900"
-              }`}
-            >
-              {iconMap[type]}
-              <span>{type}</span>
-            </button>
-          );
-        })}
+      {/* ================= 10-COLUMN DIRECTORY TABLE ================= */}
+      <div className="bg-white border border-slate-200/90 shadow-xs overflow-hidden rounded-none">
+        {loading ? (
+          <div className="py-16 text-center text-slate-500 text-xs flex flex-col items-center justify-center gap-2">
+            <FaSpinner className="w-5 h-5 animate-spin text-slate-600" />
+            <span>Loading {selectedType.toLowerCase()}s from database...</span>
+          </div>
+        ) : currentData.length === 0 ? (
+          <div className="py-16 text-center text-slate-400 text-xs">
+            <p className="font-semibold text-slate-600 text-sm">No {selectedType.toLowerCase()}s found</p>
+            <p className="mt-1">Add your first entry using the "Add {selectedType}" button above.</p>
+          </div>
+        ) : (
+          <Table
+            data={paginatedData}
+            columnConfig={activeColumnConfig}
+            showSrNo={true}
+            currentPage={currentPage}
+            totalItems={currentData.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={(page) => setCurrentPage(page)}
+            onItemsPerPageChange={(limit) => {
+              setItemsPerPage(limit);
+              setCurrentPage(1);
+            }}
+            itemsPerPageOptions={[10, 25, 50]}
+          />
+        )}
       </div>
 
-      {/* ================= DIRECTORY TABLE ================= */}
-      <div className="bg-white border border-slate-200/90 shadow-xs overflow-hidden">
-        <Table
-          data={paginatedSuppliersContractors}
-          columnConfig={columnConfig}
-          showSrNo={true}
-          currentPage={currentPage}
-          totalItems={filteredSuppliersContractors.length}
-          itemsPerPage={itemsPerPage}
-          onPageChange={(page) => setCurrentPage(page)}
-          onItemsPerPageChange={(limit) => {
-            setItemsPerPage(limit);
-            setCurrentPage(1);
-          }}
-          itemsPerPageOptions={[10, 25, 50]}
-        />
-      </div>
+      {/* ================= QUICK VIEW DETAILS MODAL ================= */}
+      {selectedItem && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-2xl border border-slate-200">
+            {/* Modal Header */}
+            <div className="sticky top-0 bg-slate-900 text-white p-4 flex items-center justify-between z-10">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="font-bold text-sm text-white">{selectedItem.name}</h3>
+                  <span className="text-[10px] font-mono bg-white/20 text-emerald-200 px-1.5 py-0.5 rounded">
+                    {selectedItem.code}
+                  </span>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-emerald-500/30 text-emerald-300">
+                    {viewType}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-0.5">
+                  {selectedItem.supplierType || selectedItem.contractorType}
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedItem(null)}
+                className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/10 cursor-pointer"
+              >
+                <FaTimes className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 space-y-4 text-xs">
+              {/* Contact Info */}
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                <h4 className="font-bold text-slate-800 mb-2 border-b border-slate-200 pb-1">
+                  1. Contact Information
+                </h4>
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <div><span className="text-slate-500">Contact Person:</span> <strong className="text-slate-800">{selectedItem.contactPerson}</strong></div>
+                  <div><span className="text-slate-500">Designation:</span> <strong className="text-slate-800">{selectedItem.designation || "—"}</strong></div>
+                  <div><span className="text-slate-500">Phone:</span> <strong className="text-slate-800">{selectedItem.phone}</strong></div>
+                  <div><span className="text-slate-500">WhatsApp:</span> <strong className="text-slate-800">{selectedItem.whatsappNo || "—"}</strong></div>
+                  <div><span className="text-slate-500">Alt Phone:</span> <strong className="text-slate-800">{selectedItem.alternatePhone || "—"}</strong></div>
+                  <div><span className="text-slate-500">Email:</span> <strong className="text-slate-800">{selectedItem.email || "—"}</strong></div>
+                </div>
+              </div>
+
+              {/* Address */}
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                <h4 className="font-bold text-slate-800 mb-2 border-b border-slate-200 pb-1">
+                  2. Business Address & Location
+                </h4>
+                <div className="grid grid-cols-2 gap-2 text-[11px]">
+                  <div className="col-span-2"><span className="text-slate-500">Registered Address:</span> <strong className="text-slate-800">{selectedItem.address}</strong></div>
+                  <div><span className="text-slate-500">City / State:</span> <strong className="text-slate-800">{selectedItem.city}, {selectedItem.state}</strong></div>
+                  <div><span className="text-slate-500">Pincode:</span> <strong className="text-slate-800">{selectedItem.pincode || "—"}</strong></div>
+                  {selectedItem.deliveryLeadTime && (
+                    <div><span className="text-slate-500">Delivery Lead Time:</span> <strong className="text-slate-800">{selectedItem.deliveryLeadTime} Days</strong></div>
+                  )}
+                  {selectedItem.availability && (
+                    <div><span className="text-slate-500">Availability:</span> <strong className="text-slate-800">{selectedItem.availability}</strong></div>
+                  )}
+                </div>
+              </div>
+
+              {/* Tax & Banking (For Supplier) / Work Scope (For Contractor) */}
+              {viewType === "Supplier" ? (
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                  <h4 className="font-bold text-slate-800 mb-2 border-b border-slate-200 pb-1">
+                    3. Tax, Commercial & Bank Details
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    <div><span className="text-slate-500">GSTIN:</span> <strong className="font-mono text-slate-800">{selectedItem.gstin || "—"}</strong></div>
+                    <div><span className="text-slate-500">PAN:</span> <strong className="font-mono text-slate-800">{selectedItem.pan || "—"}</strong></div>
+                    <div><span className="text-slate-500">MSME / Udyam:</span> <strong className="text-slate-800">{selectedItem.msmeNo || "—"}</strong></div>
+                    <div><span className="text-slate-500">Credit Limit:</span> <strong className="text-slate-800">{selectedItem.creditLimit ? `₹ ${selectedItem.creditLimit.toLocaleString()}` : "—"}</strong></div>
+                    <div><span className="text-slate-500">Bank Name:</span> <strong className="text-slate-800">{selectedItem.bankName || "—"}</strong></div>
+                    <div><span className="text-slate-500">A/C Number:</span> <strong className="font-mono text-slate-800">{selectedItem.accountNumber || "—"}</strong></div>
+                    <div><span className="text-slate-500">A/C Holder:</span> <strong className="text-slate-800">{selectedItem.accountHolderName || "—"}</strong></div>
+                    <div><span className="text-slate-500">IFSC Code:</span> <strong className="font-mono text-slate-800">{selectedItem.ifsc || "—"}</strong></div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                  <h4 className="font-bold text-slate-800 mb-2 border-b border-slate-200 pb-1">
+                    3. Contractor Execution & Tools Details
+                  </h4>
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    <div><span className="text-slate-500">Work Will Done By:</span> <strong className="text-slate-800">{selectedItem.workWillDoneBy || "—"}</strong></div>
+                    <div><span className="text-slate-500">Commercial Terms:</span> <strong className="text-slate-800">{selectedItem.commercialTerms || "—"}</strong></div>
+                    {selectedItem.toolsVehicles?.length > 0 && (
+                      <div className="col-span-2">
+                        <span className="text-slate-500 block mb-1">Tools / Vehicles Available:</span>
+                        <div className="flex flex-wrap gap-1">
+                          {selectedItem.toolsVehicles.map((t, idx) => (
+                            <span key={idx} className="bg-blue-50 text-blue-700 border border-blue-200 px-2 py-0.5 rounded text-[10px]">
+                              {t}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Items List */}
+              {viewType === "Supplier" && selectedItem.materialsSupplied?.length > 0 && (
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                  <h4 className="font-bold text-slate-800 mb-2 border-b border-slate-200 pb-1">
+                    4. Materials / Services Supplied ({selectedItem.materialsSupplied.length})
+                  </h4>
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedItem.materialsSupplied.map((m, i) => (
+                      <span key={i} className="bg-indigo-50 text-indigo-700 border border-indigo-200 px-2 py-0.5 rounded text-[11px] font-medium">
+                        {m}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {viewType === "Contractor" && selectedItem.workCategories?.length > 0 && (
+                <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200">
+                  <h4 className="font-bold text-slate-800 mb-2 border-b border-slate-200 pb-1">
+                    4. Work Categories & Supported Tasks
+                  </h4>
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {selectedItem.workCategories.map((w, i) => (
+                      <span key={i} className="bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded text-[11px] font-medium">
+                        {w}
+                      </span>
+                    ))}
+                  </div>
+                  {selectedItem.supportedTasks?.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {selectedItem.supportedTasks.map((t, i) => (
+                        <span key={i} className="bg-slate-100 text-slate-600 border border-slate-200 px-1.5 py-0.5 rounded text-[10px]">
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Remarks */}
+              {selectedItem.remarks && (
+                <div className="bg-amber-50/50 p-3.5 rounded-xl border border-amber-200">
+                  <h4 className="font-bold text-amber-900 mb-1">Remarks:</h4>
+                  <p className="text-slate-700 text-[11px]">{selectedItem.remarks}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3 bg-slate-50 border-t border-slate-200 flex justify-end">
+              <button
+                onClick={() => setSelectedItem(null)}
+                className="px-4 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-semibold cursor-pointer"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
