@@ -100,7 +100,7 @@ const SupplierContractorDetailsComponent = () => {
     <div className="space-y-4 pb-12 px-1 sm:px-0 font-sans">
       {/* ================= TOP HEADER BANNER ================= */}
       <div
-        className={`sticky top-0 z-40 text-white rounded-xl px-4 py-3 shadow-md border overflow-hidden ${
+        className={`sticky top-0 z-10 text-white rounded-xl px-4 py-3 shadow-md border overflow-hidden ${
           isSupplier
             ? "bg-gradient-to-r from-emerald-950 via-teal-950 to-slate-900 border-teal-700/50"
             : "bg-gradient-to-r from-blue-950 via-indigo-950 to-slate-900 border-indigo-700/50"

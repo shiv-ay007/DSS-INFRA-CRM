@@ -70,7 +70,7 @@ const Layout = () => {
         <SalesHeader toggleSidebar={() => setIsSidebarOpen((prev) => !prev)} />
 
         {/* Dynamic Page Content (Scrollable Middle Section) */}
-        <main className="flex-1 p-2.5 sm:p-4 overflow-y-auto scroll-smooth">
+        <main className="flex-1 p-2.5 sm:p-4 overflow-y-auto overflow-x-hidden scroll-smooth">
           <Outlet />
         </main>
 

@@ -36,8 +36,22 @@ const SuplireContractorComponent = () => {
   const [suppliers, setSuppliers] = useState([]);
   const [contractors, setContractors] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  // Search & Table-Based Filter States
+  const [showFilters, setShowFilters] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [cityFilter, setCityFilter] = useState("All");
+
+  // Supplier-specific filters
+  const [categoryFilter, setCategoryFilter] = useState("All");
+  const [supplierTypeFilter, setSupplierTypeFilter] = useState("All");
+  const [paymentTermsFilter, setPaymentTermsFilter] = useState("All");
+
+  // Contractor-specific filters
+  const [specializationFilter, setSpecializationFilter] = useState("All");
+  const [availabilityFilter, setAvailabilityFilter] = useState("All");
+  const [contractorTypeFilter, setContractorTypeFilter] = useState("All");
 
   // Selected item for Quick View modal/drawer
   const [selectedItem, setSelectedItem] = useState(null);
@@ -48,20 +62,14 @@ const SuplireContractorComponent = () => {
     try {
       setLoading(true);
       if (selectedType === "Supplier") {
-        const res = await supplierService.getAllSuppliers({
-          search: searchTerm,
-          status: statusFilter
-        });
+        const res = await supplierService.getAllSuppliers({ limit: 500 });
         if (res && res.success) {
           setSuppliers(res.data || []);
         } else {
           setSuppliers([]);
         }
       } else {
-        const res = await contractorService.getAllContractors({
-          search: searchTerm,
-          status: statusFilter
-        });
+        const res = await contractorService.getAllContractors({ limit: 500 });
         if (res && res.success) {
           setContractors(res.data || []);
         } else {
@@ -74,7 +82,7 @@ const SuplireContractorComponent = () => {
     } finally {
       setLoading(false);
     }
-  }, [selectedType, searchTerm, statusFilter]);
+  }, [selectedType]);
 
   useEffect(() => {
     fetchData();
@@ -108,6 +116,140 @@ const SuplireContractorComponent = () => {
     }
   };
 
+  // Dynamic filter options for Supplier
+  const supplierCategories = useMemo(() => {
+    const set = new Set();
+    suppliers.forEach((s) => {
+      if (Array.isArray(s.materialCategories)) {
+        s.materialCategories.forEach((c) => c && set.add(c.trim()));
+      } else if (typeof s.materialCategories === "string" && s.materialCategories.trim()) {
+        set.add(s.materialCategories.trim());
+      }
+    });
+    return ["All", ...Array.from(set).sort()];
+  }, [suppliers]);
+
+  const supplierCities = useMemo(() => {
+    const set = new Set();
+    suppliers.forEach((s) => {
+      if (s.city && typeof s.city === "string" && s.city.trim()) {
+        set.add(s.city.trim());
+      }
+    });
+    return ["All", ...Array.from(set).sort()];
+  }, [suppliers]);
+
+  const supplierTypesList = useMemo(() => {
+    const set = new Set(["Manufacturer", "Trader", "Distributor", "Wholesaler", "Retailer"]);
+    suppliers.forEach((s) => {
+      if (s.supplierType && typeof s.supplierType === "string" && s.supplierType.trim()) {
+        set.add(s.supplierType.trim());
+      }
+    });
+    return ["All", ...Array.from(set).sort()];
+  }, [suppliers]);
+
+  const paymentTermsList = useMemo(() => {
+    const set = new Set();
+    suppliers.forEach((s) => {
+      if (s.paymentTerms && typeof s.paymentTerms === "string" && s.paymentTerms.trim()) {
+        set.add(s.paymentTerms.trim());
+      }
+    });
+    return ["All", ...Array.from(set).sort()];
+  }, [suppliers]);
+
+  // Dynamic filter options for Contractor
+  const contractorSpecializations = useMemo(() => {
+    const set = new Set();
+    contractors.forEach((c) => {
+      const list = c.workSpecializations || c.specializations;
+      if (Array.isArray(list)) {
+        list.forEach((w) => w && set.add(w.trim()));
+      } else if (typeof list === "string" && list.trim()) {
+        set.add(list.trim());
+      }
+    });
+    return ["All", ...Array.from(set).sort()];
+  }, [contractors]);
+
+  const contractorCities = useMemo(() => {
+    const set = new Set();
+    contractors.forEach((c) => {
+      if (c.city && typeof c.city === "string" && c.city.trim()) {
+        set.add(c.city.trim());
+      }
+    });
+    return ["All", ...Array.from(set).sort()];
+  }, [contractors]);
+
+  const contractorTypesList = useMemo(() => {
+    const set = new Set();
+    contractors.forEach((c) => {
+      if (c.contractorType && typeof c.contractorType === "string" && c.contractorType.trim()) {
+        set.add(c.contractorType.trim());
+      }
+    });
+    return ["All", ...Array.from(set).sort()];
+  }, [contractors]);
+
+  const contractorAvailabilityList = useMemo(() => {
+    const set = new Set(["Available", "Busy", "On Project", "Unavailable"]);
+    contractors.forEach((c) => {
+      if (c.availability && typeof c.availability === "string" && c.availability.trim()) {
+        set.add(c.availability.trim());
+      }
+    });
+    return ["All", ...Array.from(set).sort()];
+  }, [contractors]);
+
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (statusFilter !== "All") count++;
+    if (cityFilter !== "All") count++;
+    if (selectedType === "Supplier") {
+      if (categoryFilter !== "All") count++;
+      if (supplierTypeFilter !== "All") count++;
+      if (paymentTermsFilter !== "All") count++;
+    } else {
+      if (specializationFilter !== "All") count++;
+      if (availabilityFilter !== "All") count++;
+      if (contractorTypeFilter !== "All") count++;
+    }
+    return count;
+  }, [
+    selectedType,
+    statusFilter,
+    cityFilter,
+    categoryFilter,
+    supplierTypeFilter,
+    paymentTermsFilter,
+    specializationFilter,
+    availabilityFilter,
+    contractorTypeFilter
+  ]);
+
+  const hasActiveFilters = searchTerm !== "" || activeFiltersCount > 0;
+
+  const handleResetFilters = () => {
+    setSearchTerm("");
+    setStatusFilter("All");
+    setCityFilter("All");
+    setCategoryFilter("All");
+    setSupplierTypeFilter("All");
+    setPaymentTermsFilter("All");
+    setSpecializationFilter("All");
+    setAvailabilityFilter("All");
+    setContractorTypeFilter("All");
+    setCurrentPage(1);
+  };
+
+  const handleTypeChange = (type) => {
+    setSelectedType(type);
+    setCurrentPage(1);
+    handleResetFilters();
+  };
+
   // Active current dataset
   const currentData = selectedType === "Supplier" ? suppliers : contractors;
 
@@ -120,14 +262,113 @@ const SuplireContractorComponent = () => {
     return { total, active, inactive, blocked };
   }, [currentData]);
 
+  // Filtering based on table columns
+  const filteredData = useMemo(() => {
+    const rawList = selectedType === "Supplier" ? suppliers : contractors;
+    return rawList.filter((item) => {
+      const q = searchTerm.toLowerCase().trim();
+      const name = (item.name || "").toLowerCase();
+      const code = (item.code || "").toLowerCase();
+      const contactPerson = (item.contactPerson || "").toLowerCase();
+      const phone = (item.phone || item.mobile || "").toLowerCase();
+      const email = (item.email || "").toLowerCase();
+      const city = (item.city || "").toLowerCase();
+      const state = (item.state || "").toLowerCase();
+
+      const matchesSearch =
+        !q ||
+        name.includes(q) ||
+        code.includes(q) ||
+        contactPerson.includes(q) ||
+        phone.includes(q) ||
+        email.includes(q) ||
+        city.includes(q) ||
+        state.includes(q);
+
+      const matchesStatus =
+        statusFilter === "All" ||
+        (item.status || "Active").toLowerCase() === statusFilter.toLowerCase();
+
+      const matchesCity =
+        cityFilter === "All" ||
+        city === cityFilter.toLowerCase();
+
+      if (selectedType === "Supplier") {
+        const categories = Array.isArray(item.materialCategories)
+          ? item.materialCategories.join(" ").toLowerCase()
+          : (item.materialCategories || "").toLowerCase();
+        const matchesCategory =
+          categoryFilter === "All" ||
+          categories.includes(categoryFilter.toLowerCase());
+
+        const matchesSupplierType =
+          supplierTypeFilter === "All" ||
+          (item.supplierType || "").toLowerCase() === supplierTypeFilter.toLowerCase();
+
+        const matchesPaymentTerms =
+          paymentTermsFilter === "All" ||
+          (item.paymentTerms || "").toLowerCase() === paymentTermsFilter.toLowerCase();
+
+        return (
+          matchesSearch &&
+          matchesStatus &&
+          matchesCity &&
+          matchesCategory &&
+          matchesSupplierType &&
+          matchesPaymentTerms
+        );
+      } else {
+        const specializations = Array.isArray(item.workSpecializations)
+          ? item.workSpecializations.join(" ").toLowerCase()
+          : Array.isArray(item.specializations)
+          ? item.specializations.join(" ").toLowerCase()
+          : (item.workSpecializations || item.specializations || "").toLowerCase();
+
+        const matchesSpec =
+          specializationFilter === "All" ||
+          specializations.includes(specializationFilter.toLowerCase());
+
+        const matchesAvail =
+          availabilityFilter === "All" ||
+          (item.availability || "Available").toLowerCase() === availabilityFilter.toLowerCase();
+
+        const matchesContractorType =
+          contractorTypeFilter === "All" ||
+          (item.contractorType || "").toLowerCase() === contractorTypeFilter.toLowerCase();
+
+        return (
+          matchesSearch &&
+          matchesStatus &&
+          matchesCity &&
+          matchesSpec &&
+          matchesAvail &&
+          matchesContractorType
+        );
+      }
+    });
+  }, [
+    selectedType,
+    suppliers,
+    contractors,
+    searchTerm,
+    statusFilter,
+    cityFilter,
+    categoryFilter,
+    supplierTypeFilter,
+    paymentTermsFilter,
+    specializationFilter,
+    availabilityFilter,
+    contractorTypeFilter
+  ]);
+
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
   const paginatedData = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
-    return currentData.slice(start, start + itemsPerPage);
-  }, [currentData, currentPage, itemsPerPage]);
+    return filteredData.slice(start, start + itemsPerPage);
+  }, [filteredData, currentPage, itemsPerPage]);
 
   // 10 Table Heads for Supplier
   const supplierColumnConfig = useMemo(
@@ -598,7 +839,7 @@ const SuplireContractorComponent = () => {
       <div className="absolute -right-4 -bottom-6 opacity-15 transform group-hover:scale-110 transition-transform duration-500 pointer-events-none">
         {IconBg}
       </div>
-      <div className="relative z-10 flex items-start justify-between">
+      <div className="relative z-1 flex items-start justify-between">
         <div>
           <p className="text-[10px] uppercase font-bold tracking-widest opacity-90">{label}</p>
           <h3 className="text-3xl font-black mt-1 leading-none">{value}</h3>
@@ -610,47 +851,67 @@ const SuplireContractorComponent = () => {
   );
 
   return (
-    <div className="space-y-4 pb-12 px-1 sm:px-0 font-sans">
-      {/* ================= HEADER BANNER ================= */}
-      <div className="sticky top-0 z-40 bg-gradient-to-r from-emerald-950 via-teal-950 to-slate-900 text-white rounded-xl px-4 py-2.5 shadow-md border border-teal-700/50 overflow-hidden mb-2">
-        <div className="absolute top-0 right-0 -mt-8 -mr-8 w-48 h-48 bg-emerald-500/20 rounded-full blur-2xl pointer-events-none" />
+    <div className="w-full max-w-full min-w-0 space-y-4 pb-12 px-1 sm:px-0 font-sans">
+      {/* ================= FIXED / STICKY HEADER BANNER ================= */}
+      <div className="sticky -top-2.5 sm:-top-4 z-30 bg-slate-100 pt-1 pb-1">
+        <div className="bg-gradient-to-r from-emerald-950 via-teal-950 to-slate-900 text-white rounded-xl px-4 py-3 shadow-md border border-teal-700/50 overflow-hidden">
+          <div className="absolute top-0 right-0 -mt-8 -mr-8 w-48 h-48 bg-emerald-500/20 rounded-full blur-2xl pointer-events-none" />
 
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-2.5">
-          <div className="flex items-center gap-2.5">
-            <div className="p-1.5 bg-gradient-to-br from-emerald-400 to-teal-600 rounded-lg shadow-sm flex items-center justify-center shrink-0">
-              <FaUsersCog className="w-4 h-4 text-white" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-base sm:text-lg font-black tracking-tight text-white leading-tight">
-                  Supplier Master Directory
-                </h1>
-                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 flex items-center gap-1">
-                  <HiSparkles className="w-2.5 h-2.5 text-emerald-300" /> Database Live
-                </span>
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2.5">
+              <div className="p-1.5 bg-gradient-to-br from-emerald-400 to-teal-600 rounded-lg shadow-sm flex items-center justify-center shrink-0">
+                <FaUsersCog className="w-4 h-4 text-white" />
               </div>
-              <p className="text-[11px] text-teal-200/90 mt-0.5 leading-none font-normal">
-                Approved master directory of registered material suppliers, distributors, and vendors.
-              </p>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h1 className="text-base sm:text-lg font-black tracking-tight text-white leading-tight">
+                    Supplier Master Directory
+                  </h1>
+                  <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 flex items-center gap-1">
+                    <HiSparkles className="w-2.5 h-2.5 text-emerald-300" /> Database Live
+                  </span>
+                </div>
+                <p className="text-[11px] text-teal-200/90 mt-0.5 leading-none font-normal">
+                  Approved master directory of registered material suppliers, distributors, and vendors.
+                </p>
+              </div>
             </div>
-          </div>
 
-          {/* TWO SEPARATE ADD BUTTONS */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              onClick={() => navigate("/sales/master/suplire-and-contractor/add-supplier")}
-              className="px-3 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer text-xs"
-            >
-              <FaPlus className="w-3 h-3" />
-              <span>Add Supplier</span>
-            </button>
-            <button
-              onClick={() => navigate("/sales/master/suplire-and-contractor/add-contractor")}
-              className="px-3 py-1.5 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer text-xs"
-            >
-              <FaPlus className="w-3 h-3" />
-              <span>Add Contractor</span>
-            </button>
+            {/* TWO SEPARATE ADD BUTTONS & FILTER BUTTON */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setShowFilters((prev) => !prev)}
+                className={`relative p-2 rounded-lg font-bold text-xs transition-all flex items-center justify-center cursor-pointer shadow-sm border ${
+                  showFilters
+                    ? "bg-white text-emerald-950 border-white shadow-md scale-105"
+                    : "bg-emerald-900/60 hover:bg-emerald-800/80 text-emerald-100 border-emerald-600/50 hover:border-emerald-500"
+                }`}
+                title={showFilters ? "Hide Filter Options" : "Show Filter Options"}
+              >
+                <FaFilter className={`w-3.5 h-3.5 ${showFilters ? "text-emerald-700" : "text-emerald-300"}`} />
+                {activeFiltersCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black flex items-center justify-center shadow-xs">
+                    {activeFiltersCount}
+                  </span>
+                )}
+              </button>
+
+              <button
+                onClick={() => navigate("/sales/master/suplire-and-contractor/add-supplier")}
+                className="px-3 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer text-xs"
+              >
+                <FaPlus className="w-3 h-3" />
+                <span>Add Supplier</span>
+              </button>
+              <button
+                onClick={() => navigate("/sales/master/suplire-and-contractor/add-contractor")}
+                className="px-3 py-1.5 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer text-xs"
+              >
+                <FaPlus className="w-3 h-3" />
+                <span>Add Contractor</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -699,10 +960,7 @@ const SuplireContractorComponent = () => {
           return (
             <button
               key={type}
-              onClick={() => {
-                setSelectedType(type);
-                setCurrentPage(1);
-              }}
+              onClick={() => handleTypeChange(type)}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer border ${
                 active
                   ? isSupplier
@@ -718,59 +976,351 @@ const SuplireContractorComponent = () => {
         })}
       </div>
 
-      {/* ================= SEARCH & FILTER BAR ================= */}
-      <div className="bg-white rounded-xl p-3 shadow-sm border border-slate-200/80 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3">
-        <div className="relative flex-1 max-w-lg">
-          <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs" />
-          <input
-            type="text"
-            placeholder={`Search ${selectedType.toLowerCase()} by name, code, contact person, phone...`}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-16 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:bg-white transition-all placeholder:text-slate-400"
-          />
-          {searchTerm && (
-            <button
-              onClick={() => setSearchTerm("")}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
-            >
-              Clear
-            </button>
+      {/* ================= SEARCH & TABLE-BASED FILTER CONTROL BAR (COLLAPSIBLE) ================= */}
+      {showFilters && (
+        <div className="bg-white rounded-xl p-3 sm:p-4 shadow-sm border border-slate-200/80 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+          {/* Top Row: Search Box, Found Count, Reset & Close */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+            {/* Search Box */}
+            <div className="relative flex-1 max-w-lg">
+              <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs" />
+              <input
+                type="text"
+                placeholder={`Search ${selectedType.toLowerCase()} by name, code, contact person, phone, email, city...`}
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className={`w-full pl-9 pr-16 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 ${
+                  selectedType === "Supplier" ? "focus:ring-emerald-500" : "focus:ring-blue-500"
+                } focus:bg-white transition-all placeholder:text-slate-400 font-medium`}
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchTerm("");
+                    setCurrentPage(1);
+                  }}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            {/* Actions & Count */}
+            <div className="flex items-center gap-2 justify-between sm:justify-end">
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition-all cursor-pointer flex items-center gap-1.5"
+                  title="Reset all filters"
+                >
+                  <FaTimes className="w-3 h-3" />
+                  <span>Reset Filters</span>
+                </button>
+              )}
+
+              <span className="text-xs font-black text-slate-800 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 whitespace-nowrap">
+                {filteredData.length} Found
+              </span>
+
+              <button
+                type="button"
+                onClick={() => setShowFilters(false)}
+                className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                title="Close Filter Panel"
+              >
+                <FaTimes className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Bottom Row: Dropdown Filters Corresponding to Table Columns */}
+          {selectedType === "Supplier" ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 pt-2 border-t border-slate-100 text-xs">
+              {/* 1. Status Filter */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Status
+                </label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => {
+                    setStatusFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className={`w-full px-2.5 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-colors focus:outline-none focus:ring-1 focus:ring-emerald-500 truncate ${
+                    statusFilter !== "All"
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-300 font-bold"
+                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-white"
+                  }`}
+                >
+                  <option value="All">All Status</option>
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                  <option value="Blocked">Blocked</option>
+                </select>
+              </div>
+
+              {/* 2. Category Filter (Column: Category / Supplied Materials) */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Category
+                </label>
+                <select
+                  value={categoryFilter}
+                  onChange={(e) => {
+                    setCategoryFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className={`w-full px-2.5 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-colors focus:outline-none focus:ring-1 focus:ring-emerald-500 truncate ${
+                    categoryFilter !== "All"
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-300 font-bold"
+                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-white"
+                  }`}
+                >
+                  {supplierCategories.map((c) => (
+                    <option key={c} value={c}>
+                      {c === "All" ? "All Categories" : c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 3. Location / City Filter (Column: Location) */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Location / City
+                </label>
+                <select
+                  value={cityFilter}
+                  onChange={(e) => {
+                    setCityFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className={`w-full px-2.5 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-colors focus:outline-none focus:ring-1 focus:ring-emerald-500 truncate ${
+                    cityFilter !== "All"
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-300 font-bold"
+                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-white"
+                  }`}
+                >
+                  {supplierCities.map((ct) => (
+                    <option key={ct} value={ct}>
+                      {ct === "All" ? "All Locations" : ct}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 4. Supplier Type Filter (Column: Supplier Type) */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Supplier Type
+                </label>
+                <select
+                  value={supplierTypeFilter}
+                  onChange={(e) => {
+                    setSupplierTypeFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className={`w-full px-2.5 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-colors focus:outline-none focus:ring-1 focus:ring-emerald-500 truncate ${
+                    supplierTypeFilter !== "All"
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-300 font-bold"
+                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-white"
+                  }`}
+                >
+                  {supplierTypesList.map((st) => (
+                    <option key={st} value={st}>
+                      {st === "All" ? "All Supplier Types" : st}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 5. Payment Terms Filter (Column: Payment Terms) */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Payment Terms
+                </label>
+                <select
+                  value={paymentTermsFilter}
+                  onChange={(e) => {
+                    setPaymentTermsFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className={`w-full px-2.5 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-colors focus:outline-none focus:ring-1 focus:ring-emerald-500 truncate ${
+                    paymentTermsFilter !== "All"
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-300 font-bold"
+                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-white"
+                  }`}
+                >
+                  {paymentTermsList.map((pt) => (
+                    <option key={pt} value={pt}>
+                      {pt === "All" ? "All Payment Terms" : pt}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 pt-2 border-t border-slate-100 text-xs">
+              {/* 1. Status Filter */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Status
+                </label>
+                <select
+                  value={statusFilter}
+                  onChange={(e) => {
+                    setStatusFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className={`w-full px-2.5 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500 truncate ${
+                    statusFilter !== "All"
+                      ? "bg-blue-50 text-blue-800 border-blue-300 font-bold"
+                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-white"
+                  }`}
+                >
+                  <option value="All">All Status</option>
+                  <option value="Active">Active</option>
+                  <option value="Inactive">Inactive</option>
+                  <option value="Blocked">Blocked</option>
+                </select>
+              </div>
+
+              {/* 2. Specialization Filter (Column: Work Categories / Specializations) */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Work Category
+                </label>
+                <select
+                  value={specializationFilter}
+                  onChange={(e) => {
+                    setSpecializationFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className={`w-full px-2.5 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500 truncate ${
+                    specializationFilter !== "All"
+                      ? "bg-blue-50 text-blue-800 border-blue-300 font-bold"
+                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-white"
+                  }`}
+                >
+                  {contractorSpecializations.map((sp) => (
+                    <option key={sp} value={sp}>
+                      {sp === "All" ? "All Categories" : sp}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 3. Location / City Filter (Column: Location) */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Location / City
+                </label>
+                <select
+                  value={cityFilter}
+                  onChange={(e) => {
+                    setCityFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className={`w-full px-2.5 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500 truncate ${
+                    cityFilter !== "All"
+                      ? "bg-blue-50 text-blue-800 border-blue-300 font-bold"
+                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-white"
+                  }`}
+                >
+                  {contractorCities.map((ct) => (
+                    <option key={ct} value={ct}>
+                      {ct === "All" ? "All Locations" : ct}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 4. Contractor Type Filter (Column: Contractor Type) */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Contractor Type
+                </label>
+                <select
+                  value={contractorTypeFilter}
+                  onChange={(e) => {
+                    setContractorTypeFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className={`w-full px-2.5 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500 truncate ${
+                    contractorTypeFilter !== "All"
+                      ? "bg-blue-50 text-blue-800 border-blue-300 font-bold"
+                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-white"
+                  }`}
+                >
+                  {contractorTypesList.map((ct) => (
+                    <option key={ct} value={ct}>
+                      {ct === "All" ? "All Contractor Types" : ct}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 5. Availability Filter (Column: Availability) */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                  Availability
+                </label>
+                <select
+                  value={availabilityFilter}
+                  onChange={(e) => {
+                    setAvailabilityFilter(e.target.value);
+                    setCurrentPage(1);
+                  }}
+                  className={`w-full px-2.5 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-colors focus:outline-none focus:ring-1 focus:ring-blue-500 truncate ${
+                    availabilityFilter !== "All"
+                      ? "bg-blue-50 text-blue-800 border-blue-300 font-bold"
+                      : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-white"
+                  }`}
+                >
+                  {contractorAvailabilityList.map((av) => (
+                    <option key={av} value={av}>
+                      {av === "All" ? "All Availability" : av}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
           )}
         </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5">
-            <FaFilter className="text-slate-400 text-[10px]" />
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wide">Status:</span>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="text-[11px] font-bold bg-transparent text-slate-700 focus:outline-none cursor-pointer"
-            >
-              <option value="All">All Status</option>
-              <option value="Active">Active</option>
-              <option value="Inactive">Inactive</option>
-              <option value="Blocked">Blocked</option>
-            </select>
-          </div>
-          <span className="text-[11px] font-black text-slate-800 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 whitespace-nowrap">
-            {currentData.length} Found
-          </span>
-        </div>
-      </div>
+      )}
 
       {/* ================= 10-COLUMN DIRECTORY TABLE ================= */}
-      <div className="bg-white border border-slate-200/90 shadow-xs overflow-hidden rounded-none">
+      <div className="w-full max-w-full min-w-0 bg-white border border-slate-200/90 shadow-xs overflow-hidden rounded-none">
         {loading ? (
           <div className="py-16 text-center text-slate-500 text-xs flex flex-col items-center justify-center gap-2">
             <FaSpinner className="w-5 h-5 animate-spin text-slate-600" />
             <span>Loading {selectedType.toLowerCase()}s from database...</span>
           </div>
-        ) : currentData.length === 0 ? (
+        ) : filteredData.length === 0 ? (
           <div className="py-16 text-center text-slate-400 text-xs">
             <p className="font-semibold text-slate-600 text-sm">No {selectedType.toLowerCase()}s found</p>
-            <p className="mt-1">Add your first entry using the "Add {selectedType}" button above.</p>
+            <p className="mt-1">
+              {hasActiveFilters
+                ? "Try adjusting your search query or filter options."
+                : `Add your first entry using the "Add ${selectedType}" button above.`}
+            </p>
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition-all cursor-pointer"
+              >
+                <FaTimes className="w-3 h-3" />
+                <span>Reset All Filters</span>
+              </button>
+            )}
           </div>
         ) : (
           <Table
@@ -778,7 +1328,7 @@ const SuplireContractorComponent = () => {
             columnConfig={activeColumnConfig}
             showSrNo={true}
             currentPage={currentPage}
-            totalItems={currentData.length}
+            totalItems={filteredData.length}
             itemsPerPage={itemsPerPage}
             onPageChange={(page) => setCurrentPage(page)}
             onItemsPerPageChange={(limit) => {

@@ -12,7 +12,10 @@ import LeadDetails from '../Pages/LeadDetails'
 import SalesLeadForm from '../Pages/SalesLeadForm'
 import Presales from '../Pages/Presales'
 import PmsTemplate from '../Pages/Master/PmsTemplate'
+import CreatePmsTemplatePage from '../Pages/Master/CreatePmsTemplatePage'
 import MaterialMaster from '../Pages/Master/MaterialMaster'
+import AddMaterialPage from '../Pages/Master/AddMaterialPage'
+import MaterialDetailsPage from '../Pages/Master/MaterialDetailsPage'
 import SuplireContractor from '../Pages/Master/SuplireContractor'
 import AddSupplierPage from '../Pages/Master/AddSupplierPage'
 import AddContractorPage from '../Pages/Master/AddContractorPage'
@@ -41,7 +44,14 @@ const SalesRoutes = () => {
         <Route path="presales/:id" element={<Presales />} />
         {/* MasterForm Routes */}
         <Route path="master/pms-template" element={<PmsTemplate />} />
+        <Route path="master/pms-template/create" element={<CreatePmsTemplatePage />} />
+        <Route path="master/pms-template/create-template" element={<CreatePmsTemplatePage />} />
+        <Route path="master/pms-template/edit/:id" element={<CreatePmsTemplatePage />} />
+        <Route path="master/pms-template/edit-template/:id" element={<CreatePmsTemplatePage />} />
         <Route path="master/material" element={<MaterialMaster />} />
+        <Route path="master/material/add-material" element={<AddMaterialPage />} />
+        <Route path="master/material/edit-material/:id" element={<AddMaterialPage />} />
+        <Route path="master/material/details/:id" element={<MaterialDetailsPage />} />
         <Route path="master/suplire-and-contractor" element={<SuplireContractor />} />
         <Route path="master/suplire-and-contractor/add-supplier" element={<AddSupplierPage />} />
         <Route path="master/suplire-and-contractor/edit-supplier/:id" element={<AddSupplierPage />} />

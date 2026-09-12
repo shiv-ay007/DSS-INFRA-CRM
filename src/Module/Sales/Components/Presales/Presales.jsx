@@ -26,9 +26,15 @@ import {
   FaFilter,
   FaTable,
   FaStream,
-  FaSpinner
+  FaSpinner,
+  FaBuilding,
+  FaStar,
+  FaExternalLinkAlt,
+  FaBoxes
 } from "react-icons/fa";
+import { HiSparkles } from "react-icons/hi2";
 import { toast } from "react-toastify";
+import { useAuth } from "../../../../context/AuthContext";
 import {
   getAllLeadProjectsApi,
   createLeadProjectApi,
@@ -63,6 +69,9 @@ const isStageApplicable = (stageId, scope) => {
 
 const Presales = () => {
   const navigate = useNavigate();
+  const { role, isObserver } = useAuth();
+  const currentRole = role || "Worker";
+  const isUserObserver = isObserver || String(currentRole).toLowerCase() === "observer";
 
   // Active View Mode: "table" (default Table form) vs "pipeline"
   const [viewMode, setViewMode] = useState("table");
@@ -85,36 +94,42 @@ const Presales = () => {
         return {
           id: cleanId,
           _id: bp._id || cleanId,
-          leadId: leadObj?._id || bp.leadId || cleanId,
+          leadId: leadObj?._id || (typeof bp.leadId === "string" ? bp.leadId : cleanId),
           clientName: bp.clientName || bp.concernPersonName || leadObj?.clientName || leadObj?.concernPersonName || "Unnamed Client",
           contactNo: bp.phoneNumber || bp.contactNo || bp.whatsappNumber || leadObj?.phoneNumber || leadObj?.contactNo || "--",
+          phoneNumber: bp.phoneNumber || bp.contactNo || bp.whatsappNumber || leadObj?.phoneNumber || leadObj?.contactNo || "--",
+          alternateNumber: bp.alternateNumber || leadObj?.alternateNumber || "--",
+          whatsappNumber: bp.whatsappNumber || bp.phoneNumber || leadObj?.whatsappNumber || leadObj?.phoneNumber || "--",
           emailAddress: bp.emailAddress || bp.email || leadObj?.emailAddress || leadObj?.email || "",
-          engagementScope: bp.businessType?.includes("Consultancy")
-            ? "Consultancy Only"
-            : bp.businessType?.includes("Design")
-            ? "Design Only"
-            : "Design + Construction",
-          projectDetails: bp.requirement || bp.projectDetails || "Interior / Architectural Work",
-          expectedRevenue: Number(bp.expectedBusiness || bp.expectedRevenue || 0),
-          activePerson: bp.assignedTo || bp.activePerson || "Admin",
-          workTypes:
-            Array.isArray(bp.workTypes) && bp.workTypes.length > 0
-              ? bp.workTypes
-              : ["3D View", "Concept Drawing"],
-          city: bp.city || leadObj?.city || "Lucknow",
-          currentStageId: bp.currentStageId || 1,
-          status: bp.status || "OPEN",
-          closureStatus: bp.closureStatus || "Open",
-          stagesData: bp.stagesData || {},
-          remarks: Array.isArray(bp.remarks) ? bp.remarks : [],
-          createdAt: bp.createdAt || bp.created_at || bp.date || leadObj?.createdAt || leadObj?.date || null
+          companyName: bp.companyName || leadObj?.companyName || "--",
+          businessType: bp.businessType || leadObj?.businessType || leadObj?.workCategory || "--",
+          jobType: bp.jobType || "NEW",
+          priority: bp.priority || "High",
+          clientDesignation: bp.clientDesignation || "--",
+          clientRating: Number(bp.clientRating) || 4.5,
+          expectedBusiness: Number(bp.expectedBusiness || bp.amount || bp.expectedRevenue || 0),
+          expectedRevenue: Number(bp.expectedBusiness || bp.amount || bp.expectedRevenue || 0),
+          assignedTo: bp.assignedTo || bp.salesPerson || leadObj?.salesPerson || "Admin",
+          activePerson: bp.assignedTo || bp.salesPerson || leadObj?.salesPerson || "Admin",
+          nextPersonName: bp.nextPersonName || "",
+          designation: bp.designation || bp.nextPersonDesignation || "",
+          city: bp.city || leadObj?.city || "--",
+          state: bp.state || leadObj?.state || "",
+          pincode: bp.pincode || leadObj?.pincode || "",
+          address: bp.address || leadObj?.address || "",
+          requirement: bp.requirement || bp.projectDetails || leadObj?.requirement || "--",
+          projectDetails: bp.requirement || bp.projectDetails || leadObj?.requirement || "--",
+          transferRemark: bp.transferRemark || bp.salesRemarks || bp.remark || leadObj?.remark || "",
+          createdAt: bp.createdAt || bp.created_at || bp.date || leadObj?.createdAt || leadObj?.date || null,
+          rawProject: bp,
+          leadObj: leadObj
         };
       });
 
       setPresalesList(formatted);
       if (formatted.length > 0) {
         setSelectedPresaleId((prev) => (prev && formatted.some((p) => p.id === prev) ? prev : formatted[0].id));
-        setActiveStageId((prev) => prev || formatted[0].currentStageId || 1);
+        setActiveStageId((prev) => prev || 1);
       }
     } catch (err) {
       console.error("Error fetching backend projects for Presales:", err);
@@ -133,13 +148,20 @@ const Presales = () => {
   const [activeStageId, setActiveStageId] = useState(1);
   const [newRemarkText, setNewRemarkText] = useState("");
 
-  // Search and Filters for Table
+  // View Details Modal State (Exact matching Details View)
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+
+  // Search and Filters for Table (Master Form Pattern)
+  const [showFilters, setShowFilters] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [filterScope, setFilterScope] = useState("ALL");
-  const [filterStatus, setFilterStatus] = useState("ALL");
+  const [filterPriority, setFilterPriority] = useState("ALL");
+  const [filterJobType, setFilterJobType] = useState("ALL");
+  const [filterBusinessType, setFilterBusinessType] = useState("ALL");
+  const [filterAssignedTo, setFilterAssignedTo] = useState("ALL");
+  const [filterCity, setFilterCity] = useState("ALL");
 
   // Modals
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isPipelineModalOpen, setIsPipelineModalOpen] = useState(false);
   const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
   const [closureOption, setClosureOption] = useState("Closed — Consultancy Only");
@@ -187,7 +209,6 @@ const Presales = () => {
   }, [stageFormData.modDate, stageFormData.finalContractSignDate]);
 
   const [savingStage, setSavingStage] = useState(false);
-  const [creatingPresale, setCreatingPresale] = useState(false);
 
   // Update Engagement Scope
   const handleScopeChange = async (newScope) => {
@@ -349,6 +370,75 @@ const Presales = () => {
     }
   };
 
+  // Project actions matching Details View
+  const handleEditProject = (project) => {
+    const targetLeadId = project.leadId?._id || project.leadId || project._id || project.id;
+    navigate(`/sales/leads/sales-form/${targetLeadId}`, {
+      state: {
+        lead: project.leadObj || { _id: targetLeadId, clientName: project.clientName, phoneNumber: project.phoneNumber },
+        project: project.rawProject || project,
+        returnToLeadDetails: false,
+        from: "presales"
+      }
+    });
+  };
+
+  const handleNavigateToLeadDetails = (project) => {
+    const targetLeadId = project.leadId?._id || project.leadId || project._id || project.id;
+    navigate(`/sales/leads/details/${targetLeadId}`, {
+      state: { lead: project.leadObj || project, from: "presales", allowEdit: false }
+    });
+  };
+
+  // Unique options for dropdown filters
+  const businessTypesList = useMemo(() => {
+    const set = new Set();
+    presalesList.forEach((p) => {
+      if (p.businessType) set.add(p.businessType);
+    });
+    return Array.from(set).sort();
+  }, [presalesList]);
+
+  const assignedToList = useMemo(() => {
+    const set = new Set();
+    presalesList.forEach((p) => {
+      const name = p.assignedTo || p.activePerson;
+      if (name) set.add(name);
+    });
+    return Array.from(set).sort();
+  }, [presalesList]);
+
+  const citiesList = useMemo(() => {
+    const set = new Set();
+    presalesList.forEach((p) => {
+      if (p.city) set.add(p.city);
+    });
+    return Array.from(set).sort();
+  }, [presalesList]);
+
+  // Active filters count
+  const activeFiltersCount = useMemo(() => {
+    let count = 0;
+    if (searchTerm) count++;
+    if (filterPriority !== "ALL") count++;
+    if (filterJobType !== "ALL") count++;
+    if (filterBusinessType !== "ALL") count++;
+    if (filterAssignedTo !== "ALL") count++;
+    if (filterCity !== "ALL") count++;
+    return count;
+  }, [searchTerm, filterPriority, filterJobType, filterBusinessType, filterAssignedTo, filterCity]);
+
+  const hasActiveFilters = activeFiltersCount > 0;
+
+  const handleResetFilters = () => {
+    setSearchTerm("");
+    setFilterPriority("ALL");
+    setFilterJobType("ALL");
+    setFilterBusinessType("ALL");
+    setFilterAssignedTo("ALL");
+    setFilterCity("ALL");
+  };
+
   // Filtered Table Records
   const filteredPresales = useMemo(() => {
     return presalesList.filter((item) => {
@@ -357,21 +447,44 @@ const Presales = () => {
         !searchTerm ||
         item.clientName?.toLowerCase().includes(q) ||
         item.contactNo?.includes(q) ||
+        item.phoneNumber?.includes(q) ||
         item.emailAddress?.toLowerCase().includes(q) ||
+        item.companyName?.toLowerCase().includes(q) ||
         item.city?.toLowerCase().includes(q) ||
-        item.activePerson?.toLowerCase().includes(q);
+        item.businessType?.toLowerCase().includes(q) ||
+        item.assignedTo?.toLowerCase().includes(q) ||
+        item.activePerson?.toLowerCase().includes(q) ||
+        item.requirement?.toLowerCase().includes(q);
 
-      const matchScope =
-        filterScope === "ALL" ||
-        item.engagementScope?.toLowerCase() === filterScope.toLowerCase();
+      const itemPriority = String(item.priority || "High").toUpperCase();
+      const matchPriority =
+        filterPriority === "ALL" ||
+        itemPriority === filterPriority.toUpperCase() ||
+        (filterPriority === "HIGH" && itemPriority === "HOT") ||
+        (filterPriority === "MEDIUM" && itemPriority === "WARM");
 
-      const matchStatus =
-        filterStatus === "ALL" ||
-        item.status?.toLowerCase() === filterStatus.toLowerCase();
+      const itemJobType = String(item.jobType || "NEW").toUpperCase();
+      const matchJobType =
+        filterJobType === "ALL" ||
+        itemJobType === filterJobType.toUpperCase();
 
-      return matchSearch && matchScope && matchStatus;
+      const matchBusinessType =
+        filterBusinessType === "ALL" ||
+        String(item.businessType || "").toLowerCase() === filterBusinessType.toLowerCase();
+
+      const itemAssigned = item.assignedTo || item.activePerson || "";
+      const matchAssignedTo =
+        filterAssignedTo === "ALL" ||
+        itemAssigned.toLowerCase() === filterAssignedTo.toLowerCase();
+
+      const itemCity = item.city || "";
+      const matchCity =
+        filterCity === "ALL" ||
+        itemCity.toLowerCase() === filterCity.toLowerCase();
+
+      return matchSearch && matchPriority && matchJobType && matchBusinessType && matchAssignedTo && matchCity;
     });
-  }, [presalesList, searchTerm, filterScope, filterStatus]);
+  }, [presalesList, searchTerm, filterPriority, filterJobType, filterBusinessType, filterAssignedTo, filterCity]);
 
   // View Pipeline of a specific Presale
   const handleOpenPipelineForClient = (client) => {
@@ -380,99 +493,7 @@ const Presales = () => {
     setIsPipelineModalOpen(true);
   };
 
-  // New Presale Form State for Modal
-  const [newPresaleForm, setNewPresaleForm] = useState({
-    clientName: "",
-    contactNo: "",
-    emailAddress: "",
-    engagementScope: "Design + Construction",
-    projectDetails: "Residential Work",
-    expectedRevenue: 850000,
-    activePerson: "Admin",
-    city: "Lucknow",
-    workTypes: "3D View, Concept Drawing, Elevation"
-  });
 
-  const handleCreateNewPresale = async (e) => {
-    e.preventDefault();
-    if (!newPresaleForm.clientName.trim()) {
-      toast.error("Client Name is required!");
-      return;
-    }
-    if (!newPresaleForm.contactNo.trim()) {
-      toast.error("Contact Number is required!");
-      return;
-    }
-
-    setCreatingPresale(true);
-    const payload = {
-      clientName: newPresaleForm.clientName.trim(),
-      phoneNumber: newPresaleForm.contactNo.trim(),
-      contactNo: newPresaleForm.contactNo.trim(),
-      emailAddress: newPresaleForm.emailAddress.trim(),
-      email: newPresaleForm.emailAddress.trim(),
-      businessType: newPresaleForm.engagementScope,
-      requirement: newPresaleForm.projectDetails,
-      expectedBusiness: Number(newPresaleForm.expectedRevenue) || 0,
-      assignedTo: newPresaleForm.activePerson,
-      city: newPresaleForm.city.trim(),
-      workTypes: newPresaleForm.workTypes.split(",").map((w) => w.trim()).filter(Boolean),
-      currentStageId: 1,
-      status: "OPEN",
-      closureStatus: "Open",
-      stagesData: {},
-      remarks: []
-    };
-
-    try {
-      const res = await createLeadProjectApi(payload);
-      const savedDoc = res?.data?.project || res?.project || res?.data || res;
-      const cleanId = savedDoc?._id || savedDoc?.leadId || `PRESALE-${Date.now().toString().slice(-4)}`;
-
-      const newPresaleItem = {
-        id: cleanId,
-        _id: savedDoc?._id || cleanId,
-        leadId: savedDoc?.leadId || cleanId,
-        clientName: payload.clientName,
-        contactNo: payload.contactNo,
-        emailAddress: payload.emailAddress || "",
-        engagementScope: payload.businessType,
-        projectDetails: payload.requirement,
-        expectedRevenue: payload.expectedBusiness,
-        activePerson: payload.assignedTo,
-        workTypes: payload.workTypes,
-        city: payload.city,
-        currentStageId: 1,
-        status: "OPEN",
-        closureStatus: "Open",
-        stagesData: {},
-        remarks: [],
-        createdAt: savedDoc?.createdAt || new Date().toISOString()
-      };
-
-      setPresalesList((prev) => [newPresaleItem, ...prev]);
-      setSelectedPresaleId(cleanId);
-      setActiveStageId(1);
-      setIsAddModalOpen(false);
-      setNewPresaleForm({
-        clientName: "",
-        contactNo: "",
-        emailAddress: "",
-        engagementScope: "Design + Construction",
-        projectDetails: "Residential Work",
-        expectedRevenue: 850000,
-        activePerson: "Admin",
-        city: "Lucknow",
-        workTypes: "3D View, Concept Drawing, Elevation"
-      });
-      toast.success(`Presale created for ${newPresaleItem.clientName}! 🚀`);
-    } catch (err) {
-      console.error("Error creating presale:", err);
-      toast.error("Failed to create presale on server");
-    } finally {
-      setCreatingPresale(false);
-    }
-  };
 
   // Reusable Negotiation Block
   const renderNegotiationBlock = (extraField = null) => {
@@ -980,149 +1001,318 @@ const Presales = () => {
 
   // KPI Metrics
   const totalRevenue = useMemo(() => {
-    return presalesList.reduce((acc, curr) => acc + (Number(curr.expectedRevenue) || 0), 0);
+    return presalesList.reduce((acc, curr) => acc + (Number(curr.expectedBusiness) || 0), 0);
   }, [presalesList]);
 
+  const highPriorityCount = useMemo(() => {
+    return presalesList.filter((p) => {
+      const pr = String(p.priority || "").toUpperCase();
+      return pr === "HIGH" || pr === "HOT";
+    }).length;
+  }, [presalesList]);
+
+  const newJobsCount = useMemo(() => {
+    return presalesList.filter((p) => String(p.jobType || "NEW").toUpperCase() === "NEW").length;
+  }, [presalesList]);
+
+  // Reusable MasterForm-style KPI Card
+  const KpiCard = ({ gradient, icon, label, value, subtitle, IconBg }) => (
+    <div className={`relative overflow-hidden rounded-xl p-4 shadow-md ${gradient} text-white group`}>
+      <div className="absolute -right-4 -bottom-6 opacity-15 transform group-hover:scale-110 transition-transform duration-500 pointer-events-none">
+        {IconBg}
+      </div>
+      <div className="relative z-1 flex items-start justify-between">
+        <div>
+          <p className="text-[10px] uppercase font-bold tracking-widest opacity-90">{label}</p>
+          <h3 className="text-3xl font-black mt-1 leading-none">{value}</h3>
+          <p className="text-[10px] opacity-80 mt-1 font-medium">{subtitle}</p>
+        </div>
+        <div className="p-2.5 bg-white/20 rounded-lg backdrop-blur-sm shadow-inner">{icon}</div>
+      </div>
+    </div>
+  );
+
   return (
-    <div className="max-w-7xl mx-auto p-3 sm:p-6 space-y-5 font-sans pb-16">
+    <div className="w-full max-w-full min-w-0 space-y-4 pb-16 px-1 sm:px-0 font-sans">
       
       {/* ──────────────────────────────────────────────────────────────────
-          TOP HEADER BAR
+          FIXED / STICKY HEADER BANNER (MASTER FORM DESIGN)
       ────────────────────────────────────────────────────────────────── */}
-      <div className="bg-white border border-slate-200 rounded-xl p-4 sm:p-5 shadow-xs flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5">
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            className="w-9 h-9 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
-            title="Go Back"
-          >
-            <FaArrowLeft className="text-sm" />
-          </button>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-lg sm:text-xl font-bold text-slate-900 tracking-tight">
-                Presale / Design Pipeline
-              </h1>
-              <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                {presalesList.length} Active Presales
-              </span>
-            </div>
-            <p className="text-xs text-slate-500 font-medium">
-              Module 2 — Multi-Stage Design & Negotiation Tracking System
-            </p>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2.5">
-          {/* VIEW SWITCHER: TABLE VIEW vs PIPELINE VIEW */}
-          <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
-            <button
-              type="button"
-              onClick={() => setViewMode("table")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                viewMode === "table" ? "bg-white text-indigo-600 shadow-2xs" : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              <FaTable className="text-xs" />
-              <span>Table View</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setViewMode("pipeline")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                viewMode === "pipeline" ? "bg-white text-indigo-600 shadow-2xs" : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              <FaStream className="text-xs" />
-              <span>Pipeline View</span>
-            </button>
-          </div>
-
-          {/* + ADD PRESALE BUTTON */}
-          <button
-            type="button"
-            onClick={() => setIsAddModalOpen(true)}
-            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 shadow-xs cursor-pointer"
-          >
-            <FaPlus className="text-xs" />
-            <span>Add Presale</span>
-          </button>
-        </div>
-      </div>
-
-      {/* ──────────────────────────────────────────────────────────────────
-          KPI METRIC SUMMARY CARDS
-      ────────────────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5">
-        <div className="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-xs">
-          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Total Presales</p>
-          <p className="text-lg sm:text-xl font-extrabold text-slate-900 font-mono mt-0.5">{presalesList.length}</p>
-        </div>
-        <div className="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-xs">
-          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Pipeline Revenue</p>
-          <p className="text-lg sm:text-xl font-extrabold text-emerald-700 font-mono mt-0.5">
-            ₹{totalRevenue.toLocaleString("en-IN")}
-          </p>
-        </div>
-        <div className="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-xs">
-          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">In Pipeline</p>
-          <p className="text-lg sm:text-xl font-extrabold text-blue-600 font-mono mt-0.5">
-            {presalesList.filter((p) => p.status === "OPEN").length}
-          </p>
-        </div>
-        <div className="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 shadow-xs">
-          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Active Projects</p>
-          <p className="text-lg sm:text-xl font-extrabold text-purple-700 font-mono mt-0.5">
-            {presalesList.filter((p) => p.status === "ACTIVE_PROJECT").length}
-          </p>
-        </div>
-      </div>
-
-      {/* ──────────────────────────────────────────────────────────────────
-          MODE 1: PRESALES TABLE VIEW (CRM STANDARD TABLE FORMAT)
-      ────────────────────────────────────────────────────────────────── */}
-      {viewMode === "table" && (
-        <div className="w-full bg-white border border-slate-200 rounded-2xl shadow-xs overflow-hidden space-y-3">
-          {/* SEARCH & FILTERS BAR */}
-          <div className="p-4 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2 flex-1 min-w-[240px]">
-              <div className="relative flex-1">
-                <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs" />
-                <input
-                  type="text"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  placeholder="Search by client name, contact, city, active person..."
-                  className="w-full pl-9 pr-3.5 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm font-medium bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                />
+      <div className="sticky -top-2.5 sm:-top-4 z-30 bg-slate-100 pt-1 pb-1">
+        <div className="bg-gradient-to-r from-blue-900 via-indigo-950 to-slate-900 text-white rounded-xl px-4 py-3 shadow-md border border-indigo-700/50 overflow-hidden relative">
+          <div className="absolute top-0 right-0 -mt-8 -mr-8 w-48 h-48 bg-cyan-500/20 rounded-full blur-2xl pointer-events-none" />
+          <div className="absolute bottom-0 left-1/3 -mb-8 w-48 h-48 bg-indigo-500/20 rounded-full blur-2xl pointer-events-none" />
+          
+          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-2.5">
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => navigate(-1)}
+                className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95 shrink-0 border border-white/10"
+                title="Go Back"
+              >
+                <FaArrowLeft className="text-xs" />
+              </button>
+              <div className="p-2 bg-gradient-to-br from-cyan-400 to-blue-600 rounded-lg shadow-sm flex items-center justify-center shrink-0">
+                <FaBuilding className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h1 className="text-base sm:text-lg font-black tracking-tight text-white leading-tight">
+                    Presales Management
+                  </h1>
+                  <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 flex items-center gap-1">
+                    <HiSparkles className="w-2.5 h-2.5 text-cyan-300" /> Database Live
+                  </span>
+                </div>
+                <p className="text-[11px] text-indigo-200/90 mt-0.5 leading-none font-normal">
+                  Approved master pipeline of lead projects, proposals & expected business.
+                </p>
               </div>
             </div>
 
             <div className="flex items-center gap-2">
-              <select
-                value={filterScope}
-                onChange={(e) => setFilterScope(e.target.value)}
-                className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+              <button
+                type="button"
+                onClick={() => setShowFilters((prev) => !prev)}
+                className={`relative p-2 rounded-lg font-bold text-xs transition-all flex items-center justify-center cursor-pointer shadow-sm border ${
+                  showFilters
+                    ? "bg-white text-indigo-950 border-white shadow-md scale-105"
+                    : "bg-indigo-900/60 hover:bg-indigo-800/80 text-indigo-100 border-indigo-600/50 hover:border-indigo-500"
+                }`}
+                title={showFilters ? "Hide Filter Options" : "Show Filter Options"}
               >
-                <option value="ALL">All Scopes</option>
-                <option value="Consultancy Only">Consultancy Only</option>
-                <option value="Design Only">Design Only</option>
-                <option value="Design + Construction">Design + Construction</option>
-              </select>
+                <FaFilter className={`w-3.5 h-3.5 ${showFilters ? "text-indigo-700" : "text-indigo-300"}`} />
+                {activeFiltersCount > 0 && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-400 text-slate-950 text-[10px] font-black flex items-center justify-center shadow-xs">
+                    {activeFiltersCount}
+                  </span>
+                )}
+              </button>
+              <span className="px-3 py-1 rounded-lg text-xs font-bold bg-white/10 text-white border border-white/15">
+                {presalesList.length} Active Records
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
 
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="px-3 py-2 rounded-xl border border-slate-300 text-xs font-semibold bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+      {/* ──────────────────────────────────────────────────────────────────
+          COMPACT KPI METRIC SUMMARY CARDS (MASTER FORM DESIGN)
+      ────────────────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+        <KpiCard
+          gradient="bg-gradient-to-br from-slate-800 to-slate-900"
+          label="Total Presales"
+          value={presalesList.length}
+          subtitle="Saved in master database"
+          icon={<FaBuilding className="w-5 h-5 text-white" />}
+          IconBg={<FaBuilding className="w-20 h-20" />}
+        />
+        <KpiCard
+          gradient="bg-gradient-to-br from-emerald-600 to-teal-700"
+          label="Total Value"
+          value={`₹${totalRevenue.toLocaleString("en-IN")}`}
+          subtitle="Expected business pipeline"
+          icon={<FaRupeeSign className="w-5 h-5 text-white" />}
+          IconBg={<FaRupeeSign className="w-20 h-20" />}
+        />
+        <KpiCard
+          gradient="bg-gradient-to-br from-rose-600 to-pink-700"
+          label="High Priority"
+          value={highPriorityCount}
+          subtitle="High / Hot priority leads"
+          icon={<FaStar className="w-5 h-5 text-white" />}
+          IconBg={<FaStar className="w-20 h-20" />}
+        />
+        <KpiCard
+          gradient="bg-gradient-to-br from-indigo-600 to-purple-700"
+          label="New Jobs"
+          value={newJobsCount}
+          subtitle="Fresh intake requirements"
+          icon={<FaBoxes className="w-5 h-5 text-white" />}
+          IconBg={<FaBoxes className="w-20 h-20" />}
+        />
+      </div>
+
+      {/* ──────────────────────────────────────────────────────────────────
+          MASTER FORM STYLE SEARCH & TABLE-BASED FILTER CONTROL BAR (COLLAPSIBLE)
+      ────────────────────────────────────────────────────────────────── */}
+      {showFilters && (
+        <div className="bg-white rounded-xl p-3 sm:p-4 shadow-sm border border-slate-200/80 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+          {/* Top Row: Search Box, Found Count, Reset & Close */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
+            {/* Search Box */}
+            <div className="relative flex-1 max-w-lg">
+              <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs" />
+              <input
+                type="text"
+                placeholder="Search presales by client, phone, company, city, executive, requirement..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full pl-9 pr-16 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all placeholder:text-slate-400 font-medium"
+              />
+              {searchTerm && (
+                <button
+                  type="button"
+                  onClick={() => setSearchTerm("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-400 hover:text-red-500 transition-colors cursor-pointer"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+
+            {/* Actions & Count */}
+            <div className="flex items-center gap-2 justify-between sm:justify-end">
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={handleResetFilters}
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition-all cursor-pointer flex items-center gap-1.5"
+                  title="Reset all filters"
+                >
+                  <FaTimes className="w-3 h-3" />
+                  <span>Reset Filters</span>
+                </button>
+              )}
+
+              <span className="text-xs font-black text-slate-800 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200 whitespace-nowrap">
+                {filteredPresales.length} Found
+              </span>
+
+              <button
+                type="button"
+                onClick={() => setShowFilters(false)}
+                className="p-2 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                title="Close Filter Panel"
               >
-                <option value="ALL">All Status</option>
-                <option value="OPEN">Open (In Pipeline)</option>
-                <option value="CLOSED">Closed</option>
-                <option value="ACTIVE_PROJECT">Active Project</option>
+                <FaTimes className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Bottom Row: Dropdown Filters Matching Table Columns */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 pt-2 border-t border-slate-100 text-xs">
+            {/* 1. Priority Filter (Column: PRIORITY) */}
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                Priority
+              </label>
+              <select
+                value={filterPriority}
+                onChange={(e) => setFilterPriority(e.target.value)}
+                className={`w-full px-2.5 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-colors focus:outline-none focus:ring-1 focus:ring-indigo-500 truncate ${
+                  filterPriority !== "ALL"
+                    ? "bg-indigo-50 text-indigo-800 border-indigo-300 font-bold"
+                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-white"
+                }`}
+              >
+                <option value="ALL">All Priorities</option>
+                <option value="HIGH">High / Hot</option>
+                <option value="MEDIUM">Medium / Warm</option>
+                <option value="LOW">Low</option>
+              </select>
+            </div>
+
+            {/* 2. Job Type Filter (Column: JOB TYPE) */}
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                Job Type
+              </label>
+              <select
+                value={filterJobType}
+                onChange={(e) => setFilterJobType(e.target.value)}
+                className={`w-full px-2.5 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-colors focus:outline-none focus:ring-1 focus:ring-indigo-500 truncate ${
+                  filterJobType !== "ALL"
+                    ? "bg-indigo-50 text-indigo-800 border-indigo-300 font-bold"
+                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-white"
+                }`}
+              >
+                <option value="ALL">All Job Types</option>
+                <option value="NEW">New</option>
+                <option value="EXISTING">Existing</option>
+                <option value="UPGRADE">Upgrade</option>
+              </select>
+            </div>
+
+            {/* 3. Business Type Filter (Column: BUSINESS TYPE) */}
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                Business Type
+              </label>
+              <select
+                value={filterBusinessType}
+                onChange={(e) => setFilterBusinessType(e.target.value)}
+                className={`w-full px-2.5 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-colors focus:outline-none focus:ring-1 focus:ring-indigo-500 truncate ${
+                  filterBusinessType !== "ALL"
+                    ? "bg-indigo-50 text-indigo-800 border-indigo-300 font-bold"
+                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-white"
+                }`}
+              >
+                <option value="ALL">All Business Types</option>
+                {businessTypesList.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 4. Assigned To Filter (Column: ASSIGNED TO) */}
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                Assigned To
+              </label>
+              <select
+                value={filterAssignedTo}
+                onChange={(e) => setFilterAssignedTo(e.target.value)}
+                className={`w-full px-2.5 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-colors focus:outline-none focus:ring-1 focus:ring-indigo-500 truncate ${
+                  filterAssignedTo !== "ALL"
+                    ? "bg-indigo-50 text-indigo-800 border-indigo-300 font-bold"
+                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-white"
+                }`}
+              >
+                <option value="ALL">All Executives</option>
+                {assignedToList.map((person) => (
+                  <option key={person} value={person}>
+                    {person}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 5. Location / City Filter (Column: LOCATION) */}
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                Location / City
+              </label>
+              <select
+                value={filterCity}
+                onChange={(e) => setFilterCity(e.target.value)}
+                className={`w-full px-2.5 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-colors focus:outline-none focus:ring-1 focus:ring-indigo-500 truncate ${
+                  filterCity !== "ALL"
+                    ? "bg-indigo-50 text-indigo-800 border-indigo-300 font-bold"
+                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-white"
+                }`}
+              >
+                <option value="ALL">All Locations</option>
+                {citiesList.map((city) => (
+                  <option key={city} value={city}>
+                    {city}
+                  </option>
+                ))}
               </select>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ──────────────────────────────────────────────────────────────────
+          PRESALES TABLE VIEW (REAL DATA MATCHING DETAILS VIEW)
+      ────────────────────────────────────────────────────────────────── */}
+      {viewMode === "table" && (
+        <div className="w-full bg-white border border-slate-200/90 shadow-xs overflow-hidden rounded-none">
 
           {/* TABLE CONTAINER */}
           <div className="w-full overflow-x-auto">
@@ -1131,21 +1321,24 @@ const Presales = () => {
                 <tr className="bg-black text-white text-xs font-bold uppercase tracking-wider select-none">
                   <th className="py-3 px-3 text-center w-12 border-r border-slate-800 whitespace-nowrap">SR. NO.</th>
                   <th className="py-3 px-3 text-center w-28 border-r border-slate-800 whitespace-nowrap">ACTIONS</th>
-                  <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">REVENUE</th>
-                  <th className="py-3 px-3 text-left border-r border-slate-800 whitespace-nowrap">CLIENT DETAILS</th>
-                  <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">ENGAGEMENT SCOPE</th>
-                  <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">CURRENT STAGE</th>
-                  <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">PROJECT DETAILS</th>
-                  <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">CITY</th>
-                  <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">ACTIVE PERSON</th>
-                  <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">STATUS</th>
+                  <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">AMOUNT</th>
+                  <th className="py-3 px-3 text-left border-r border-slate-800 whitespace-nowrap">CLIENT</th>
+                  <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">COMPANY</th>
+                  <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">BUSINESS TYPE</th>
+                  <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">JOB TYPE</th>
+                  <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">PRIORITY</th>
+                  <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">ASSIGNED TO</th>
+                  <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">NEXT PERSON</th>
+                  <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">LOCATION</th>
+                  <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">REQUIREMENT</th>
+                  <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">SALES REMARKS</th>
                   <th className="py-3 px-3 text-center whitespace-nowrap">CREATED AT</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
                 {loading ? (
                   <tr>
-                    <td colSpan={11} className="py-12 text-center text-slate-500 font-medium">
+                    <td colSpan={14} className="py-12 text-center text-slate-500 font-medium">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <FaSpinner className="animate-spin text-blue-600 text-xl" />
                         <span className="text-xs font-semibold">Loading presales data from server...</span>
@@ -1154,15 +1347,19 @@ const Presales = () => {
                   </tr>
                 ) : filteredPresales.length === 0 ? (
                   <tr>
-                    <td colSpan={11} className="py-12 text-center text-slate-500 font-medium">
+                    <td colSpan={14} className="py-12 text-center text-slate-500 font-medium">
                       {presalesList.length === 0
-                        ? "No Presale projects found in database. Click \"+ Add Presale\" to create one."
-                        : "No Presale records match your filters."}
+                        ? "No Presale projects found in database."
+                        : "No Presale records match your search or filters."}
                     </td>
                   </tr>
                 ) : (
                   filteredPresales.map((item, idx) => {
-                    const stageObj = PIPELINE_STAGES.find((s) => s.id === (item.currentStageId || 1)) || PIPELINE_STAGES[0];
+                    const amt = Number(item.expectedBusiness || item.amount || 0);
+                    const p = String(item.priority || "High").toUpperCase();
+                    const isHigh = p === "HIGH" || p === "HOT";
+                    const isMedium = p === "MEDIUM" || p === "WARM";
+
                     const dateObj = item.createdAt ? new Date(item.createdAt) : null;
                     const isValidDate = dateObj && !isNaN(dateObj.getTime());
                     const formattedDate = isValidDate
@@ -1179,55 +1376,58 @@ const Presales = () => {
                           {idx + 1}
                         </td>
 
-                        {/* 2. ACTIONS (VIEW PIPELINE & EDIT) */}
+                        {/* 2. ACTIONS */}
                         <td className="py-2.5 px-3 text-center border-r border-slate-100 whitespace-nowrap">
                           <div className="flex items-center justify-center gap-1.5">
+                            {/* VIEW LEAD DETAILS PAGE */}
                             <button
                               type="button"
-                              onClick={() => handleOpenPipelineForClient(item)}
-                              className="px-2 py-1 rounded-lg border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold flex items-center gap-1 cursor-pointer transition-all shadow-2xs active:scale-95"
-                              title="View & Edit 11-Stage Pipeline"
+                              onClick={() => handleNavigateToLeadDetails(item)}
+                              className="w-7 h-7 rounded-lg border border-blue-200 bg-blue-50 hover:bg-blue-100 text-blue-600 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
+                              title="View Lead Details"
                             >
                               <FaEye className="text-xs" />
-                              <span>Pipeline</span>
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setSelectedPresaleId(item.id);
-                                setViewMode("pipeline");
-                              }}
-                              className="w-7 h-7 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-600 flex items-center justify-center cursor-pointer shadow-2xs active:scale-95"
-                              title="Full Screen Pipeline Mode"
-                            >
-                              <FaStream className="text-xs" />
-                            </button>
+
+                            {/* EDIT PROJECT IN SALES FORM */}
+                            {!isUserObserver ? (
+                              <button
+                                type="button"
+                                onClick={() => handleEditProject(item)}
+                                className="w-7 h-7 rounded-lg border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
+                                title="Edit Project Details"
+                              >
+                                <FaEdit className="text-xs" />
+                              </button>
+                            ) : (
+                              <span
+                                className="w-7 h-7 rounded-lg border border-slate-200 bg-slate-100 text-slate-400 flex items-center justify-center cursor-not-allowed opacity-60"
+                                title="Edit disabled for Observer"
+                              >
+                                <FaEdit className="text-xs" />
+                              </span>
+                            )}
                           </div>
                         </td>
 
-                        {/* 3. REVENUE */}
+                        {/* 3. AMOUNT */}
                         <td className="py-2.5 px-3 text-center border-r border-slate-100 whitespace-nowrap">
                           <span className="inline-block px-2.5 py-1 rounded-md text-emerald-800 bg-emerald-50 border border-emerald-300 font-mono font-bold text-xs">
-                            ₹{Number(item.expectedRevenue || 0).toLocaleString("en-IN")}
+                            ₹{amt.toLocaleString("en-IN")}
                           </span>
                         </td>
 
-                        {/* 4. CLIENT DETAILS */}
+                        {/* 4. CLIENT */}
                         <td className="py-2.5 px-3 text-left border-r border-slate-100">
                           <div className="space-y-0.5 max-w-[180px]">
-                            {/* Client Name (Clickable to open pipeline) */}
-                            <div>
-                              <button
-                                type="button"
-                                onClick={() => handleOpenPipelineForClient(item)}
-                                className="font-bold text-slate-900 hover:text-blue-600 hover:underline cursor-pointer text-left block truncate max-w-full"
-                                title={`Open Pipeline: ${item.clientName}`}
-                              >
-                                {item.clientName}
-                              </button>
-                            </div>
-
-                            {/* Phone Number (Clickable link) */}
+                            <button
+                              type="button"
+                              onClick={() => handleNavigateToLeadDetails(item)}
+                              className="font-bold text-slate-900 hover:text-blue-600 hover:underline cursor-pointer text-left block truncate max-w-full"
+                              title={`View Details: ${item.clientName}`}
+                            >
+                              {item.clientName}
+                            </button>
                             {item.contactNo && item.contactNo !== "--" ? (
                               <div>
                                 <a
@@ -1241,83 +1441,99 @@ const Presales = () => {
                             ) : (
                               <div className="text-[11px] text-slate-400 font-mono">--</div>
                             )}
-
-                            {/* Email Address (Clickable link) */}
                             {item.emailAddress && item.emailAddress !== "--" && item.emailAddress.trim() !== "" ? (
                               <div>
                                 <a
                                   href={`mailto:${item.emailAddress}`}
-                                  className="text-[11px] font-mono text-blue-600 hover:text-blue-800 hover:underline block truncate cursor-pointer"
+                                  className="text-[10px] text-slate-400 hover:text-blue-600 hover:underline block truncate cursor-pointer max-w-[140px]"
                                   title={`Email ${item.emailAddress}`}
                                 >
                                   {item.emailAddress}
                                 </a>
                               </div>
                             ) : (
-                              <div className="text-[11px] text-slate-400 font-mono">--</div>
+                              <div className="text-[10px] text-slate-400 font-mono">--</div>
                             )}
                           </div>
                         </td>
 
-                        {/* 5. ENGAGEMENT SCOPE */}
+                        {/* 5. COMPANY */}
+                        <td className="py-2.5 px-3 text-center font-medium text-slate-800 border-r border-slate-100 whitespace-nowrap">
+                          {item.companyName || "--"}
+                        </td>
+
+                        {/* 6. BUSINESS TYPE */}
+                        <td className="py-2.5 px-3 text-center font-medium text-slate-700 border-r border-slate-100 whitespace-nowrap">
+                          {item.businessType || "--"}
+                        </td>
+
+                        {/* 7. JOB TYPE */}
                         <td className="py-2.5 px-3 text-center border-r border-slate-100 whitespace-nowrap">
-                          <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                            {item.engagementScope}
+                          <span className="px-2 py-0.5 rounded text-[11px] font-bold uppercase bg-purple-50 text-purple-700 border border-purple-200">
+                            {item.jobType || "NEW"}
                           </span>
                         </td>
 
-                        {/* 6. CURRENT STAGE */}
+                        {/* 8. PRIORITY */}
                         <td className="py-2.5 px-3 text-center border-r border-slate-100 whitespace-nowrap">
-                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-extrabold bg-amber-50 text-amber-800 border border-amber-200">
-                            <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                            <span>Stage {stageObj.id}: {stageObj.name}</span>
+                          <span
+                            className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
+                              isHigh
+                                ? "bg-rose-50 text-rose-700 border-rose-200"
+                                : isMedium
+                                ? "bg-amber-50 text-amber-700 border-amber-200"
+                                : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                            }`}
+                          >
+                            {isHigh ? "🔴 High" : isMedium ? "🟡 Medium" : "🟢 Low"}
                           </span>
                         </td>
 
-                        {/* 7. PROJECT DETAILS */}
-                        <td className="py-2.5 px-3 text-center border-r border-slate-100 max-w-[160px]">
-                          <div className="truncate text-xs text-slate-700 font-medium" title={item.projectDetails}>
-                            {item.projectDetails || "--"}
-                          </div>
+                        {/* 9. ASSIGNED TO */}
+                        <td className="py-2.5 px-3 text-center font-medium text-slate-800 border-r border-slate-100 whitespace-nowrap">
+                          {item.assignedTo || "Admin"}
                         </td>
 
-                        {/* 8. CITY */}
-                        <td className="py-2.5 px-3 text-center font-semibold text-slate-800 border-r border-slate-100 whitespace-nowrap">
-                          {item.city || "--"}
-                        </td>
-
-                        {/* 9. ACTIVE PERSON */}
-                        <td className="py-2.5 px-3 text-center border-r border-slate-100 whitespace-nowrap">
-                          <span className="font-medium text-slate-800 flex items-center justify-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-                            <span>{item.activePerson || "Admin"}</span>
-                          </span>
-                        </td>
-
-                        {/* 10. STATUS */}
-                        <td className="py-2.5 px-3 text-center border-r border-slate-100 whitespace-nowrap">
-                          {item.status === "CLOSED" ? (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                              CLOSED
-                            </span>
-                          ) : item.status === "ACTIVE_PROJECT" ? (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-purple-50 text-purple-700 border border-purple-200">
-                              ACTIVE PROJECT
-                            </span>
+                        {/* 10. NEXT PERSON */}
+                        <td className="py-2.5 px-3 text-center text-slate-700 border-r border-slate-100 whitespace-nowrap">
+                          {item.nextPersonName ? (
+                            <div>
+                              <div className="font-bold text-slate-800">{item.nextPersonName}</div>
+                              {item.designation && (
+                                <div className="text-[10px] text-slate-400">({item.designation})</div>
+                              )}
+                            </div>
                           ) : (
-                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              IN PIPELINE
-                            </span>
+                            "--"
                           )}
                         </td>
 
-                        {/* 11. CREATED AT */}
+                        {/* 11. LOCATION */}
+                        <td className="py-2.5 px-3 text-center font-semibold text-slate-800 border-r border-slate-100 whitespace-nowrap">
+                          {item.city || item.address || "--"}
+                        </td>
+
+                        {/* 12. REQUIREMENT */}
+                        <td className="py-2.5 px-3 text-center border-r border-slate-100 max-w-[160px]">
+                          <div className="truncate text-xs text-slate-700 font-medium mx-auto" title={item.requirement}>
+                            {item.requirement || "--"}
+                          </div>
+                        </td>
+
+                        {/* 13. SALES REMARKS */}
+                        <td className="py-2.5 px-3 text-center border-r border-slate-100 max-w-[160px]">
+                          <div className="truncate text-xs text-slate-700 font-medium mx-auto" title={item.transferRemark}>
+                            {item.transferRemark || "--"}
+                          </div>
+                        </td>
+
+                        {/* 14. CREATED AT */}
                         <td className="py-2.5 px-3 text-center whitespace-nowrap">
                           {isValidDate ? (
-                            <div className="inline-flex flex-col items-center px-2 py-0.5 rounded-md bg-slate-50 text-slate-700 border border-slate-200 shadow-2xs">
+                            <div className="inline-flex flex-col items-center px-2 py-0.5 rounded-lg bg-blue-50 text-blue-900 border border-blue-200/90 shadow-2xs">
                               <span className="font-bold text-xs whitespace-nowrap">{formattedDate}</span>
                               {formattedTime && (
-                                <span className="font-mono text-[10px] text-slate-500 whitespace-nowrap">{formattedTime}</span>
+                                <span className="font-mono text-[10px] text-blue-700 whitespace-nowrap">{formattedTime}</span>
                               )}
                             </div>
                           ) : (
@@ -1330,6 +1546,151 @@ const Presales = () => {
                 )}
               </tbody>
             </table>
+          </div>
+        </div>
+      )}
+
+      {/* ──────────────────────────────────────────────────────────────────
+          MODAL: VIEW FULL PROJECT DETAILS (EXACT MATCH TO DETAILS VIEW)
+      ────────────────────────────────────────────────────────────────── */}
+      {isViewModalOpen && selectedProject && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
+            {/* MODAL HEADER */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center font-bold">
+                  <FaBuilding />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">
+                    Project Details: {selectedProject.clientName}
+                  </h3>
+                  <span className="text-xs font-mono font-bold text-indigo-600">
+                    ID: {selectedProject.leadId || "--"}
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsViewModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center cursor-pointer transition-colors"
+              >
+                <FaTimes className="text-xs" />
+              </button>
+            </div>
+
+            {/* DETAILS GRID */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs">
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                <span className="text-slate-400 font-bold block mb-0.5">Company Name</span>
+                <span className="font-bold text-slate-900 text-sm">{selectedProject.companyName || "--"}</span>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                <span className="text-slate-400 font-bold block mb-0.5">Business Type</span>
+                <span className="font-bold text-slate-900 text-sm">{selectedProject.businessType || "--"}</span>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                <span className="text-slate-400 font-bold block mb-0.5">Client Designation</span>
+                <span className="font-bold text-slate-900 text-sm">{selectedProject.clientDesignation || "--"}</span>
+              </div>
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200">
+                <span className="text-emerald-800 font-bold block mb-0.5">Expected Business Value</span>
+                <span className="font-extrabold text-emerald-700 text-base font-mono">
+                  ₹{Number(selectedProject.expectedBusiness || 0).toLocaleString("en-IN")}
+                </span>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                <span className="text-slate-400 font-bold block mb-0.5">Priority & Job Type</span>
+                <span className="font-bold text-slate-900 text-sm uppercase">
+                  {selectedProject.priority || "High"} • {selectedProject.jobType || "NEW"}
+                </span>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                <span className="text-slate-400 font-bold block mb-0.5">Assigned Executive</span>
+                <span className="font-bold text-slate-900 text-sm">{selectedProject.assignedTo || "Admin"}</span>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                <span className="text-slate-400 font-bold block mb-0.5">Next Concern Person</span>
+                <span className="font-bold text-slate-900 text-sm">
+                  {selectedProject.nextPersonName
+                    ? `${selectedProject.nextPersonName} ${selectedProject.designation ? `(${selectedProject.designation})` : ""}`
+                    : "--"}
+                </span>
+              </div>
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
+                <span className="text-slate-400 font-bold block mb-0.5">Client Rating</span>
+                <span className="font-extrabold text-amber-600 text-sm flex items-center gap-1">
+                  <FaStar /> {selectedProject.clientRating || 4.5} / 5
+                </span>
+              </div>
+            </div>
+
+            {/* LOCATION */}
+            {(selectedProject.address || selectedProject.city) && (
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
+                <span className="font-bold text-slate-700 block mb-0.5">Location / Address:</span>
+                <span className="text-slate-600 font-medium">
+                  {[selectedProject.address, selectedProject.city, selectedProject.state, selectedProject.pincode]
+                    .filter(Boolean)
+                    .join(", ")}
+                </span>
+              </div>
+            )}
+
+            {/* REQUIREMENT */}
+            {selectedProject.requirement && (
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
+                <span className="font-bold text-slate-700 block mb-1">Requirement Details:</span>
+                <p className="text-slate-800 font-medium whitespace-pre-line">{selectedProject.requirement}</p>
+              </div>
+            )}
+
+            {/* REMARKS */}
+            {selectedProject.transferRemark && (
+              <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200 text-xs">
+                <span className="font-bold text-amber-900 block mb-1">Sales Management Remarks / Notes:</span>
+                <p className="text-slate-800 font-medium whitespace-pre-line">{selectedProject.transferRemark}</p>
+              </div>
+            )}
+
+            {/* MODAL FOOTER */}
+            <div className="flex items-center justify-between gap-2.5 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsViewModalOpen(false);
+                  handleNavigateToLeadDetails(selectedProject);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl border border-slate-300 hover:bg-slate-50 text-slate-700 text-xs font-bold cursor-pointer transition-all"
+              >
+                <FaExternalLinkAlt className="text-[10px]" />
+                <span>Open Lead Details</span>
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsViewModalOpen(false)}
+                  className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold cursor-pointer"
+                >
+                  Close
+                </button>
+                {!isUserObserver && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsViewModalOpen(false);
+                      handleEditProject(selectedProject);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs cursor-pointer"
+                  >
+                    <FaEdit className="text-xs" />
+                    <span>Edit This Project</span>
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -1596,140 +1957,7 @@ const Presales = () => {
         </div>
       )}
 
-      {/* ──────────────────────────────────────────────────────────────────
-          MODAL: + ADD PRESALE
-      ────────────────────────────────────────────────────────────────── */}
-      {isAddModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4 animate-in fade-in zoom-in-95 duration-150">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="text-base font-bold text-slate-900">Add New Presale Lead</h3>
-              <button
-                type="button"
-                onClick={() => setIsAddModalOpen(false)}
-                className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center cursor-pointer"
-              >
-                <FaTimes className="text-xs" />
-              </button>
-            </div>
 
-            <form onSubmit={handleCreateNewPresale} className="space-y-3.5">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Client Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={newPresaleForm.clientName}
-                  onChange={(e) => setNewPresaleForm({ ...newPresaleForm, clientName: e.target.value })}
-                  placeholder="e.g. ABC Infra"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-medium focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Contact No. *</label>
-                  <input
-                    type="text"
-                    required
-                    value={newPresaleForm.contactNo}
-                    onChange={(e) => setNewPresaleForm({ ...newPresaleForm, contactNo: e.target.value })}
-                    placeholder="e.g. 9876543210"
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-medium focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Email Address</label>
-                  <input
-                    type="email"
-                    value={newPresaleForm.emailAddress}
-                    onChange={(e) => setNewPresaleForm({ ...newPresaleForm, emailAddress: e.target.value })}
-                    placeholder="e.g. client@example.com"
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-medium focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">City</label>
-                <input
-                  type="text"
-                  value={newPresaleForm.city}
-                  onChange={(e) => setNewPresaleForm({ ...newPresaleForm, city: e.target.value })}
-                  placeholder="e.g. Lucknow"
-                  className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-medium focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Engagement Scope</label>
-                  <select
-                    value={newPresaleForm.engagementScope}
-                    onChange={(e) => setNewPresaleForm({ ...newPresaleForm, engagementScope: e.target.value })}
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-medium focus:ring-2 focus:ring-blue-500 bg-white"
-                  >
-                    <option value="Consultancy Only">Consultancy Only</option>
-                    <option value="Design Only">Design Only</option>
-                    <option value="Design + Construction">Design + Construction</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Project Details</label>
-                  <input
-                    type="text"
-                    value={newPresaleForm.projectDetails}
-                    onChange={(e) => setNewPresaleForm({ ...newPresaleForm, projectDetails: e.target.value })}
-                    placeholder="e.g. Residential Work"
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-medium focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Expected Revenue (₹)</label>
-                  <input
-                    type="number"
-                    value={newPresaleForm.expectedRevenue}
-                    onChange={(e) => setNewPresaleForm({ ...newPresaleForm, expectedRevenue: e.target.value })}
-                    placeholder="e.g. 850000"
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-medium focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">Active Person</label>
-                  <input
-                    type="text"
-                    value={newPresaleForm.activePerson}
-                    onChange={(e) => setNewPresaleForm({ ...newPresaleForm, activePerson: e.target.value })}
-                    placeholder="e.g. Shivam"
-                    className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-medium focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setIsAddModalOpen(false)}
-                  className="px-4 py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={creatingPresale}
-                  className="px-5 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold shadow-xs cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-                >
-                  {creatingPresale && <FaSpinner className="animate-spin text-xs" />}
-                  <span>{creatingPresale ? "Saving..." : "Save & Add to Table"}</span>
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* ──────────────────────────────────────────────────────────────────
           MODAL: MARK AS CLOSED

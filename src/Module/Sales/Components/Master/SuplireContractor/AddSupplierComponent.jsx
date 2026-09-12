@@ -518,7 +518,7 @@ const AddSupplierComponent = () => {
   return (
     <div className="space-y-4 pb-12 px-1 sm:px-2 font-sans">
       {/* Top Header */}
-      <div className="sticky top-0 z-40 bg-gradient-to-r from-emerald-900 via-teal-950 to-slate-900 text-white rounded-xl px-4 py-2.5 shadow-md border border-teal-700/50">
+      <div className="sticky top-0 z-10 bg-gradient-to-r from-emerald-900 via-teal-950 to-slate-900 text-white rounded-xl px-4 py-2.5 shadow-md border border-teal-700/50">
         <div className="relative z-10 flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <button
