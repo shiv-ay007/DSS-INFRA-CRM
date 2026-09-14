@@ -1,0 +1,1810 @@
+{
+  "info": {
+    "_postman_id": "e4c3a2b1-9876-4abc-9def-123456789abc",
+    "name": "Lead Management CRM - Complete API Collection",
+    "description": "Complete Postman collection for all APIs in Lead Management CRM backend, including Auth, Users, Branches, Departments, Leads, Followups, Lead Projects, Suppliers, Contractors, Materials, PMS WBS (Stages, Works, Tasks), Uploads, and Health check.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000/api/v1",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "01. Authentication",
+      "item": [
+        {
+          "name": "Login User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "var jsonData = pm.response.json();",
+                  "if (jsonData && jsonData.data && jsonData.data.accessToken) {",
+                  "    pm.collectionVariables.set('accessToken', jsonData.data.accessToken);",
+                  "    console.log('Access token saved:', jsonData.data.accessToken);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"admin@crm.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Logs in user and automatically sets collection variable 'accessToken'."
+          }
+        },
+        {
+          "name": "Get Current User (Me)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Refresh Access Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/refresh-token",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "refresh-token"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Logout User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "logout"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "02. Users Management",
+      "item": [
+        {
+          "name": "Get All Users",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users?search=&role=&isActive=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "role",
+                  "value": ""
+                },
+                {
+                  "key": "isActive",
+                  "value": ""
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create User",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"New Sales Executive\",\n  \"email\": \"sales.new@crm.com\",\n  \"password\": \"password123\",\n  \"phone\": \"9876543299\",\n  \"role\": \"Sales Executive\",\n  \"branch\": \"\",\n  \"department\": \"\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get User By ID",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "USER_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get User By Email",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/email/:email",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "email",
+                ":email"
+              ],
+              "variable": [
+                {
+                  "key": "email",
+                  "value": "admin@crm.com"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update User",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Updated Sales Executive\",\n  \"phone\": \"9876543299\",\n  \"role\": \"Sales Executive\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "USER_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Toggle User Status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/:id/toggle-status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                ":id",
+                "toggle-status"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "USER_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Soft Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "USER_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Restore User",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/:id/restore",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                ":id",
+                "restore"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "USER_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Permanent Delete User",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/users/:id/permanent",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                ":id",
+                "permanent"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "USER_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Bulk Delete Users",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userIds\": [\n    \"USER_ID_1\",\n    \"USER_ID_2\"\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/users/bulk/delete",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "users",
+                "bulk",
+                "delete"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "03. Branches",
+      "item": [
+        {
+          "name": "Get All Branches",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/branches?search=&state=&city=&status=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "branches"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "state",
+                  "value": ""
+                },
+                {
+                  "key": "city",
+                  "value": ""
+                },
+                {
+                  "key": "status",
+                  "value": ""
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Branch",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchName\": \"Noida Head Office\",\n  \"branchCode\": \"NOI-01\",\n  \"state\": \"Uttar Pradesh\",\n  \"city\": \"Noida\",\n  \"pincode\": \"201301\",\n  \"address\": \"Sector 62, Noida\",\n  \"phone\": \"01201234567\",\n  \"email\": \"noida@crm.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/branches",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "branches"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Branch Statistics",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/branches/statistics",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "branches",
+                "statistics"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Branch By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/branches/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "branches",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "BRANCH_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Branch",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"branchName\": \"Noida Corporate Office\",\n  \"address\": \"Sector 63, Noida\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/branches/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "branches",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "BRANCH_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Branch (Soft)",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/branches/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "branches",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "BRANCH_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "04. Departments",
+      "item": [
+        {
+          "name": "Get All Departments",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/departments?search=&status=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "departments"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Department",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"departmentName\": \"Sales & Marketing\",\n  \"departmentCode\": \"SALES-01\",\n  \"description\": \"Handling client outreach and leads\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/departments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "departments"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Department By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/departments/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "departments",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "DEPT_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Department",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"departmentName\": \"Sales & Business Development\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/departments/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "departments",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "DEPT_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Department",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/departments/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "departments",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "DEPT_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "05. Leads Management",
+      "item": [
+        {
+          "name": "Get All Leads",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/leads?search=&status=&leadType=&salesPerson=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "leads"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "status",
+                  "value": ""
+                },
+                {
+                  "key": "leadType",
+                  "value": ""
+                },
+                {
+                  "key": "salesPerson",
+                  "value": ""
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Lead",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientName\": \"Rajesh Kumar\",\n  \"phoneNumber\": \"9876543210\",\n  \"email\": \"rajesh@example.com\",\n  \"city\": \"Delhi\",\n  \"state\": \"Delhi\",\n  \"status\": \"NEW LEAD\",\n  \"leadSource\": \"Google Ads\",\n  \"budget\": \"5000000\",\n  \"projectCategory\": \"Residential Construction\",\n  \"salesPerson\": \"Rahul Sharma\",\n  \"remarks\": \"Interested in 3BHK turnkey construction\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/leads",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "leads"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Single Lead By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/leads/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "leads",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "LEAD_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Lead",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clientName\": \"Rajesh Kumar\",\n  \"phoneNumber\": \"9876543210\",\n  \"budget\": \"5500000\",\n  \"remarks\": \"Updated budget after discussion\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/leads/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "leads",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "LEAD_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Quick Status Update",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"FOLLOW UP\",\n  \"remarks\": \"Client asked to call on weekend\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/leads/:id/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "leads",
+                ":id",
+                "status"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "LEAD_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Mark / Unmark Interested",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isInterested\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/leads/:id/interested",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "leads",
+                ":id",
+                "interested"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "LEAD_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Add Follow-up to Lead",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"Call\",\n  \"comment\": \"Discussed floor plans, client requested revised quotation\",\n  \"nextFollowupDate\": \"2026-09-20T10:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/leads/:id/followups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "leads",
+                ":id",
+                "followups"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "LEAD_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Lead (Soft)",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/leads/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "leads",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "LEAD_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "06. Follow-ups",
+      "item": [
+        {
+          "name": "Get All Follow-ups Across Leads",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/followups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "followups"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Follow-up (Direct)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{accessToken}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leadId\": \"LEAD_ID_HERE\",\n  \"type\": \"Meeting\",\n  \"comment\": \"Met at site location, satisfied with progress\",\n  \"nextFollowupDate\": \"2026-09-22T14:30:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/followups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "followups"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Follow-ups For Single Lead",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/followups/lead/:leadId",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "followups",
+                "lead",
+                ":leadId"
+              ],
+              "variable": [
+                {
+                  "key": "leadId",
+                  "value": "LEAD_ID_OR_CODE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "07. Lead Projects",
+      "item": [
+        {
+          "name": "Get All Lead Projects",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/lead-projects",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "lead-projects"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Lead Project",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leadId\": \"LEAD_ID_HERE\",\n  \"projectName\": \"Villa Sunshine\",\n  \"projectCategory\": \"Residential\",\n  \"estimatedBudget\": 8500000,\n  \"location\": \"Greater Noida West\",\n  \"status\": \"Planning\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/lead-projects",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "lead-projects"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Lead Project By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/lead-projects/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "lead-projects",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "PROJECT_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Lead Project",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"projectName\": \"Villa Sunshine Phase 1\",\n  \"status\": \"In Progress\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/lead-projects/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "lead-projects",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "PROJECT_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "08. Suppliers",
+      "item": [
+        {
+          "name": "Get All Suppliers",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/suppliers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "suppliers"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Supplier",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"supplierName\": \"Ultratech Cement Distributor\",\n  \"contactPerson\": \"Amit Verma\",\n  \"phone\": \"9811122233\",\n  \"email\": \"ultratech@supplier.com\",\n  \"category\": \"Cement & Aggregates\",\n  \"gstin\": \"07AAAAA0000A1Z5\",\n  \"city\": \"Noida\",\n  \"status\": \"Active\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/suppliers",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "suppliers"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Supplier By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/suppliers/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "suppliers",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "SUPPLIER_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Supplier",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"9811122244\",\n  \"contactPerson\": \"Amit Kumar Verma\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/suppliers/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "suppliers",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "SUPPLIER_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Supplier",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/suppliers/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "suppliers",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "SUPPLIER_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "09. Contractors",
+      "item": [
+        {
+          "name": "Get All Contractors",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/contractors",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "contractors"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Contractor",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contractorName\": \"Shree Ram RCC Contractors\",\n  \"contractorType\": \"RCC Contractor\",\n  \"contactPerson\": \"Ram Singh\",\n  \"phone\": \"9822233344\",\n  \"email\": \"shreeram@contractor.com\",\n  \"dailyLabourCapacity\": 25,\n  \"status\": \"Active\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/contractors",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "contractors"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Contractor By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/contractors/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "contractors",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "CONTRACTOR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Contractor",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"dailyLabourCapacity\": 30\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/contractors/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "contractors",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "CONTRACTOR_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Contractor",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/contractors/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "contractors",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "CONTRACTOR_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "10. Materials Master",
+      "item": [
+        {
+          "name": "Get All Materials",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/materials?search=&category=&status=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "materials"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": ""
+                },
+                {
+                  "key": "category",
+                  "value": ""
+                },
+                {
+                  "key": "status",
+                  "value": ""
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Material",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"code\": \"MAT-CEM-001\",\n  \"name\": \"OPC 53 Grade Cement\",\n  \"category\": \"Cement\",\n  \"baseUom\": \"Bags\",\n  \"purchaseUom\": \"Bags\",\n  \"standardPurchaseRate\": 380,\n  \"brand\": \"Ultratech\",\n  \"status\": \"Active\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/materials",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "materials"
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Material By ID",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/materials/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "materials",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "MATERIAL_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Update Material",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"standardPurchaseRate\": 395\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/materials/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "materials",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "MATERIAL_ID_HERE"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Delete Material",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/materials/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "materials",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "MATERIAL_ID_HERE"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "11. PMS WBS Master (3 Collections)",
+      "item": [
+        {
+          "name": "Get All WBS Master Data (Stages, Works, Tasks)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/pms-wbs",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pms-wbs"
+              ]
+            },
+            "description": "Fetches all documents from pms_stages, pms_works, and pms_tasks collections in MongoDB."
+          }
+        },
+        {
+          "name": "Create Stage (pms_stages)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stage_code\": \"S24\",\n  \"stage_name\": \"STAGE 24 = LANDSCAPING & EXTERIOR FINISH\",\n  \"description\": \"Gardening, pavers, outdoor lighting and gate setup\",\n  \"order\": 24,\n  \"status\": \"Active\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/pms-wbs/stages",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pms-wbs",
+                "stages"
+              ]
+            },
+            "description": "Inserts a new stage directly into MongoDB pms_stages collection with a genuine ObjectId."
+          }
+        },
+        {
+          "name": "Update Stage (pms_stages)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stage_name\": \"STAGE 24 = LANDSCAPING & AMENITIES\",\n  \"description\": \"Updated description for milestone\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/pms-wbs/stages/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pms-wbs",
+                "stages",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "STAGE_OBJECT_ID"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Work (pms_works with Stage ObjectId)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"stage_id\": \"6aa7d585728dd9cf0e2dc9f7\",\n  \"work_code\": \"S1-W2\",\n  \"work_name\": \"TREE CUTTING & ROOT CLEARANCE\",\n  \"contractor_type\": \"Civil Contractor\",\n  \"order\": 2,\n  \"status\": \"Active\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/pms-wbs/works",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pms-wbs",
+                "works"
+              ]
+            },
+            "description": "Creates a work in pms_works collection. 'stage_id' must be the MongoDB ObjectId of parent Stage."
+          }
+        },
+        {
+          "name": "Update Work (pms_works)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"work_name\": \"TREE CUTTING & JUNGLE CLEARANCE\",\n  \"contractor_type\": \"Specialized Contractor\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/pms-wbs/works/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pms-wbs",
+                "works",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "WORK_OBJECT_ID"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create Task (pms_tasks with Work ObjectId)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"work_id\": \"6aa7d585728dd9cf0e2dca0e\",\n  \"task_code\": \"S1-W1-T1\",\n  \"task_name\": \"SURVEYING AND GRID MARKING\",\n  \"work_done_by\": \"SURVEYOR\",\n  \"materials\": \"Lime powder, wooden pegs, string\",\n  \"order\": 1,\n  \"status\": \"Active\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/pms-wbs/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pms-wbs",
+                "tasks"
+              ]
+            },
+            "description": "Creates task in pms_tasks collection. 'work_id' must be the MongoDB ObjectId of parent Work."
+          }
+        },
+        {
+          "name": "Update Task (pms_tasks)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"task_name\": \"SURVEYING AND DIGITAL TOTAL STATION MARKING\",\n  \"materials\": \"Total station markers, lime powder\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/pms-wbs/tasks/:id",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pms-wbs",
+                "tasks",
+                ":id"
+              ],
+              "variable": [
+                {
+                  "key": "id",
+                  "value": "TASK_OBJECT_ID"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Seed / Sync WBS Data",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"overwrite\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/pms-wbs/seed",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "pms-wbs",
+                "seed"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "12. Uploads & Media (Cloudinary)",
+      "item": [
+        {
+          "name": "Upload File / Audio to Cloudinary",
+          "request": {
+            "method": "POST",
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "file",
+                  "type": "file",
+                  "description": "Select an image, document, audio or video file"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/uploads",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "uploads"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "13. System Health Check",
+      "item": [
+        {
+          "name": "Server Health Check",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "http://localhost:8000/health",
+              "protocol": "http",
+              "host": [
+                "localhost"
+              ],
+              "port": "8000",
+              "path": [
+                "health"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import salesLogo from "../../../assets/SalesLogo.png";
 import { useAuth } from "../../../context/AuthContext";
-import { FaWpforms, FaBoxes, FaHardHat } from "react-icons/fa";
+import { FaWpforms, FaBoxes, FaHardHat, FaLayerGroup } from "react-icons/fa";
 import { HiOutlineTemplate } from "react-icons/hi";
 
 // 1. Worker (Admin / Staff) Menu Items - Has "Add Lead"
@@ -89,6 +89,14 @@ const workerMenuItems = [
         badge: "PMS",
         icon: <HiOutlineTemplate className="w-3.5 h-3.5 text-cyan-400" />,
         badgeStyle: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30"
+      },
+      { 
+        id: "wbs_master", 
+        label: "WBS Stages & Tasks", 
+        path: "/sales/master/pms-template/wbs-master", 
+        badge: "23 Stages",
+        icon: <FaLayerGroup className="w-3.5 h-3.5 text-indigo-400" />,
+        badgeStyle: "bg-indigo-500/20 text-indigo-300 border-indigo-500/30"
       },
       { 
         id: "material", 
@@ -183,6 +191,14 @@ const observerMenuItems = [
         badgeStyle: "bg-cyan-500/20 text-cyan-300 border-cyan-500/30"
       },
       { 
+        id: "wbs_master", 
+        label: "WBS Stages & Tasks", 
+        path: "/sales/master/pms-template/wbs-master", 
+        badge: "23 Stages",
+        icon: <FaLayerGroup className="w-3.5 h-3.5 text-indigo-400" />,
+        badgeStyle: "bg-indigo-500/20 text-indigo-300 border-indigo-500/30"
+      },
+      { 
         id: "material", 
         label: "Material", 
         path: "/sales/master/material", 
@@ -217,9 +233,25 @@ const SalseSidebar = ({ isOpen = true, setIsOpen }) => {
   // Dynamic menu list based on role
   const activeMenuList = isUserObserver ? observerMenuItems : workerMenuItems;
 
+  // Check if a specific sub-item is currently active
+  const isSubItemActive = (sub) => {
+    const pathname = location.pathname;
+    if (sub.id === "pms_template") {
+      // Exclude WBS Master route so both don't show active together
+      if (pathname.includes("/wbs-master") || pathname.includes("/pms-wbs")) {
+        return false;
+      }
+      return pathname === sub.path || pathname.startsWith(sub.path + "/");
+    }
+    if (sub.id === "wbs_master") {
+      return pathname.includes("/wbs-master") || pathname.includes("/pms-wbs");
+    }
+    return pathname === sub.path || pathname.startsWith(sub.path + "/");
+  };
+
   // Check if any sub-item in this item is currently active
   const isSubActive = (subItems = []) =>
-    subItems.some((sub) => location.pathname === sub.path || location.pathname.startsWith(sub.path + "/"));
+    subItems.some((sub) => isSubItemActive(sub));
 
   // Track expanded state for any sub-item dropdowns
   const [openSubMenus, setOpenSubMenus] = useState(() => {
@@ -350,41 +382,38 @@ const SalseSidebar = ({ isOpen = true, setIsOpen }) => {
                 {/* Sub-items list */}
                 {isSidebarOpen && isDropdownOpen && (
                   <div className="mt-1 ml-3 pl-2 border-l border-slate-800 space-y-0.5 py-0.5">
-                    {item.subItems.map((sub) => (
-                      <NavLink
-                        key={sub.id}
-                        to={sub.path}
-                        className={({ isActive }) =>
-                          `w-full text-left py-1.5 px-2.5 rounded-lg text-xs transition-all duration-150 cursor-pointer flex items-center justify-between truncate ${
+                    {item.subItems.map((sub) => {
+                      const isActive = isSubItemActive(sub);
+                      return (
+                        <NavLink
+                          key={sub.id}
+                          to={sub.path}
+                          className={`w-full text-left py-1.5 px-2.5 rounded-lg text-xs transition-all duration-150 cursor-pointer flex items-center justify-between truncate ${
                             isActive
                               ? "text-emerald-300 font-bold bg-emerald-950/50 border border-emerald-800/60 shadow-xs"
                               : "text-slate-400 hover:text-slate-100 hover:bg-slate-800/50 font-medium"
-                          }`
-                        }
-                      >
-                        {({ isActive }) => (
-                          <>
-                            <div className="flex items-center gap-2 truncate">
-                              {sub.icon ? (
-                                <span className="shrink-0">{sub.icon}</span>
-                              ) : (
-                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? "bg-emerald-400" : "bg-slate-600"}`} />
-                              )}
-                              <span className="truncate">{sub.label}</span>
-                            </div>
-                            {sub.badge && (
-                              <span className={`text-[9px] uppercase font-mono font-bold px-1.5 py-0.5 rounded border shrink-0 ${
-                                isActive
-                                  ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
-                                  : sub.badgeStyle || "bg-slate-800 text-slate-400 border-slate-700"
-                              }`}>
-                                {sub.badge}
-                              </span>
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 truncate">
+                            {sub.icon ? (
+                              <span className="shrink-0">{sub.icon}</span>
+                            ) : (
+                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${isActive ? "bg-emerald-400" : "bg-slate-600"}`} />
                             )}
-                          </>
-                        )}
-                      </NavLink>
-                    ))}
+                            <span className="truncate">{sub.label}</span>
+                          </div>
+                          {sub.badge && (
+                            <span className={`text-[9px] uppercase font-mono font-bold px-1.5 py-0.5 rounded border shrink-0 ${
+                              isActive
+                                ? "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                                : sub.badgeStyle || "bg-slate-800 text-slate-400 border-slate-700"
+                            }`}>
+                              {sub.badge}
+                            </span>
+                          )}
+                        </NavLink>
+                      );
+                    })}
                   </div>
                 )}
               </div>

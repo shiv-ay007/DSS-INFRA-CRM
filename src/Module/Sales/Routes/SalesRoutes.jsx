@@ -20,6 +20,7 @@ import SuplireContractor from '../Pages/Master/SuplireContractor'
 import AddSupplierPage from '../Pages/Master/AddSupplierPage'
 import AddContractorPage from '../Pages/Master/AddContractorPage'
 import SupplierContractorDetailsPage from '../Pages/Master/SupplierContractorDetailsPage'
+import PmsWbsMasterPage from '../Pages/Master/PmsWbsMasterPage'
 
 const SalesRoutes = () => {
   return (
@@ -44,6 +45,8 @@ const SalesRoutes = () => {
         <Route path="presales/:id" element={<Presales />} />
         {/* MasterForm Routes */}
         <Route path="master/pms-template" element={<PmsTemplate />} />
+        <Route path="master/pms-template/wbs-master" element={<PmsWbsMasterPage />} />
+        <Route path="master/pms-wbs" element={<PmsWbsMasterPage />} />
         <Route path="master/pms-template/create" element={<CreatePmsTemplatePage />} />
         <Route path="master/pms-template/create-template" element={<CreatePmsTemplatePage />} />
         <Route path="master/pms-template/edit/:id" element={<CreatePmsTemplatePage />} />
