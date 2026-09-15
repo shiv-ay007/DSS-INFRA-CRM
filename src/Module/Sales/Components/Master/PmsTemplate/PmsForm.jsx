@@ -20,10 +20,6 @@ import { supplierService } from "../../../services/supplierService";
 import { contractorService } from "../../../services/contractorService";
 import { getAllLeadProjectsApi } from "../../../services/leadProject.api";
 import pmsWbsService from "../../../services/pmsWbsService";
-export const PMS_MASTER_STAGES_KEY = "pms_master_stages_data";
-export const PMS_MASTER_WORKS_KEY = "pms_master_works_data";
-export const PMS_MASTER_TASKS_KEY = "pms_master_tasks_data";
-import ReactSelectMulti from "./ReactSelectMulti";
 
 // Storage Keys
 export const PMS_TASKS_STORAGE_KEY = "dss_pms_tasks_master_data";
@@ -32,6 +28,80 @@ export const PMS_TEMPLATES_STORAGE_KEY = "dss_pms_templates_data";
 // 1. PROJECT STATUS (Count: 1 default | On Track + standard statuses)
 export const PROJECT_STATUS_LIST = ["On Track", "Delayed", "In Progress", "Completed", "On Hold"];
 
+// 2. STAGE HIERARCHY (Count: 35)
+export const STAGES_LIST = [
+  "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8", "S9", "S10",
+  "S11", "S12", "S13", "S14", "S15", "S16", "S17", "S18", "S19", "S20",
+  "S21", "S22", "S23", "1.0", "2.0", "3.0", "4.0", "5.0", "6.0", "7.0",
+  "8.0", "9.0", "10.0", "11.0"
+];
+
+// 3. WORK (Filtered by Stage - Count: 86)
+export const STAGE_TO_WORKS_MAP = {
+  "S1": ["S1-W1"],
+  "S2": ["S2-W1"],
+  "S3": ["S3-W1", "S3-W2"],
+  "S4": ["S4-W1", "S4-W2"],
+  "S5": ["S5-W1", "S5-W2", "S5-W3", "S5-W4", "S5-W5", "S5-W6"],
+  "S6": ["S6-W1", "S6-W2", "S6-W3"],
+  "S7": ["S7-W1", "S7-W2"],
+  "S8": ["S8-W1", "S8-W2", "S8-W3", "S8-W4"],
+  "S9": ["S9-W1", "S9-W2", "S9-W3", "S9-W4", "S9-W5", "S9-W6", "S9-W7", "S9-W8", "S9-W9", "S9-W10", "S9-W11"],
+  "S10": ["S10-W1", "S10-W2", "S10-W3", "S10-W4", "S10-W5"],
+  "S11": ["S11-W1", "S11-W2", "S11-W3"],
+  "S12": ["S12-W1", "S12-W2", "S12-W3"],
+  "S13": ["S13-W1"],
+  "S14": ["S14-W1", "S14-W2", "S14-W3"],
+  "S15": ["S15-W1", "S15-W2", "S15-W3"],
+  "S16": ["S16-W1", "S16-W2"],
+  "S17": ["S17-W1", "S17-W2", "S17-W3"],
+  "S18": ["S18-W1", "S18-W2", "S18-W3"],
+  "S19": ["S19-W1"],
+  "S20": ["S20-W1", "S20-W2", "S20-W3"],
+  "S21": ["S21-W1", "S21-W2", "S21-W3"],
+  "S22": ["S22-W1", "S22-W2", "S22-W3"],
+  "S23": ["S23-W1", "S23-W2", "S23-W3", "S23-W4", "S23-W5", "S23-W6"],
+  "1.0": ["1.0"], "2.0": ["2.0"], "3.0": ["3.0"], "4.0": ["4.0"], "5.0": ["5.0"],
+  "6.0": ["6.0"], "7.0": ["7.0"], "8.0": ["8.0"], "9.0": ["9.0"], "10.0": ["10.0"], "11.0": ["11.0"]
+};
+
+// 4. TASK (Filtered by Work - Count: 199)
+export const WORK_TO_TASKS_MAP = {
+  "S1-W1": ["S1-W1-T1", "S1-W1-T2", "S1-W1-T3", "S1-W1-T4", "S1-W1-T5", "S1-W1-T6", "S1-W1-T7", "S1-W1-T8", "S1-W1-T9", "S1-W1-T10", "S1-W1-T11"],
+  "S2-W1": ["S2-W1-T1", "S2-W1-T2"],
+  "S3-W1": ["S3-W1-T1", "S3-W1-T2", "S3-W1-T3"],
+  "S3-W2": ["S3-W2-T1"],
+  "S4-W1": ["S4-W1-T1"],
+  "S4-W2": ["S4-W2-T1", "S4-W2-T2", "S4-W2-T3", "S4-W2-T4", "S4-W2-T5"],
+  "S5-W1": ["S5-W1-T1", "S5-W1-T2", "S5-W1-T3", "S5-W1-T4", "S5-W1-T5"],
+  "S5-W2": ["S5-W2-T1", "S5-W2-T2", "S5-W2-T3"],
+  "S5-W3": ["S5-W3-T1", "S5-W3-T2", "S5-W3-T3", "S5-W3-T4", "S5-W3-T5", "S5-W3-T6", "S5-W3-T7"],
+  "S5-W4": ["S5-W4-T1", "S5-W4-T2", "S5-W4-T3", "S5-W4-T4", "S5-W4-T5"],
+  "S5-W5": ["S5-W5-T1"],
+  "S5-W6": ["S5-W6-T1"],
+  "S6-W1": ["S6-W1-T1", "S6-W1-T2", "S6-W1-T3", "S6-W1-T4", "S6-W1-T5"],
+  "S6-W2": ["S6-W2-T1", "S6-W2-T2", "S6-W2-T3", "S6-W2-T4", "S6-W2-T5", "S6-W2-T6", "S6-W2-T7", "S6-W2-T8"],
+  "S6-W3": ["S6-W3-T1"],
+  "S7-W1": ["S7-W1-T1", "S7-W1-T2", "S7-W1-T3", "S7-W1-T4", "S7-W1-T5", "S7-W1-T6", "S7-W1-T7", "S7-W1-T8", "S7-W1-T9", "S7-W1-T10"],
+  "S7-W2": ["S7-W2-T1", "S7-W2-T2", "S7-W2-T3"],
+  "S8-W1": ["S8-W1-T1", "S8-W1-T2", "S8-W1-T3", "S8-W1-T4"],
+  "S8-W2": ["S8-W2-T1", "S8-W2-T2", "S8-W2-T3"],
+  "S8-W3": ["S8-W3-T1", "S8-W3-T2", "S8-W3-T3"],
+  "S8-W4": ["S8-W4-T1"],
+  "S9-W1": ["S9-W1-T1"],
+  "S9-W2": ["S9-W2-T1", "S9-W2-T2", "S9-W2-T3", "S9-W2-T4", "S9-W2-T5", "S9-W2-T6"],
+  "S9-W3": ["S9-W3-T1", "S9-W3-T2", "S9-W3-T3", "S9-W3-T4", "S9-W3-T5", "S9-W3-T6"],
+  "S9-W4": ["S9-W4-T1"],
+  "S9-W5": ["S9-W5-T1", "S9-W5-T2"],
+  "S9-W6": ["S9-W6-T1", "S9-W6-T2"],
+  "S9-W7": ["S9-W7-T1"],
+  "S9-W8": ["S9-W8-T1"],
+  "S9-W9": ["S9-W9-T1", "S9-W9-T2", "S9-W9-T3", "S9-W9-T4", "S9-W9-T5", "S9-W9-T6"],
+  "S9-W10": ["S9-W10-T1"],
+  "S9-W11": ["S9-W11-T1", "S9-W11-T2", "S9-W11-T3", "S9-W11-T4", "S9-W11-T5", "S9-W11-T6", "S9-W11-T7", "S9-W11-T8"],
+  "1.0": ["1.0"],
+  "2.0": ["2.0"]
+};
 
 // 5. WORK WILL DONE BY (Seed Items + Contractor Master Names)
 export const DEFAULT_WORK_WILL_DONE_BY = [
@@ -168,6 +238,456 @@ const INITIAL_PMS_TASKS = [
 ];
 
 
+/**
+ * Reusable Stage -> Work -> Task hierarchy builder.
+ *
+ * The component is intentionally master-data agnostic. For now it consumes
+ * the existing local master maps from this file. Later the same props can be
+ * fed from Stage / Work / Task APIs without changing the UI flow.
+ *
+ * Value shape:
+ * {
+ *   stages: [
+ *     {
+ *       stageId: "S1",
+ *       works: [
+ *         { workId: "S1-W1", tasks: ["S1-W1-T1", "S1-W1-T2"] }
+ *       ]
+ *     }
+ *   ]
+ * }
+ */
+const WbsHierarchyBuilder = ({
+  value = { stages: [] },
+  onChange,
+  stageOptions = [],
+  getWorksForStage,
+  getTasksForWork
+}) => {
+  const [stageOpen, setStageOpen] = useState(false);
+  const [stageSearch, setStageSearch] = useState("");
+  const [openWorkDropdown, setOpenWorkDropdown] = useState(null);
+  const [workSearch, setWorkSearch] = useState("");
+  const [openTaskDropdown, setOpenTaskDropdown] = useState(null);
+  const [taskSearch, setTaskSearch] = useState("");
+  const [expandedStages, setExpandedStages] = useState(() =>
+    (value?.stages || []).reduce((acc, s) => ({ ...acc, [s.stageId]: true }), {})
+  );
+
+  const stages = value?.stages || [];
+  const selectedStageIds = useMemo(() => new Set(stages.map((s) => s.stageId)), [stages]);
+
+  const totalWorks = useMemo(
+    () => stages.reduce((sum, stage) => sum + (stage.works?.length || 0), 0),
+    [stages]
+  );
+
+  const totalTasks = useMemo(
+    () => stages.reduce(
+      (sum, stage) => sum + (stage.works || []).reduce((workSum, work) => workSum + (work.tasks?.length || 0), 0),
+      0
+    ),
+    [stages]
+  );
+
+  const filteredStages = useMemo(() => {
+    const q = stageSearch.trim().toLowerCase();
+    return stageOptions.filter((stage) => String(stage).toLowerCase().includes(q));
+  }, [stageOptions, stageSearch]);
+
+  const addStage = (stageId) => {
+    const exists = stages.some((stage) => stage.stageId === stageId);
+    if (exists) {
+      onChange({ stages: stages.filter((stage) => stage.stageId !== stageId) });
+      return;
+    }
+
+    onChange({
+      stages: [...stages, { stageId, works: [] }]
+    });
+    setExpandedStages((prev) => ({ ...prev, [stageId]: true }));
+  };
+
+  const removeStage = (stageId) => {
+    onChange({ stages: stages.filter((stage) => stage.stageId !== stageId) });
+  };
+
+  const toggleStageExpanded = (stageId) => {
+    setExpandedStages((prev) => ({ ...prev, [stageId]: !prev[stageId] }));
+  };
+
+  const getStageWorks = (stageId) => {
+    const works = getWorksForStage?.(stageId) || [];
+    return Array.from(new Set(works));
+  };
+
+  const getWorkTasks = (workId) => {
+    const tasks = getTasksForWork?.(workId) || [];
+    return Array.from(new Set(tasks));
+  };
+
+  const toggleWork = (stageId, workId) => {
+    const nextStages = stages.map((stage) => {
+      if (stage.stageId !== stageId) return stage;
+      const exists = (stage.works || []).some((work) => work.workId === workId);
+      return {
+        ...stage,
+        works: exists
+          ? stage.works.filter((work) => work.workId !== workId)
+          : [...(stage.works || []), { workId, tasks: [] }]
+      };
+    });
+    onChange({ stages: nextStages });
+  };
+
+  const toggleTask = (stageId, workId, taskId) => {
+    const nextStages = stages.map((stage) => {
+      if (stage.stageId !== stageId) return stage;
+      return {
+        ...stage,
+        works: (stage.works || []).map((work) => {
+          if (work.workId !== workId) return work;
+          const tasks = work.tasks || [];
+          const exists = tasks.includes(taskId);
+          return {
+            ...work,
+            tasks: exists ? tasks.filter((task) => task !== taskId) : [...tasks, taskId]
+          };
+        })
+      };
+    });
+    onChange({ stages: nextStages });
+  };
+
+  const removeWork = (stageId, workId) => toggleWork(stageId, workId);
+  const removeTask = (stageId, workId, taskId) => toggleTask(stageId, workId, taskId);
+
+  const clearAll = () => onChange({ stages: [] });
+
+  return (
+    <section className="md:col-span-2 lg:col-span-3 rounded-xl border border-slate-200 bg-slate-50/60 overflow-visible">
+      {/* Builder header */}
+      <div className="px-4 sm:px-5 py-4 border-b border-slate-200 bg-white rounded-t-xl">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-sm">WBS</div>
+              <div>
+                <h2 className="text-sm font-extrabold text-slate-900">WBS Structure</h2>
+                <p className="text-[11px] text-slate-500 mt-0.5">Configure Stage → Work → Task mapping for this PMS template.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="px-2.5 py-1 rounded-full bg-indigo-50 border border-indigo-100 text-[10px] font-bold text-indigo-700">
+              {stages.length} Stage{stages.length === 1 ? "" : "s"}
+            </span>
+            <span className="px-2.5 py-1 rounded-full bg-slate-100 border border-slate-200 text-[10px] font-bold text-slate-600">
+              {totalWorks} Work{totalWorks === 1 ? "" : "s"}
+            </span>
+            <span className="px-2.5 py-1 rounded-full bg-emerald-50 border border-emerald-100 text-[10px] font-bold text-emerald-700">
+              {totalTasks} Task{totalTasks === 1 ? "" : "s"}
+            </span>
+            {stages.length > 0 && (
+              <button
+                type="button"
+                onClick={clearAll}
+                className="text-[10px] font-bold text-red-500 hover:text-red-600 px-2 py-1"
+              >
+                Clear all
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Stage multi-select */}
+        <div className="relative mt-4">
+          <label className="block text-[11px] font-extrabold uppercase tracking-wide text-slate-500 mb-1.5">
+            Select Stages <span className="text-red-500">*</span>
+          </label>
+          <button
+            type="button"
+            onClick={() => setStageOpen((prev) => !prev)}
+            className="w-full min-h-[44px] px-3 py-2 border border-slate-200 rounded-lg bg-white hover:border-indigo-300 flex items-center gap-2 text-left transition-colors"
+          >
+            <div className="flex flex-wrap gap-1.5 flex-1">
+              {stages.length > 0 ? stages.map((stage) => (
+                <span key={stage.stageId} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-bold">
+                  Stage {stage.stageId}
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      removeStage(stage.stageId);
+                    }}
+                    className="hover:text-red-500"
+                    title="Remove stage"
+                  >
+                    <FaTimes className="w-2.5 h-2.5" />
+                  </span>
+                </span>
+              )) : (
+                <span className="text-sm text-slate-400 font-normal">Select one or more stages...</span>
+              )}
+            </div>
+            <FaChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${stageOpen ? "rotate-180" : ""}`} />
+          </button>
+
+          {stageOpen && (
+            <div className="absolute z-[70] left-0 right-0 mt-1 bg-white rounded-xl shadow-2xl border border-slate-200 p-2">
+              <div className="relative mb-2">
+                <FaSearch className="absolute left-3 top-2.5 text-slate-400 w-3 h-3" />
+                <input
+                  type="text"
+                  value={stageSearch}
+                  onChange={(e) => setStageSearch(e.target.value)}
+                  placeholder="Search stage..."
+                  className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300"
+                  autoFocus
+                />
+              </div>
+              <div className="max-h-60 overflow-y-auto space-y-1">
+                {filteredStages.map((stage) => {
+                  const checked = selectedStageIds.has(stage);
+                  return (
+                    <button
+                      type="button"
+                      key={stage}
+                      onClick={() => addStage(stage)}
+                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left text-xs transition-colors ${checked ? "bg-indigo-50 text-indigo-800 font-bold" : "hover:bg-slate-50 text-slate-700"}`}
+                    >
+                      <span>Stage {stage}</span>
+                      <span className={`w-4 h-4 rounded border flex items-center justify-center ${checked ? "bg-indigo-600 border-indigo-600 text-white" : "border-slate-300"}`}>
+                        {checked && <FaCheck className="w-2.5 h-2.5" />}
+                      </span>
+                    </button>
+                  );
+                })}
+                {filteredStages.length === 0 && <div className="p-3 text-center text-xs text-slate-400">No stages found.</div>}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Selected stage cards */}
+      <div className="p-3 sm:p-4 space-y-3">
+        {stages.length === 0 ? (
+          <div className="py-10 text-center border border-dashed border-slate-300 rounded-xl bg-white">
+            <div className="text-sm font-bold text-slate-600">No stages selected</div>
+            <p className="text-xs text-slate-400 mt-1">Select stages above to start mapping their works and tasks.</p>
+          </div>
+        ) : stages.map((stage) => {
+          const availableWorks = getStageWorks(stage.stageId);
+          const selectedWorks = stage.works || [];
+          const isExpanded = expandedStages[stage.stageId] !== false;
+          const filteredWorks = availableWorks.filter((work) => String(work).toLowerCase().includes(workSearch.toLowerCase()));
+
+          return (
+            <div key={stage.stageId} className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-visible">
+              {/* Stage row */}
+              <div className="px-3 sm:px-4 py-3 flex items-center gap-3 bg-slate-50/80 border-b border-slate-100 rounded-t-xl">
+                <button type="button" onClick={() => toggleStageExpanded(stage.stageId)} className="w-7 h-7 rounded-lg bg-white border border-slate-200 text-slate-500 flex items-center justify-center hover:text-indigo-600">
+                  <FaChevronDown className={`w-3 h-3 transition-transform ${isExpanded ? "" : "-rotate-90"}`} />
+                </button>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-extrabold text-indigo-700">STAGE {stage.stageId}</span>
+                    <span className="text-[10px] font-semibold text-slate-400">{selectedWorks.length} work{selectedWorks.length === 1 ? "" : "s"}</span>
+                  </div>
+                </div>
+                <button type="button" onClick={() => removeStage(stage.stageId)} className="p-1.5 rounded-md text-slate-400 hover:text-red-500 hover:bg-red-50" title="Remove stage">
+                  <FaTimes className="w-3 h-3" />
+                </button>
+              </div>
+
+              {isExpanded && (
+                <div className="p-3 sm:p-4">
+                  {/* Work selector for this stage */}
+                  <div className="relative">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <label className="text-[11px] font-extrabold uppercase tracking-wide text-slate-500">Works for this stage</label>
+                      <span className="text-[10px] font-semibold text-indigo-600">Multi-select</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const key = stage.stageId;
+                        setOpenWorkDropdown((prev) => prev === key ? null : key);
+                        setWorkSearch("");
+                        setOpenTaskDropdown(null);
+                      }}
+                      className="w-full min-h-[42px] px-3 py-2 border border-slate-200 rounded-lg bg-white hover:border-indigo-300 flex items-center gap-2 text-left"
+                    >
+                      <div className="flex flex-wrap gap-1.5 flex-1">
+                        {selectedWorks.length > 0 ? selectedWorks.map((work) => (
+                          <span key={work.workId} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-semibold">
+                            {work.workId}
+                            <span
+                              role="button"
+                              tabIndex={0}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeWork(stage.stageId, work.workId);
+                              }}
+                              className="hover:text-red-500"
+                            >
+                              <FaTimes className="w-2.5 h-2.5" />
+                            </span>
+                          </span>
+                        )) : <span className="text-sm text-slate-400 font-normal">Select works for Stage {stage.stageId}...</span>}
+                      </div>
+                      <FaChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${openWorkDropdown === stage.stageId ? "rotate-180" : ""}`} />
+                    </button>
+
+                    {openWorkDropdown === stage.stageId && (
+                      <div className="absolute z-[60] left-0 right-0 mt-1 bg-white rounded-xl shadow-2xl border border-slate-200 p-2">
+                        <div className="relative mb-2">
+                          <FaSearch className="absolute left-3 top-2.5 text-slate-400 w-3 h-3" />
+                          <input
+                            type="text"
+                            value={workSearch}
+                            onChange={(e) => setWorkSearch(e.target.value)}
+                            placeholder="Search work..."
+                            className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300"
+                            autoFocus
+                          />
+                        </div>
+                        <div className="max-h-56 overflow-y-auto space-y-1">
+                          {filteredWorks.map((work) => {
+                            const checked = selectedWorks.some((item) => item.workId === work);
+                            return (
+                              <button
+                                type="button"
+                                key={work}
+                                onClick={() => toggleWork(stage.stageId, work)}
+                                className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left text-xs ${checked ? "bg-indigo-50 text-indigo-800 font-bold" : "hover:bg-slate-50 text-slate-700"}`}
+                              >
+                                <span>{work}</span>
+                                <span className={`w-4 h-4 rounded border flex items-center justify-center ${checked ? "bg-indigo-600 border-indigo-600 text-white" : "border-slate-300"}`}>
+                                  {checked && <FaCheck className="w-2.5 h-2.5" />}
+                                </span>
+                              </button>
+                            );
+                          })}
+                          {filteredWorks.length === 0 && <div className="p-3 text-center text-xs text-slate-400">No works found for this stage.</div>}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Work -> Task mapping */}
+                  {selectedWorks.length > 0 && (
+                    <div className="mt-4 space-y-2.5">
+                      <div className="flex items-center gap-2">
+                        <div className="h-px flex-1 bg-slate-100" />
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-400">Task Mapping</span>
+                        <div className="h-px flex-1 bg-slate-100" />
+                      </div>
+
+                      {selectedWorks.map((work) => {
+                        const availableTasks = getWorkTasks(work.workId);
+                        const selectedTasks = work.tasks || [];
+                        const filteredTasks = availableTasks.filter((task) => String(task).toLowerCase().includes(taskSearch.toLowerCase()));
+                        const taskKey = `${stage.stageId}::${work.workId}`;
+
+                        return (
+                          <div key={work.workId} className="rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="w-6 h-6 rounded-md bg-white border border-slate-200 text-[10px] font-black text-slate-500 flex items-center justify-center">W</div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-xs font-extrabold text-slate-800 truncate">{work.workId}</div>
+                                <div className="text-[10px] text-slate-400">{selectedTasks.length} task{selectedTasks.length === 1 ? "" : "s"} selected</div>
+                              </div>
+                              {selectedTasks.length === 0 && <span className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-100 px-2 py-1 rounded-md">Needs tasks</span>}
+                              <button type="button" onClick={() => removeWork(stage.stageId, work.workId)} className="p-1 text-slate-400 hover:text-red-500" title="Remove work">
+                                <FaTimes className="w-3 h-3" />
+                              </button>
+                            </div>
+
+                            <div className="relative">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setOpenTaskDropdown((prev) => prev === taskKey ? null : taskKey);
+                                  setTaskSearch("");
+                                  setOpenWorkDropdown(null);
+                                }}
+                                className="w-full min-h-[40px] px-3 py-2 border border-slate-200 rounded-lg bg-white flex items-center gap-2 text-left hover:border-indigo-300"
+                              >
+                                <div className="flex flex-wrap gap-1.5 flex-1">
+                                  {selectedTasks.length > 0 ? selectedTasks.map((task) => (
+                                    <span key={task} className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-emerald-50 border border-emerald-100 text-emerald-700 text-[11px] font-semibold">
+                                      {task}
+                                      <span
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          removeTask(stage.stageId, work.workId, task);
+                                        }}
+                                        className="hover:text-red-500"
+                                      >
+                                        <FaTimes className="w-2.5 h-2.5" />
+                                      </span>
+                                    </span>
+                                  )) : <span className="text-sm text-slate-400 font-normal">Select tasks for {work.workId}...</span>}
+                                </div>
+                                <FaChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform ${openTaskDropdown === taskKey ? "rotate-180" : ""}`} />
+                              </button>
+
+                              {openTaskDropdown === taskKey && (
+                                <div className="absolute z-[60] left-0 right-0 mt-1 bg-white rounded-xl shadow-2xl border border-slate-200 p-2">
+                                  <div className="relative mb-2">
+                                    <FaSearch className="absolute left-3 top-2.5 text-slate-400 w-3 h-3" />
+                                    <input
+                                      type="text"
+                                      value={taskSearch}
+                                      onChange={(e) => setTaskSearch(e.target.value)}
+                                      placeholder="Search task..."
+                                      className="w-full pl-8 pr-3 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300"
+                                      autoFocus
+                                    />
+                                  </div>
+                                  <div className="max-h-56 overflow-y-auto space-y-1">
+                                    {filteredTasks.map((task) => {
+                                      const checked = selectedTasks.includes(task);
+                                      return (
+                                        <button
+                                          type="button"
+                                          key={task}
+                                          onClick={() => toggleTask(stage.stageId, work.workId, task)}
+                                          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg text-left text-xs ${checked ? "bg-emerald-50 text-emerald-800 font-bold" : "hover:bg-slate-50 text-slate-700"}`}
+                                        >
+                                          <span>{task}</span>
+                                          <span className={`w-4 h-4 rounded border flex items-center justify-center ${checked ? "bg-emerald-600 border-emerald-600 text-white" : "border-slate-300"}`}>
+                                            {checked && <FaCheck className="w-2.5 h-2.5" />}
+                                          </span>
+                                        </button>
+                                      );
+                                    })}
+                                    {filteredTasks.length === 0 && <div className="p-3 text-center text-xs text-slate-400">No tasks found for this work.</div>}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+};
+
 const CreatePmsTemplateComponent = () => {
   const navigate = useNavigate();
   const { id } = useParams();
@@ -180,49 +700,22 @@ const CreatePmsTemplateComponent = () => {
   const [materialList, setMaterialList] = useState(SEED_MATERIALS);
   const [supplierList, setSupplierList] = useState(SEED_SUPPLIERS);
   const [contractorList, setContractorList] = useState(SEED_CONTRACTORS);
-
-  // WBS Masters (Stages, Works, Tasks loaded from backend API / localStorage cache)
-  const [wbsStages, setWbsStages] = useState(() => {
-    try {
-      const cached = localStorage.getItem(PMS_MASTER_STAGES_KEY);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {
-      console.error("Error reading cached stages:", e);
-    }
-    return [];
-  });
-
-  const [wbsWorks, setWbsWorks] = useState(() => {
-    try {
-      const cached = localStorage.getItem(PMS_MASTER_WORKS_KEY);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {
-      console.error("Error reading cached works:", e);
-    }
-    return [];
-  });
-
-  const [wbsTasks, setWbsTasks] = useState(() => {
-    try {
-      const cached = localStorage.getItem(PMS_MASTER_TASKS_KEY);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
-      }
-    } catch (e) {
-      console.error("Error reading cached tasks:", e);
-    }
-    return [];
-  });
-
-  const [wbsLoading, setWbsLoading] = useState(false);
   const [projectStatusList, setProjectStatusList] = useState(PROJECT_STATUS_LIST);
+
+  useEffect(() => {
+    const fetchStatuses = async () => {
+      try {
+        const res = await pmsWbsService.getAllProjectStatuses();
+        const data = res?.data?.data || res?.data || [];
+        if (Array.isArray(data) && data.length > 0) {
+          setProjectStatusList(data.map(s => s.status_name || s));
+        }
+      } catch (err) {
+        console.warn("Could not fetch project statuses in PmsForm:", err);
+      }
+    };
+    fetchStatuses();
+  }, []);
 
   // PMS Tasks List in storage
   const [savedTasks, setSavedTasks] = useState(() => {
@@ -244,9 +737,9 @@ const CreatePmsTemplateComponent = () => {
     clientName: "",                           // Client Name (From Presales - Searchable)
     projectDetails: "",                       // Project Details (Auto-filled from Presales client)
     projectStatus: "On Track",                 // 1. Project Status (DDL - Req)
-    stage: "",                                // 2. Stage Code / Name (Lookup/DDL - Req)
-    work: "",                                 // 3. Work Code / Name (Filtered by Stage - Req)
-    task: "",                                 // 4. Task Code / Name (Filtered by Work - Req)
+    stage: "S1",                              // 2. Stage Code / Name (Lookup/DDL - Req)
+    work: "S1-W1",                            // 3. Work Code / Name (Filtered by Stage - Req)
+    task: "S1-W1-T1",                         // 4. Task Code / Name (Filtered by Work - Req)
     workWillDoneBy: "",                       // 5. Work Will Done By (Contractor/Worker - Req)
     contractorType: "",                       // 6. Contractor Type (Lookup - Cond)
     toolsVehicles: [],                        // 7. Tools / Vehicle (Multi-select - No)
@@ -266,13 +759,24 @@ const CreatePmsTemplateComponent = () => {
 
   const [errors, setErrors] = useState({});
 
-  // Stage -> Work -> Task hierarchy state. Starts empty so user builds dynamically.
+  // Stage -> Work -> Task hierarchy state. The UI component keeps this
+  // independent from the legacy single stage/work/task fields.
   const [wbsStructure, setWbsStructure] = useState({
-    stages: []
+    stages: [
+      {
+        stageId: "S1",
+        works: [
+          { workId: "S1-W1", tasks: ["S1-W1-T1", "S1-W1-T2"] }
+        ]
+      },
+      {
+        stageId: "S2",
+        works: [
+          { workId: "S2-W1", tasks: ["S2-W1-T1"] }
+        ]
+      }
+    ]
   });
-
-  // Accordion expanded state for each Stage card
-  const [expandedStages, setExpandedStages] = useState({});
 
   // Presales Client List
   const [presalesList, setPresalesList] = useState([]);
@@ -414,43 +918,6 @@ const CreatePmsTemplateComponent = () => {
       } catch (e) {
         console.log("Using seed contractors fallback");
       }
-
-      // 4. WBS 3 Dedicated Backend APIs: Stages, Works, Tasks (Limit: 1000)
-      try {
-        setWbsLoading(true);
-        const [stagesRes, worksRes, tasksRes, statusesRes] = await Promise.all([
-          pmsWbsService.getStagesPaginated({ limit: 1000 }),
-          pmsWbsService.getWorksPaginated({ limit: 1000 }),
-          pmsWbsService.getTasksPaginated({ limit: 1000 }),
-          pmsWbsService.getAllProjectStatuses().catch(() => null)
-        ]);
-
-        const stagesData = stagesRes?.data || stagesRes?.data?.data || (Array.isArray(stagesRes) ? stagesRes : []);
-        const worksData = worksRes?.data || worksRes?.data?.data || (Array.isArray(worksRes) ? worksRes : []);
-        const tasksData = tasksRes?.data || tasksRes?.data?.data || (Array.isArray(tasksRes) ? tasksRes : []);
-        const statusesData = statusesRes?.data?.data || statusesRes?.data || [];
-
-        if (Array.isArray(statusesData) && statusesData.length > 0) {
-          setProjectStatusList(statusesData.map(s => s.status_name || s));
-        }
-
-        if (Array.isArray(stagesData) && stagesData.length > 0) {
-          setWbsStages(stagesData);
-          localStorage.setItem(PMS_MASTER_STAGES_KEY, JSON.stringify(stagesData));
-        }
-        if (Array.isArray(worksData) && worksData.length > 0) {
-          setWbsWorks(worksData);
-          localStorage.setItem(PMS_MASTER_WORKS_KEY, JSON.stringify(worksData));
-        }
-        if (Array.isArray(tasksData) && tasksData.length > 0) {
-          setWbsTasks(tasksData);
-          localStorage.setItem(PMS_MASTER_TASKS_KEY, JSON.stringify(tasksData));
-        }
-      } catch (e) {
-        console.log("Error loading WBS data via separate APIs:", e);
-      } finally {
-        setWbsLoading(false);
-      }
     };
 
     fetchMasters();
@@ -470,27 +937,6 @@ const CreatePmsTemplateComponent = () => {
         const found = list.find((t) => String(t.id) === String(id));
         if (found) {
           setFormData(found);
-          if (found.wbsStructure?.stages?.length > 0) {
-            setWbsStructure(found.wbsStructure);
-            const initialExpanded = {};
-            found.wbsStructure.stages.forEach((s) => {
-              initialExpanded[s.stageId] = true;
-            });
-            setExpandedStages(initialExpanded);
-          } else if (found.stage) {
-            const stg = found.stage;
-            const wrk = found.work;
-            const tsk = found.task;
-            setWbsStructure({
-              stages: [
-                {
-                  stageId: stg,
-                  works: wrk ? [{ workId: wrk, tasks: tsk ? [tsk] : [] }] : []
-                }
-              ]
-            });
-            setExpandedStages({ [stg]: true });
-          }
         } else {
           toast.error("Task not found with ID: " + id);
           navigate("/sales/master/pms-template/create");
@@ -512,176 +958,26 @@ const CreatePmsTemplateComponent = () => {
     return Array.from(names);
   }, [contractorList]);
 
-  // 1. Stage Options (From backend stages API - 1000 limit)
-  const stageOptions = useMemo(() => {
-    return (wbsStages || []).map((s) => {
-      const code = s.stage_code || s.code || s.id || "";
-      const name = s.stage_name || s.name || "";
-      return {
-        value: code,
-        label: name ? `${code} - ${name}` : code
-      };
-    });
-  }, [wbsStages]);
-
-  // 2. Dynamic Works for a specific Stage (Backend matching works prioritized, with all works available)
-  const getWorksForStage = (stageCode) => {
-    const matching = [];
-    const others = [];
-    (wbsWorks || []).forEach((w) => {
-      const code = w.work_code || w.code || w.id || "";
-      const name = w.work_name || w.name || "";
-      const label = name ? `${code} - ${name}` : code;
-      const isMatch =
-        w.stage_code === stageCode ||
-        code.startsWith(`${stageCode}-`) ||
-        code.startsWith(stageCode);
-      if (isMatch) {
-        matching.push({ value: code, label });
-      } else {
-        others.push({ value: code, label: `${code} - ${name}` });
-      }
-    });
-    return [...matching, ...others];
-  };
-
-  // 3. Dynamic Tasks for a specific Work (Backend matching tasks prioritized, with all tasks available)
-  const getTasksForWork = (workCode) => {
-    const matching = [];
-    const others = [];
-    (wbsTasks || []).forEach((t) => {
-      const code = t.task_code || t.code || t.id || "";
-      const name = t.task_name || t.name || "";
-      const label = name ? `${code} - ${name}` : code;
-      const isMatch =
-        t.work_code === workCode ||
-        code.startsWith(`${workCode}-`) ||
-        code.startsWith(workCode);
-      if (isMatch) {
-        matching.push({ value: code, label });
-      } else {
-        others.push({ value: code, label: `${code} - ${name}` });
-      }
-    });
-    return [...matching, ...others];
-  };
-
-  // Toggle stage accordion
-  const toggleStageExpanded = (stageId) => {
-    setExpandedStages((prev) => ({
-      ...prev,
-      [stageId]: prev[stageId] !== undefined ? !prev[stageId] : false
-    }));
-  };
-
-  // Level 1: Stages multi-select change handler
-  const handleStagesChange = (newStageIds) => {
-    setWbsStructure((prev) => {
-      const currentStages = prev.stages || [];
-      const currentMap = new Map(currentStages.map((s) => [s.stageId, s]));
-      const nextStages = newStageIds.map((sId) => {
-        if (currentMap.has(sId)) {
-          return currentMap.get(sId);
-        }
-        return { stageId: sId, works: [] };
-      });
-      return { stages: nextStages };
-    });
-    setExpandedStages((prev) => {
-      const updated = { ...prev };
-      newStageIds.forEach((id) => {
-        if (updated[id] === undefined) updated[id] = true;
-      });
-      return updated;
-    });
-    if (errors.stage) setErrors((prev) => ({ ...prev, stage: "" }));
-  };
-
-  // Level 2: Works multi-select change handler for a specific Stage
-  const handleWorksChange = (stageId, newWorkIds) => {
-    setWbsStructure((prev) => {
-      const nextStages = (prev.stages || []).map((stg) => {
-        if (stg.stageId !== stageId) return stg;
-        const currentWorksMap = new Map((stg.works || []).map((w) => [w.workId, w]));
-        const nextWorks = newWorkIds.map((wId) => {
-          if (currentWorksMap.has(wId)) {
-            return currentWorksMap.get(wId);
-          }
-          return { workId: wId, tasks: [] };
-        });
-        return { ...stg, works: nextWorks };
-      });
-      return { stages: nextStages };
-    });
-  };
-
-  // Level 3: Tasks multi-select change handler for a specific Work under a Stage
-  const handleTasksChange = (stageId, workId, newTaskIds) => {
-    setWbsStructure((prev) => {
-      const nextStages = (prev.stages || []).map((stg) => {
-        if (stg.stageId !== stageId) return stg;
-        const nextWorks = (stg.works || []).map((w) => {
-          if (w.workId !== workId) return w;
-          return { ...w, tasks: newTaskIds };
-        });
-        return { ...stg, works: nextWorks };
-      });
-      return { stages: nextStages };
-    });
-  };
-
-  const removeStage = (stageId) => {
-    setWbsStructure((prev) => ({
-      stages: (prev.stages || []).filter((s) => s.stageId !== stageId)
-    }));
-  };
-
-  const removeWork = (stageId, workId) => {
-    setWbsStructure((prev) => ({
-      stages: (prev.stages || []).map((s) => {
-        if (s.stageId !== stageId) return s;
-        return {
-          ...s,
-          works: (s.works || []).filter((w) => w.workId !== workId)
-        };
-      })
-    }));
-  };
-
-  const handleClearAllWbs = () => {
-    setWbsStructure({ stages: [] });
-  };
-
-  // Live count computations
-  const stagesList = wbsStructure.stages || [];
-  const totalStagesCount = stagesList.length;
-  const totalWorksCount = useMemo(
-    () => stagesList.reduce((sum, s) => sum + (s.works?.length || 0), 0),
-    [stagesList]
-  );
-  const totalTasksCount = useMemo(
-    () =>
-      stagesList.reduce(
-        (sum, s) =>
-          sum + (s.works || []).reduce((wSum, w) => wSum + (w.tasks?.length || 0), 0),
-        0
-      ),
-    [stagesList]
-  );
-
-  // Synchronize wbsStructure into primary formData fields (stage, work, task)
+  // Keep the existing task fields backward-compatible with the first mapped leaf.
+  // The complete hierarchy is stored separately in wbsStructure.
   useEffect(() => {
-    const allStages = (wbsStructure.stages || []).map((s) => s.stageId);
-    const allWorks = (wbsStructure.stages || []).flatMap((s) => (s.works || []).map((w) => w.workId));
-    const allTasks = (wbsStructure.stages || []).flatMap((s) => (s.works || []).flatMap((w) => w.tasks || []));
-
+    const firstStage = wbsStructure?.stages?.[0];
+    const firstWork = firstStage?.works?.[0];
+    const firstTask = firstWork?.tasks?.[0];
     setFormData((prev) => ({
       ...prev,
-      stage: allStages.join(", "),
-      work: allWorks.join(", "),
-      task: allTasks.join(", ")
+      stage: firstStage?.stageId || "",
+      work: firstWork?.workId || "",
+      task: firstTask || ""
     }));
   }, [wbsStructure]);
+
+  const handleWbsChange = (nextStructure) => {
+    setWbsStructure(nextStructure);
+    if (errors.wbsStructure) {
+      setErrors((prev) => ({ ...prev, wbsStructure: "" }));
+    }
+  };
 
   // Work Will Done By selection -> auto-fills Contractor Type & suggestions
   const handleSelectWorkDoneBy = (workerOrContractor) => {
@@ -781,9 +1077,19 @@ const CreatePmsTemplateComponent = () => {
     // 1. Project Status (Required)
     if (!formData.projectStatus) errs.projectStatus = "Project Status is required";
 
-    // 2. WBS hierarchy (Requires at least one Stage selected)
-    if (!wbsStructure.stages || wbsStructure.stages.length === 0) {
-      errs.stage = "Please select at least one Stage";
+    // 2-4. WBS hierarchy (Stage -> Work -> Task)
+    const hierarchyHasStage = Array.isArray(wbsStructure?.stages) && wbsStructure.stages.length > 0;
+    const hierarchyHasWork = hierarchyHasStage && wbsStructure.stages.every((stage) => (stage.works || []).length > 0);
+    const hierarchyHasTasks = hierarchyHasWork && wbsStructure.stages.every((stage) =>
+      (stage.works || []).every((work) => (work.tasks || []).length > 0)
+    );
+
+    if (!hierarchyHasStage) {
+      errs.wbsStructure = "Select at least one Stage";
+    } else if (!hierarchyHasWork) {
+      errs.wbsStructure = "Select at least one Work for every selected Stage";
+    } else if (!hierarchyHasTasks) {
+      errs.wbsStructure = "Select at least one Task for every selected Work";
     }
 
     // 5. Work Will Done By (Required)
@@ -817,18 +1123,9 @@ const CreatePmsTemplateComponent = () => {
     try {
       const durationFormatted = `${formData.durationDays || 0} D ; ${formData.durationHours || 0} H`;
 
-      const allStages = (wbsStructure.stages || []).map((s) => s.stageId);
-      const allWorks = (wbsStructure.stages || []).flatMap((s) => (s.works || []).map((w) => w.workId));
-      const allTasks = (wbsStructure.stages || []).flatMap((s) => (s.works || []).flatMap((w) => w.tasks || []));
-
-      const primaryTaskCode =
-        allTasks[0] || (formData.task && formData.task !== "--" ? formData.task : `TSK-${Date.now().toString().slice(-4)}`);
-
       const taskPayload = {
         ...formData,
-        stage: allStages.join(", ") || formData.stage || "",
-        work: allWorks.join(", ") || formData.work || "",
-        task: primaryTaskCode,
+        // New normalized hierarchy payload for the PMS Template API.
         wbsStructure,
         id: formData.id || "TSK-" + Math.floor(100 + Math.random() * 900),
         durationFormatted,
@@ -838,10 +1135,10 @@ const CreatePmsTemplateComponent = () => {
       let updatedList;
       if (isEdit) {
         updatedList = savedTasks.map((item) => (String(item.id) === String(id) ? taskPayload : item));
-        toast.success(`PMS Task "${primaryTaskCode}" updated successfully!`);
+        toast.success(`PMS Task "${formData.task}" updated successfully!`);
       } else {
         updatedList = [taskPayload, ...savedTasks];
-        toast.success(`PMS Task "${primaryTaskCode}" created successfully!`);
+        toast.success(`PMS Task "${formData.task}" created successfully!`);
       }
 
       setSavedTasks(updatedList);
@@ -1047,258 +1344,18 @@ const CreatePmsTemplateComponent = () => {
             {errors.projectStatus && <p className="text-xs text-red-500 mt-1">{errors.projectStatus}</p>}
           </div>
 
-          {/* 2-4. WBS Hierarchy Breakdown (Stages -> Works per Stage -> Tasks per Work) */}
-          <div className="md:col-span-2 lg:col-span-3 rounded-2xl border border-slate-200/90 bg-white shadow-xs overflow-hidden">
-            {/* Header with live counters & Level 1 Stage Select */}
-            <div className="px-4 sm:px-6 py-4 bg-gradient-to-r from-slate-50 via-white to-slate-50 border-b border-slate-200/90">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-600 to-violet-700 text-white flex items-center justify-center font-black text-sm shadow-xs shrink-0">
-                    WBS
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-extrabold text-slate-900 tracking-tight">
-                        WBS Hierarchy Breakdown
-                      </h3>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
-                        Stages • Works • Tasks
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 mt-0.5">
-                      Loaded from 3 dedicated backend APIs ({wbsStages.length} Stages, {wbsWorks.length} Works, {wbsTasks.length} Tasks)
-                    </p>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="px-3 py-1 rounded-full bg-indigo-50 border border-indigo-200 text-[11px] font-extrabold text-indigo-700 shadow-2xs">
-                    {totalStagesCount} Stage{totalStagesCount === 1 ? "" : "s"}
-                  </span>
-                  <span className="px-3 py-1 rounded-full bg-blue-50 border border-blue-200 text-[11px] font-extrabold text-blue-700 shadow-2xs">
-                    {totalWorksCount} Work{totalWorksCount === 1 ? "" : "s"}
-                  </span>
-                  <span className="px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-[11px] font-extrabold text-emerald-700 shadow-2xs">
-                    {totalTasksCount} Task{totalTasksCount === 1 ? "" : "s"}
-                  </span>
-                  {stagesList.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={handleClearAllWbs}
-                      className="text-[11px] font-bold text-red-500 hover:text-red-700 hover:bg-red-50 px-2.5 py-1 rounded-md transition-colors cursor-pointer ml-1"
-                    >
-                      Clear all
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              {/* Level 1: Stage Multi-Select Dropdown */}
-              <div className="mt-4 pt-3 border-t border-slate-100">
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-indigo-600"></span>
-                    Select Stage(s) <span className="text-red-500">*</span>
-                  </label>
-                  <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
-                    {wbsStages.length} Total Available
-                  </span>
-                </div>
-                <ReactSelectMulti
-                  options={stageOptions}
-                  value={stagesList.map((s) => s.stageId)}
-                  onChange={handleStagesChange}
-                  placeholder={wbsLoading ? "Loading stages from API..." : "Search & select stages (e.g. S1, S2, S3)..."}
-                  themeColor="indigo"
-                  allowSelectAll={true}
-                  isDisabled={wbsLoading}
-                />
-                {errors.stage && <p className="text-xs text-red-500 mt-1 font-medium">{errors.stage}</p>}
-              </div>
+          <WbsHierarchyBuilder
+            value={wbsStructure}
+            onChange={handleWbsChange}
+            stageOptions={STAGES_LIST}
+            getWorksForStage={(stageId) => STAGE_TO_WORKS_MAP[stageId] || [`${stageId}-W1`]}
+            getTasksForWork={(workId) => WORK_TO_TASKS_MAP[workId] || [`${workId}-T1`, `${workId}-T2`]}
+          />
+          {errors.wbsStructure && (
+            <div className="md:col-span-2 lg:col-span-3 -mt-2 px-3 py-2.5 rounded-lg bg-red-50 border border-red-100 text-xs font-semibold text-red-600">
+              {errors.wbsStructure}
             </div>
-
-            {/* Stage Cards Body */}
-            <div className="p-4 sm:p-5 bg-slate-50/40 space-y-4">
-              {stagesList.length === 0 ? (
-                <div className="py-12 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-white">
-                  <div className="w-12 h-12 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-3 shadow-2xs">
-                    <FaTasks className="w-5 h-5" />
-                  </div>
-                  <div className="text-sm font-extrabold text-slate-700">No Stages Selected Yet</div>
-                  <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
-                    Choose one or more stages from the dropdown above to configure works and tasks.
-                  </p>
-                </div>
-              ) : (
-                stagesList.map((stage) => {
-                  const sObj = wbsStages.find((s) => (s.stage_code || s.id) === stage.stageId);
-                  const availableWorks = getWorksForStage(stage.stageId);
-                  const selectedWorks = stage.works || [];
-                  const isExpanded = expandedStages[stage.stageId] !== false;
-                  const stageTasksCount = selectedWorks.reduce(
-                    (sum, w) => sum + (w.tasks?.length || 0),
-                    0
-                  );
-
-                  return (
-                    <div
-                      key={stage.stageId}
-                      className="rounded-xl border border-slate-200/90 bg-white shadow-xs border-l-4 border-l-indigo-600 overflow-hidden transition-all hover:shadow-sm"
-                    >
-                      {/* Stage Header */}
-                      <div className="px-4 py-3 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100 flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <button
-                            type="button"
-                            onClick={() => toggleStageExpanded(stage.stageId)}
-                            className="w-7 h-7 rounded-lg bg-white border border-slate-200 text-slate-600 flex items-center justify-center hover:text-indigo-600 hover:border-indigo-300 transition-colors shadow-2xs cursor-pointer shrink-0"
-                            title={isExpanded ? "Collapse stage" : "Expand stage"}
-                          >
-                            <FaChevronDown
-                              className={`w-3 h-3 transition-transform duration-200 ${
-                                isExpanded ? "" : "-rotate-90"
-                              }`}
-                            />
-                          </button>
-                          <div className="flex items-center gap-2 flex-wrap min-w-0">
-                            <span className="px-2 py-0.5 rounded-md bg-indigo-600 text-white text-[11px] font-black tracking-wide shrink-0">
-                              STAGE {stage.stageId}
-                            </span>
-                            {sObj?.stage_name && (
-                              <span
-                                className="text-xs font-bold text-slate-800 truncate"
-                                title={sObj.stage_name}
-                              >
-                                {sObj.stage_name}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
-                            {selectedWorks.length} Work{selectedWorks.length === 1 ? "" : "s"}
-                          </span>
-                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                            {stageTasksCount} Task{stageTasksCount === 1 ? "" : "s"}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => removeStage(stage.stageId)}
-                            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer ml-1"
-                            title="Remove stage"
-                          >
-                            <FaTimes className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Stage Body */}
-                      {isExpanded && (
-                        <div className="p-4 sm:p-5 space-y-4">
-                          {/* Level 2: Works Multi-Select */}
-                          <div>
-                            <div className="flex items-center justify-between mb-1.5">
-                              <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
-                                Works for Stage {stage.stageId}
-                              </label>
-                              <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
-                                Select any number of works
-                              </span>
-                            </div>
-                            <ReactSelectMulti
-                              options={availableWorks}
-                              value={selectedWorks.map((w) => w.workId)}
-                              onChange={(newWorkIds) => handleWorksChange(stage.stageId, newWorkIds)}
-                              placeholder={`Search & select works for Stage ${stage.stageId}...`}
-                              themeColor="blue"
-                              allowSelectAll={true}
-                            />
-                          </div>
-
-                          {/* Level 3: Task Mapping for Selected Works (Image 2 Replica) */}
-                          {selectedWorks.length > 0 && (
-                            <div className="mt-4 pt-3 border-t border-slate-100 space-y-3">
-                              <div className="flex items-center gap-2">
-                                <div className="h-px flex-1 bg-slate-200" />
-                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 bg-white px-2.5 py-0.5 rounded-md border border-slate-200 shadow-2xs">
-                                  Task Mapping Under Selected Works
-                                </span>
-                                <div className="h-px flex-1 bg-slate-200" />
-                              </div>
-
-                              {selectedWorks.map((work) => {
-                                const wObj = wbsWorks.find(
-                                  (w) => (w.work_code || w.id) === work.workId
-                                );
-                                const availableTasks = getTasksForWork(work.workId);
-                                const selectedTasks = work.tasks || [];
-
-                                return (
-                                  <div
-                                    key={work.workId}
-                                    className="rounded-xl border border-slate-200/90 bg-slate-50/40 hover:bg-slate-50/80 p-3.5 space-y-2.5 border-l-4 border-l-blue-500 shadow-2xs transition-all"
-                                  >
-                                    <div className="flex items-center justify-between gap-2">
-                                      <div className="flex items-center gap-2 min-w-0">
-                                        <div className="w-6 h-6 rounded-md bg-blue-600 text-white text-[10px] font-black flex items-center justify-center shrink-0 shadow-2xs">
-                                          W
-                                        </div>
-                                        <div className="truncate flex items-center gap-2">
-                                          <span className="text-xs font-bold text-slate-800 tracking-tight">
-                                            {work.workId}
-                                          </span>
-                                          {wObj?.work_name && (
-                                            <span
-                                              className="text-xs font-medium text-slate-600 truncate"
-                                              title={wObj.work_name}
-                                            >
-                                              - {wObj.work_name}
-                                            </span>
-                                          )}
-                                          <span className="text-[10px] font-semibold text-slate-500">
-                                            ({selectedTasks.length} task
-                                            {selectedTasks.length === 1 ? "" : "s"} selected)
-                                          </span>
-                                        </div>
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <button
-                                          type="button"
-                                          onClick={() => removeWork(stage.stageId, work.workId)}
-                                          className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors cursor-pointer"
-                                          title="Remove work"
-                                        >
-                                          <FaTimes className="w-3 h-3" />
-                                        </button>
-                                      </div>
-                                    </div>
-
-                                    {/* Task multi-select dropdown */}
-                                    <ReactSelectMulti
-                                      options={availableTasks}
-                                      value={selectedTasks}
-                                      onChange={(newTaskIds) =>
-                                        handleTasksChange(stage.stageId, work.workId, newTaskIds)
-                                      }
-                                      placeholder={`Search & assign tasks for ${work.workId}...`}
-                                      themeColor="emerald"
-                                      allowSelectAll={true}
-                                    />
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
+          )}
 
           {/* 5. Work Will Done By (Contractor / Worker Lookup - Required *) */}
           <div className="relative" ref={contractorDropdownRef}>
@@ -1311,7 +1368,7 @@ const CreatePmsTemplateComponent = () => {
                 errors.workWillDoneBy ? "border-red-500 bg-red-50/50" : "border-slate-200"
               }`}
             >
-              <span className={formData.workWillDoneBy ? "text-slate-900 truncate" : "text-slate-400"}>
+              <span className={formData.workWillDoneBy ? "texant-slate-900 truncate" : "text-slate-400"}>
                 {formData.workWillDoneBy || "Select Contractor / Worker..."}
               </span>
               <FaChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1" />
@@ -1399,19 +1456,70 @@ const CreatePmsTemplateComponent = () => {
           </div>
 
           {/* 7. Tools / Vehicle (Resource Multi-select) */}
-          <div className="md:col-span-2">
-            <label className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center justify-between">
-              <span>Tools / Vehicle</span>
-              <span className="text-[10px] text-slate-400 font-medium">Optional multi-select</span>
-            </label>
-            <ReactSelectMulti
-              options={TOOLS_VEHICLES_MASTER.map((t) => ({ value: t, label: t }))}
-              value={formData.toolsVehicles}
-              onChange={(newTools) => setFormData((prev) => ({ ...prev, toolsVehicles: newTools }))}
-              placeholder="Search and select tools / vehicles..."
-              themeColor="indigo"
-              allowSelectAll={true}
-            />
+          <div className="relative" ref={toolsDropdownRef}>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-sm font-bold text-slate-700">
+                Tools / Vehicle
+              </label>
+              {formData.toolsVehicles.length > 0 && (
+                <span className="text-xs text-indigo-600 font-semibold">
+                  {formData.toolsVehicles.length} selected
+                </span>
+              )}
+            </div>
+
+            <div
+              onClick={() => setIsToolsOpen(!isToolsOpen)}
+              className="w-full min-h-[42px] px-3 py-1.5 border border-slate-200 rounded-lg text-sm cursor-pointer bg-white flex items-center justify-between flex-wrap gap-1.5"
+            >
+              <div className="flex flex-wrap gap-1.5 flex-1">
+                {formData.toolsVehicles.length > 0 ? (
+                  formData.toolsVehicles.map((tool) => (
+                    <span
+                      key={tool}
+                      className="bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-medium px-2 py-0.5 rounded-md flex items-center gap-1"
+                    >
+                      {tool}
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleTool(tool);
+                        }}
+                        className="hover:text-red-500 cursor-pointer ml-0.5"
+                      >
+                        <FaTimes className="w-2.5 h-2.5" />
+                      </span>
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-slate-400 text-sm">Select Tools / Vehicle...</span>
+                )}
+              </div>
+              <FaChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1" />
+            </div>
+
+            {/* Dropdown Menu */}
+            {isToolsOpen && (
+              <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-xl border border-slate-200 z-50 p-2 max-h-56 overflow-y-auto">
+                <div className="space-y-1">
+                  {TOOLS_VEHICLES_MASTER.map((tool) => {
+                    const isChecked = formData.toolsVehicles.includes(tool);
+                    return (
+                      <div
+                        key={tool}
+                        onClick={() => handleToggleTool(tool)}
+                        className={`px-3 py-2 rounded text-xs cursor-pointer flex items-center justify-between hover:bg-indigo-50 ${
+                          isChecked ? "bg-indigo-50 text-indigo-800 font-bold" : "text-slate-700"
+                        }`}
+                      >
+                        <span>{tool}</span>
+                        {isChecked && <FaCheck className="w-3 h-3 text-indigo-600" />}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* 8. Material Required (Material Master Lookup) */}

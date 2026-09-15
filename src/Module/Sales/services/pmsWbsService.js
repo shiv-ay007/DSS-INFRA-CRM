@@ -44,6 +44,26 @@ export const pmsWbsService = {
   },
   updateTask: async (id, payload) => {
     return await api.put(`/pms-wbs/tasks/${id}`, payload);
+  },
+
+  // 6. Project Status Endpoints
+  getAllProjectStatuses: async () => {
+    return await api.get("/pms-project-statuses/all");
+  },
+  getProjectStatusesPaginated: async (params = {}) => {
+    return await api.get("/pms-project-statuses", { params });
+  },
+  createProjectStatus: async (payload) => {
+    return await api.post("/pms-project-statuses", payload);
+  },
+  updateProjectStatus: async (id, payload) => {
+    return await api.put(`/pms-project-statuses/${id}`, payload);
+  },
+  deleteProjectStatus: async (id) => {
+    return await api.delete(`/pms-project-statuses/${id}`);
+  },
+  seedProjectStatuses: async () => {
+    return await api.post("/pms-project-statuses/seed");
   }
 };
 
