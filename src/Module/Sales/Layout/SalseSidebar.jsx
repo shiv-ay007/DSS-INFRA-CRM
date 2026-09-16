@@ -76,6 +76,14 @@ const workerMenuItems = [
     )
   },
   {
+    id: "active_projects",
+    label: "Active Projects",
+    path: "/sales/active-projects",
+    activeGradient: "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-600/30",
+    iconColor: "text-blue-400 group-hover:text-blue-300",
+    icon: <FaHardHat className="w-4 h-4 shrink-0" />
+  },
+  {
     id: "master_form",
     label: "MasterForm",
     activeGradient: "bg-gradient-to-r from-violet-600 to-fuchsia-600 text-white shadow-md shadow-violet-600/30",
@@ -174,6 +182,14 @@ const observerMenuItems = [
         <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
       </svg>
     )
+  },
+  {
+    id: "active_projects",
+    label: "Active Projects",
+    path: "/sales/active-projects",
+    activeGradient: "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-600/30",
+    iconColor: "text-blue-400 group-hover:text-blue-300",
+    icon: <FaHardHat className="w-4 h-4 shrink-0" />
   },
   {
     id: "master_form",

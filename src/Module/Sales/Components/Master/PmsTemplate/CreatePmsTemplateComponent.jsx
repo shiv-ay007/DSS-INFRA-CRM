@@ -265,7 +265,7 @@ export const CreatePmsTemplateComponent = () => {
     id: "TSK-" + Math.floor(100 + Math.random() * 900),
     clientName: "",
     projectDetails: "",
-    projectStatus: "On Track",
+    projectStatus: ["On Track"],
     stage: "",
     work: "",
     task: "",
@@ -466,7 +466,17 @@ export const CreatePmsTemplateComponent = () => {
         }
         const found = list.find((t) => String(t.id) === String(id));
         if (found) {
-          setFormData(found);
+          const rawProjectStatus = found.projectStatus;
+          const normalizedProjectStatus = Array.isArray(rawProjectStatus)
+            ? rawProjectStatus
+            : typeof rawProjectStatus === "string" && rawProjectStatus.trim()
+            ? rawProjectStatus.split(",").map((s) => s.trim()).filter(Boolean)
+            : ["On Track"];
+
+          setFormData({
+            ...found,
+            projectStatus: normalizedProjectStatus
+          });
           if (found.wbsStructure?.stages?.length > 0) {
             const stagesWithDefaults = found.wbsStructure.stages.map((s) => ({
               ...DEFAULT_STAGE_DETAILS,
@@ -527,6 +537,35 @@ export const CreatePmsTemplateComponent = () => {
     });
     return Array.from(names);
   }, [contractorList]);
+
+  // 0. Project Status Multi-Select Options & State handlers
+  const projectStatusOptions = useMemo(() => {
+    return (projectStatusList || []).map((st) => {
+      const val = typeof st === "object" && st !== null ? st.status_name || st.name || st.value : String(st);
+      return {
+        value: val,
+        label: val
+      };
+    });
+  }, [projectStatusList]);
+
+  const selectedProjectStatuses = useMemo(() => {
+    if (Array.isArray(formData.projectStatus)) return formData.projectStatus;
+    if (typeof formData.projectStatus === "string" && formData.projectStatus.trim()) {
+      return formData.projectStatus.split(",").map((s) => s.trim()).filter(Boolean);
+    }
+    return [];
+  }, [formData.projectStatus]);
+
+  const handleProjectStatusChange = (newStatuses) => {
+    setFormData((prev) => ({
+      ...prev,
+      projectStatus: newStatuses
+    }));
+    if (errors.projectStatus) {
+      setErrors((prev) => ({ ...prev, projectStatus: "" }));
+    }
+  };
 
   // 1. Stage Options (From backend stages API - 1000 limit)
   const stageOptions = useMemo(() => {
@@ -1136,7 +1175,10 @@ export const CreatePmsTemplateComponent = () => {
     const errs = {};
 
     // 1. Project Status (Required)
-    if (!formData.projectStatus) errs.projectStatus = "Project Status is required";
+    const hasProjectStatus = Array.isArray(formData.projectStatus)
+      ? formData.projectStatus.length > 0
+      : Boolean(formData.projectStatus && String(formData.projectStatus).trim());
+    if (!hasProjectStatus) errs.projectStatus = "Project Status is required";
 
     // 2. WBS hierarchy (Requires at least one Stage selected)
     if (!wbsStructure.stages || wbsStructure.stages.length === 0) {
@@ -1188,8 +1230,17 @@ export const CreatePmsTemplateComponent = () => {
       const firstStage = wbsStructure.stages[0] || {};
       const durationFormatted = `${firstStage.durationDays || 0} D ; ${firstStage.durationHours || 0} H`;
 
+      const rawStatus = formData.projectStatus;
+      const projectStatusArr = Array.isArray(rawStatus)
+        ? rawStatus
+        : typeof rawStatus === "string" && rawStatus.trim()
+        ? rawStatus.split(",").map((s) => s.trim()).filter(Boolean)
+        : ["On Track"];
+
       const taskPayload = {
         ...formData,
+        projectStatus: projectStatusArr,
+        projectStatusText: projectStatusArr.join(", "),
         stage: allStages.join(", ") || formData.stage || "",
         work: allWorks.join(", ") || formData.work || "",
         task: primaryTaskCode,
@@ -1405,25 +1456,28 @@ export const CreatePmsTemplateComponent = () => {
             </div>
           </div>
 
-          {/* 1. Project Status (DDL - Required *) */}
+          {/* 1. Project Status (Multi-Select with Checkboxes - Required *) */}
           <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1.5">
-              Project Status <span className="text-red-500">*</span>
-            </label>
-            <select
-              value={formData.projectStatus}
-              onChange={(e) => setFormData({ ...formData, projectStatus: e.target.value })}
-              className={`w-full px-3.5 py-2.5 border rounded-lg text-sm font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white ${
-                errors.projectStatus ? "border-red-500 bg-red-50/50" : "border-slate-200"
-              }`}
-            >
-              {projectStatusList.map((st) => (
-                <option key={st} value={st}>
-                  {st}
-                </option>
-              ))}
-            </select>
-            {errors.projectStatus && <p className="text-xs text-red-500 mt-1">{errors.projectStatus}</p>}
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-sm font-bold text-slate-700 flex items-center gap-1.5">
+                Project Status <span className="text-red-500">*</span>
+              </label>
+              {selectedProjectStatuses.length > 0 && (
+                <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-full">
+                  {selectedProjectStatuses.length} selected
+                </span>
+              )}
+            </div>
+            <ReactSelectMulti
+              options={projectStatusOptions}
+              value={selectedProjectStatuses}
+              onChange={handleProjectStatusChange}
+              placeholder="Search & select project status(es)..."
+              themeColor="indigo"
+              allowSelectAll={true}
+              hasError={Boolean(errors.projectStatus)}
+            />
+            {errors.projectStatus && <p className="text-xs text-red-500 mt-1 font-medium">{errors.projectStatus}</p>}
           </div>
 
           {/* 2-4. WBS Hierarchy Breakdown (Stages -> Works per Stage -> Tasks per Work) */}
@@ -2142,7 +2196,7 @@ export const CreatePmsTemplateComponent = () => {
                 id: "TSK-" + Math.floor(100 + Math.random() * 900),
                 clientName: "",
                 projectDetails: "",
-                projectStatus: "On Track",
+                projectStatus: ["On Track"],
                 stage: "S1",
                 work: "S1-W1",
                 task: "S1-W1-T1",

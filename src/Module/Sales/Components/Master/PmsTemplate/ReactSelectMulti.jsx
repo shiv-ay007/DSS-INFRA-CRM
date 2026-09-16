@@ -144,7 +144,8 @@ export const ReactSelectMulti = ({
   themeColor = "indigo",
   allowSelectAll = true,
   isDisabled = false,
-  className = ""
+  className = "",
+  hasError = false
 }) => {
   // Normalize options to [{ value, label }]
   const normalizedOptions = useMemo(() => {
@@ -212,12 +213,20 @@ export const ReactSelectMulti = ({
           control: (base, state) => ({
             ...base,
             backgroundColor: isDisabled ? "#f8fafc" : "#ffffff",
-            borderColor: state.isFocused ? "#6366f1" : "#e2e8f0",
+            borderColor: hasError
+              ? "#ef4444"
+              : state.isFocused
+              ? "#6366f1"
+              : "#e2e8f0",
             borderRadius: "0.625rem",
             minHeight: "44px",
-            boxShadow: state.isFocused ? "0 0 0 3px rgba(99, 102, 241, 0.12)" : "none",
+            boxShadow: hasError
+              ? "0 0 0 3px rgba(239, 68, 68, 0.15)"
+              : state.isFocused
+              ? "0 0 0 3px rgba(99, 102, 241, 0.12)"
+              : "none",
             "&:hover": {
-              borderColor: "#818cf8"
+              borderColor: hasError ? "#dc2626" : "#818cf8"
             },
             cursor: "pointer",
             padding: "2px 4px",
