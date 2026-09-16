@@ -12,7 +12,10 @@ import {
   FaTimes,
   FaTasks,
   FaUser,
-  FaBuilding
+  FaBuilding,
+  FaArrowRight,
+  FaCheckCircle,
+  FaExclamationCircle
 } from "react-icons/fa";
 import { HiSparkles } from "react-icons/hi2";
 import { materialService } from "../../../services/materialService";
@@ -24,6 +27,7 @@ export const PMS_MASTER_STAGES_KEY = "pms_master_stages_data";
 export const PMS_MASTER_WORKS_KEY = "pms_master_works_data";
 export const PMS_MASTER_TASKS_KEY = "pms_master_tasks_data";
 import ReactSelectMulti from "./ReactSelectMulti";
+import ExecutionResourceFieldData from "./ExecutionResourceFieldData";
 
 // Storage Keys
 export const PMS_TASKS_STORAGE_KEY = "dss_pms_tasks_master_data";
@@ -168,7 +172,25 @@ const INITIAL_PMS_TASKS = [
 ];
 
 
-const CreatePmsTemplateComponent = () => {
+// Default execution details template for each stage
+const DEFAULT_STAGE_DETAILS = {
+  workWillDoneBy: "",
+  contractorType: "",
+  toolsVehicles: [],
+  materialRequired: "",
+  materialDetails: "",
+  supplierType: "",
+  supplierName: "",
+  maxTimeToComplete: "3",
+  timeUnit: "Days",
+  deadlineDate: "",
+  durationDays: "3",
+  durationHours: "0",
+  instruction: "",
+  remark: ""
+};
+
+export const CreatePmsTemplateComponent = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const isEdit = Boolean(id);
@@ -176,12 +198,12 @@ const CreatePmsTemplateComponent = () => {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
 
-  // Master Data Lists (Integrated from APIs + localStorage)
+  // Material, Supplier, Contractor Master Data from Backend (Dedicated APIs)
   const [materialList, setMaterialList] = useState(SEED_MATERIALS);
   const [supplierList, setSupplierList] = useState(SEED_SUPPLIERS);
   const [contractorList, setContractorList] = useState(SEED_CONTRACTORS);
 
-  // WBS Masters (Stages, Works, Tasks loaded from backend API / localStorage cache)
+  // WBS Dedicated Data from Backend APIs (Stages, Works, Tasks - Limit: 1000)
   const [wbsStages, setWbsStages] = useState(() => {
     try {
       const cached = localStorage.getItem(PMS_MASTER_STAGES_KEY);
@@ -238,35 +260,21 @@ const CreatePmsTemplateComponent = () => {
     return INITIAL_PMS_TASKS;
   });
 
-  // 16 Exact Fields State
+  // Common Header State (Client, Project Details, Status)
   const [formData, setFormData] = useState({
     id: "TSK-" + Math.floor(100 + Math.random() * 900),
-    clientName: "",                           // Client Name (From Presales - Searchable)
-    projectDetails: "",                       // Project Details (Auto-filled from Presales client)
-    projectStatus: "On Track",                 // 1. Project Status (DDL - Req)
-    stage: "",                                // 2. Stage Code / Name (Lookup/DDL - Req)
-    work: "",                                 // 3. Work Code / Name (Filtered by Stage - Req)
-    task: "",                                 // 4. Task Code / Name (Filtered by Work - Req)
-    workWillDoneBy: "",                       // 5. Work Will Done By (Contractor/Worker - Req)
-    contractorType: "",                       // 6. Contractor Type (Lookup - Cond)
-    toolsVehicles: [],                        // 7. Tools / Vehicle (Multi-select - No)
-    materialRequired: "",                     // 8. Material Required (Material Lookup - Cond)
-    materialDetails: "",                      // 9. Material Details (Multiline - No)
-    supplierType: "",                         // 10. Supplier Type (Lookup - Cond)
-    supplierName: "",                         // 11. Supplier Name (Lookup - Cond)
-    maxTimeToComplete: "3",                   // 12. Maximum Time to Complete Task (Number + Unit)
-    timeUnit: "Days",
-    deadlineDate: "",                         // 13. Deadline Date (Date)
-    durationDays: "3",                        // 14. Maximum Time for Work Completion [D ; H]
-    durationHours: "0",
-    instruction: "",                          // 15. Training Material / Instruction / Checklist
-    remark: "",                               // 16. Remark (Multiline)
+    clientName: "",
+    projectDetails: "",
+    projectStatus: "On Track",
+    stage: "",
+    work: "",
+    task: "",
     status: "Active"
   });
 
   const [errors, setErrors] = useState({});
 
-  // Stage -> Work -> Task hierarchy state. Starts empty so user builds dynamically.
+  // Stage -> Work -> Task hierarchy state with per-stage execution details.
   const [wbsStructure, setWbsStructure] = useState({
     stages: []
   });
@@ -274,27 +282,25 @@ const CreatePmsTemplateComponent = () => {
   // Accordion expanded state for each Stage card
   const [expandedStages, setExpandedStages] = useState({});
 
+  // 3-Level Stepper Active Tab state (Image 1 Chart UI)
+  const [activeStageId, setActiveStageId] = useState(null);
+  const [activeWorkId, setActiveWorkId] = useState(null);
+  const [activeTaskId, setActiveTaskId] = useState(null);
+
+  // Active Dropdown state tracking: { type: 'contractor'|'material'|'supplier', stageId: 'S1' }
+  const [activeDropdown, setActiveDropdown] = useState(null);
+  const dropdownContainerRef = useRef(null);
+
   // Presales Client List
   const [presalesList, setPresalesList] = useState([]);
   const [clientSearch, setClientSearch] = useState("");
   const [isClientOpen, setIsClientOpen] = useState(false);
   const clientDropdownRef = useRef(null);
 
-  // Search/Filter states for Lookups
+  // Search/Filter states for Lookups inside stages
   const [materialSearch, setMaterialSearch] = useState("");
-  const [isMaterialOpen, setIsMaterialOpen] = useState(false);
-  const materialDropdownRef = useRef(null);
-
   const [supplierSearch, setSupplierSearch] = useState("");
-  const [isSupplierOpen, setIsSupplierOpen] = useState(false);
-  const supplierDropdownRef = useRef(null);
-
   const [contractorSearch, setContractorSearch] = useState("");
-  const [isContractorOpen, setIsContractorOpen] = useState(false);
-  const contractorDropdownRef = useRef(null);
-
-  const [isToolsOpen, setIsToolsOpen] = useState(false);
-  const toolsDropdownRef = useRef(null);
 
   // Close dropdowns on outside click
   useEffect(() => {
@@ -302,17 +308,8 @@ const CreatePmsTemplateComponent = () => {
       if (clientDropdownRef.current && !clientDropdownRef.current.contains(e.target)) {
         setIsClientOpen(false);
       }
-      if (materialDropdownRef.current && !materialDropdownRef.current.contains(e.target)) {
-        setIsMaterialOpen(false);
-      }
-      if (supplierDropdownRef.current && !supplierDropdownRef.current.contains(e.target)) {
-        setIsSupplierOpen(false);
-      }
-      if (contractorDropdownRef.current && !contractorDropdownRef.current.contains(e.target)) {
-        setIsContractorOpen(false);
-      }
-      if (toolsDropdownRef.current && !toolsDropdownRef.current.contains(e.target)) {
-        setIsToolsOpen(false);
+      if (!e.target.closest(".stage-search-dropdown-container")) {
+        setActiveDropdown(null);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -471,9 +468,13 @@ const CreatePmsTemplateComponent = () => {
         if (found) {
           setFormData(found);
           if (found.wbsStructure?.stages?.length > 0) {
-            setWbsStructure(found.wbsStructure);
+            const stagesWithDefaults = found.wbsStructure.stages.map((s) => ({
+              ...DEFAULT_STAGE_DETAILS,
+              ...s
+            }));
+            setWbsStructure({ stages: stagesWithDefaults });
             const initialExpanded = {};
-            found.wbsStructure.stages.forEach((s) => {
+            stagesWithDefaults.forEach((s) => {
               initialExpanded[s.stageId] = true;
             });
             setExpandedStages(initialExpanded);
@@ -485,7 +486,22 @@ const CreatePmsTemplateComponent = () => {
               stages: [
                 {
                   stageId: stg,
-                  works: wrk ? [{ workId: wrk, tasks: tsk ? [tsk] : [] }] : []
+                  works: wrk ? [{ workId: wrk, tasks: tsk ? [tsk] : [] }] : [],
+                  ...DEFAULT_STAGE_DETAILS,
+                  workWillDoneBy: found.workWillDoneBy || "",
+                  contractorType: found.contractorType || "",
+                  toolsVehicles: found.toolsVehicles || [],
+                  materialRequired: found.materialRequired || "",
+                  materialDetails: found.materialDetails || "",
+                  supplierType: found.supplierType || "",
+                  supplierName: found.supplierName || "",
+                  maxTimeToComplete: found.maxTimeToComplete || "3",
+                  timeUnit: found.timeUnit || "Days",
+                  deadlineDate: found.deadlineDate || "",
+                  durationDays: found.durationDays || "3",
+                  durationHours: found.durationHours || "0",
+                  instruction: found.instruction || "",
+                  remark: found.remark || ""
                 }
               ]
             });
@@ -583,7 +599,7 @@ const CreatePmsTemplateComponent = () => {
         if (currentMap.has(sId)) {
           return currentMap.get(sId);
         }
-        return { stageId: sId, works: [] };
+        return { stageId: sId, works: [], ...DEFAULT_STAGE_DETAILS };
       });
       return { stages: nextStages };
     });
@@ -607,12 +623,15 @@ const CreatePmsTemplateComponent = () => {
           if (currentWorksMap.has(wId)) {
             return currentWorksMap.get(wId);
           }
-          return { workId: wId, tasks: [] };
+          return { workId: wId, tasks: [], ...DEFAULT_STAGE_DETAILS };
         });
         return { ...stg, works: nextWorks };
       });
       return { stages: nextStages };
     });
+    if (newWorkIds.length > 0 && (!activeWorkId || !newWorkIds.includes(activeWorkId))) {
+      setActiveWorkId(newWorkIds[0]);
+    }
   };
 
   // Level 3: Tasks multi-select change handler for a specific Work under a Stage
@@ -622,13 +641,70 @@ const CreatePmsTemplateComponent = () => {
         if (stg.stageId !== stageId) return stg;
         const nextWorks = (stg.works || []).map((w) => {
           if (w.workId !== workId) return w;
-          return { ...w, tasks: newTaskIds };
+          const currentTasksMap = new Map(
+            (w.tasks || []).map((t) => [typeof t === "object" ? t.taskId : t, t])
+          );
+          const nextTasks = newTaskIds.map((tId) => {
+            if (currentTasksMap.has(tId)) {
+              return currentTasksMap.get(tId);
+            }
+            return { taskId: tId, ...DEFAULT_STAGE_DETAILS };
+          });
+          return { ...w, tasks: nextTasks };
         });
         return { ...stg, works: nextWorks };
       });
       return { stages: nextStages };
     });
+    if (newTaskIds.length > 0 && (!activeTaskId || !newTaskIds.includes(activeTaskId))) {
+      setActiveTaskId(newTaskIds[0]);
+    }
   };
+
+  // Auto-synchronize activeStageId, activeWorkId, and activeTaskId with current hierarchy
+  useEffect(() => {
+    const stages = wbsStructure.stages || [];
+    if (stages.length === 0) {
+      if (activeStageId !== null) setActiveStageId(null);
+      if (activeWorkId !== null) setActiveWorkId(null);
+      if (activeTaskId !== null) setActiveTaskId(null);
+      return;
+    }
+
+    const currentStageExists = stages.some((s) => s.stageId === activeStageId);
+    const effectiveStageId = currentStageExists ? activeStageId : stages[0].stageId;
+    if (effectiveStageId !== activeStageId) {
+      setActiveStageId(effectiveStageId);
+    }
+
+    const currentStage = stages.find((s) => s.stageId === effectiveStageId);
+    const works = currentStage?.works || [];
+    if (works.length === 0) {
+      if (activeWorkId !== null) setActiveWorkId(null);
+      if (activeTaskId !== null) setActiveTaskId(null);
+      return;
+    }
+
+    const currentWorkExists = works.some((w) => w.workId === activeWorkId);
+    const effectiveWorkId = currentWorkExists ? activeWorkId : works[0].workId;
+    if (effectiveWorkId !== activeWorkId) {
+      setActiveWorkId(effectiveWorkId);
+    }
+
+    const currentWork = works.find((w) => w.workId === effectiveWorkId);
+    const tasks = currentWork?.tasks || [];
+    if (tasks.length === 0) {
+      if (activeTaskId !== null) setActiveTaskId(null);
+      return;
+    }
+
+    const getTId = (t) => (typeof t === "object" ? t.taskId : t);
+    const currentTaskExists = tasks.some((t) => getTId(t) === activeTaskId);
+    const effectiveTaskId = currentTaskExists ? activeTaskId : getTId(tasks[0]);
+    if (effectiveTaskId !== activeTaskId) {
+      setActiveTaskId(effectiveTaskId);
+    }
+  }, [wbsStructure, activeStageId, activeWorkId, activeTaskId]);
 
   const removeStage = (stageId) => {
     setWbsStructure((prev) => ({
@@ -650,6 +726,223 @@ const CreatePmsTemplateComponent = () => {
 
   const handleClearAllWbs = () => {
     setWbsStructure({ stages: [] });
+    setActiveStageId(null);
+    setActiveWorkId(null);
+    setActiveTaskId(null);
+  };
+
+  // Update field value for a specific Work
+  const updateWorkField = (stageId, workId, field, value) => {
+    setWbsStructure((prev) => ({
+      stages: (prev.stages || []).map((s) => {
+        if (s.stageId !== stageId) return s;
+        return {
+          ...s,
+          works: (s.works || []).map((w) => {
+            if (w.workId !== workId) return w;
+            return { ...w, [field]: value };
+          })
+        };
+      })
+    }));
+  };
+
+  // Update field value for a specific Task
+  const updateTaskField = (stageId, workId, taskId, field, value) => {
+    setWbsStructure((prev) => ({
+      stages: (prev.stages || []).map((s) => {
+        if (s.stageId !== stageId) return s;
+        return {
+          ...s,
+          works: (s.works || []).map((w) => {
+            if (w.workId !== workId) return w;
+            return {
+              ...w,
+              tasks: (w.tasks || []).map((t) => {
+                const curId = typeof t === "object" ? t.taskId : t;
+                if (curId !== taskId) return t;
+                const baseObj = typeof t === "object" ? t : { taskId: t, ...DEFAULT_STAGE_DETAILS };
+                return { ...baseObj, [field]: value };
+              })
+            };
+          })
+        };
+      })
+    }));
+  };
+
+  // Copy execution details from parent Stage down to Work
+  const copyStageToWork = (stageId, workId) => {
+    const targetStage = (wbsStructure.stages || []).find((s) => s.stageId === stageId);
+    if (!targetStage) return;
+    setWbsStructure((prev) => ({
+      stages: (prev.stages || []).map((s) => {
+        if (s.stageId !== stageId) return s;
+        return {
+          ...s,
+          works: (s.works || []).map((w) => {
+            if (w.workId !== workId) return w;
+            return {
+              ...w,
+              workWillDoneBy: targetStage.workWillDoneBy || w.workWillDoneBy,
+              contractorType: targetStage.contractorType || w.contractorType,
+              toolsVehicles: Array.isArray(targetStage.toolsVehicles)
+                ? [...targetStage.toolsVehicles]
+                : w.toolsVehicles,
+              materialRequired: targetStage.materialRequired || w.materialRequired,
+              materialDetails: targetStage.materialDetails || w.materialDetails,
+              supplierType: targetStage.supplierType || w.supplierType,
+              supplierName: targetStage.supplierName || w.supplierName,
+              maxTimeToComplete: targetStage.maxTimeToComplete || w.maxTimeToComplete,
+              timeUnit: targetStage.timeUnit || w.timeUnit,
+              deadlineDate: targetStage.deadlineDate || w.deadlineDate,
+              durationDays: targetStage.durationDays || w.durationDays,
+              durationHours: targetStage.durationHours || w.durationHours,
+              instruction: targetStage.instruction || w.instruction,
+              remark: targetStage.remark || w.remark
+            };
+          })
+        };
+      })
+    }));
+    toast.info(`Copied details from Stage ${stageId} to Work ${workId}`);
+  };
+
+  // Copy execution details from parent Work down to Task
+  const copyWorkToTask = (stageId, workId, taskId) => {
+    const targetStage = (wbsStructure.stages || []).find((s) => s.stageId === stageId);
+    const targetWork = targetStage?.works?.find((w) => w.workId === workId);
+    if (!targetWork) return;
+
+    setWbsStructure((prev) => ({
+      stages: (prev.stages || []).map((s) => {
+        if (s.stageId !== stageId) return s;
+        return {
+          ...s,
+          works: (s.works || []).map((w) => {
+            if (w.workId !== workId) return w;
+            return {
+              ...w,
+              tasks: (w.tasks || []).map((t) => {
+                const curId = typeof t === "object" ? t.taskId : t;
+                if (curId !== taskId) return t;
+                const baseObj = typeof t === "object" ? t : { taskId: t };
+                return {
+                  ...baseObj,
+                  workWillDoneBy: targetWork.workWillDoneBy || baseObj.workWillDoneBy,
+                  contractorType: targetWork.contractorType || baseObj.contractorType,
+                  toolsVehicles: Array.isArray(targetWork.toolsVehicles)
+                    ? [...targetWork.toolsVehicles]
+                    : baseObj.toolsVehicles,
+                  materialRequired: targetWork.materialRequired || baseObj.materialRequired,
+                  materialDetails: targetWork.materialDetails || baseObj.materialDetails,
+                  supplierType: targetWork.supplierType || baseObj.supplierType,
+                  supplierName: targetWork.supplierName || baseObj.supplierName,
+                  maxTimeToComplete: targetWork.maxTimeToComplete || baseObj.maxTimeToComplete,
+                  timeUnit: targetWork.timeUnit || baseObj.timeUnit,
+                  deadlineDate: targetWork.deadlineDate || baseObj.deadlineDate,
+                  durationDays: targetWork.durationDays || baseObj.durationDays,
+                  durationHours: targetWork.durationHours || baseObj.durationHours,
+                  instruction: targetWork.instruction || baseObj.instruction,
+                  remark: targetWork.remark || baseObj.remark
+                };
+              })
+            };
+          })
+        };
+      })
+    }));
+    toast.info(`Copied details from Work ${workId} to Task ${taskId}`);
+  };
+
+  // Bulk apply execution details from Stage down to ALL its works
+  const applyStageToAllWorks = (stageId) => {
+    const targetStage = (wbsStructure.stages || []).find((s) => s.stageId === stageId);
+    if (!targetStage) return;
+    const worksCount = targetStage.works?.length || 0;
+    if (worksCount === 0) {
+      toast.warning(`No works selected under Stage ${stageId} yet.`);
+      return;
+    }
+
+    setWbsStructure((prev) => ({
+      stages: (prev.stages || []).map((s) => {
+        if (s.stageId !== stageId) return s;
+        return {
+          ...s,
+          works: (s.works || []).map((w) => ({
+            ...w,
+            workWillDoneBy: targetStage.workWillDoneBy || w.workWillDoneBy,
+            contractorType: targetStage.contractorType || w.contractorType,
+            toolsVehicles: Array.isArray(targetStage.toolsVehicles)
+              ? [...targetStage.toolsVehicles]
+              : w.toolsVehicles,
+            materialRequired: targetStage.materialRequired || w.materialRequired,
+            materialDetails: targetStage.materialDetails || w.materialDetails,
+            supplierType: targetStage.supplierType || w.supplierType,
+            supplierName: targetStage.supplierName || w.supplierName,
+            maxTimeToComplete: targetStage.maxTimeToComplete || w.maxTimeToComplete,
+            timeUnit: targetStage.timeUnit || w.timeUnit,
+            deadlineDate: targetStage.deadlineDate || w.deadlineDate,
+            durationDays: targetStage.durationDays || w.durationDays,
+            durationHours: targetStage.durationHours || w.durationHours,
+            instruction: targetStage.instruction || w.instruction,
+            remark: targetStage.remark || w.remark
+          }))
+        };
+      })
+    }));
+    toast.success(`Applied Stage ${stageId} details to all ${worksCount} works!`);
+  };
+
+  // Bulk apply execution details from Work down to ALL its tasks
+  const applyWorkToAllTasks = (stageId, workId) => {
+    const targetStage = (wbsStructure.stages || []).find((s) => s.stageId === stageId);
+    const targetWork = targetStage?.works?.find((w) => w.workId === workId);
+    if (!targetWork) return;
+    const tasksCount = targetWork.tasks?.length || 0;
+    if (tasksCount === 0) {
+      toast.warning(`No tasks selected under Work ${workId} yet.`);
+      return;
+    }
+
+    setWbsStructure((prev) => ({
+      stages: (prev.stages || []).map((s) => {
+        if (s.stageId !== stageId) return s;
+        return {
+          ...s,
+          works: (s.works || []).map((w) => {
+            if (w.workId !== workId) return w;
+            return {
+              ...w,
+              tasks: (w.tasks || []).map((t) => {
+                const baseObj = typeof t === "object" ? t : { taskId: t };
+                return {
+                  ...baseObj,
+                  workWillDoneBy: targetWork.workWillDoneBy || baseObj.workWillDoneBy,
+                  contractorType: targetWork.contractorType || baseObj.contractorType,
+                  toolsVehicles: Array.isArray(targetWork.toolsVehicles)
+                    ? [...targetWork.toolsVehicles]
+                    : baseObj.toolsVehicles,
+                  materialRequired: targetWork.materialRequired || baseObj.materialRequired,
+                  materialDetails: targetWork.materialDetails || baseObj.materialDetails,
+                  supplierType: targetWork.supplierType || baseObj.supplierType,
+                  supplierName: targetWork.supplierName || baseObj.supplierName,
+                  maxTimeToComplete: targetWork.maxTimeToComplete || baseObj.maxTimeToComplete,
+                  timeUnit: targetWork.timeUnit || baseObj.timeUnit,
+                  deadlineDate: targetWork.deadlineDate || baseObj.deadlineDate,
+                  durationDays: targetWork.durationDays || baseObj.durationDays,
+                  durationHours: targetWork.durationHours || baseObj.durationHours,
+                  instruction: targetWork.instruction || baseObj.instruction,
+                  remark: targetWork.remark || baseObj.remark
+                };
+              })
+            };
+          })
+        };
+      })
+    }));
+    toast.success(`Applied Work ${workId} details to all ${tasksCount} tasks!`);
   };
 
   // Live count computations
@@ -669,11 +962,30 @@ const CreatePmsTemplateComponent = () => {
     [stagesList]
   );
 
+  // Auto-save draft to localStorage
+  useEffect(() => {
+    if (!isEdit && stagesList.length > 0) {
+      const draftTimer = setTimeout(() => {
+        try {
+          localStorage.setItem(
+            "pms_template_create_draft",
+            JSON.stringify({ wbsStructure, formData, savedAt: new Date().toISOString() })
+          );
+        } catch (e) {
+          // ignore quota
+        }
+      }, 1000);
+      return () => clearTimeout(draftTimer);
+    }
+  }, [wbsStructure, formData, isEdit, stagesList.length]);
+
   // Synchronize wbsStructure into primary formData fields (stage, work, task)
   useEffect(() => {
     const allStages = (wbsStructure.stages || []).map((s) => s.stageId);
     const allWorks = (wbsStructure.stages || []).flatMap((s) => (s.works || []).map((w) => w.workId));
-    const allTasks = (wbsStructure.stages || []).flatMap((s) => (s.works || []).flatMap((w) => w.tasks || []));
+    const allTasks = (wbsStructure.stages || []).flatMap((s) =>
+      (s.works || []).flatMap((w) => (w.tasks || []).map((t) => (typeof t === "object" ? t.taskId : t)))
+    );
 
     setFormData((prev) => ({
       ...prev,
@@ -683,14 +995,31 @@ const CreatePmsTemplateComponent = () => {
     }));
   }, [wbsStructure]);
 
-  // Work Will Done By selection -> auto-fills Contractor Type & suggestions
-  const handleSelectWorkDoneBy = (workerOrContractor) => {
+  // Update field value for a specific Stage
+  const updateStageField = (stageId, field, value) => {
+    setWbsStructure((prev) => ({
+      stages: (prev.stages || []).map((s) =>
+        s.stageId === stageId ? { ...s, [field]: value } : s
+      )
+    }));
+    if (errors[`${stageId}_${field}`]) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next[`${stageId}_${field}`];
+        return next;
+      });
+    }
+  };
+
+  // Work Will Done By selection -> auto-fills Contractor Type & suggestions for that Stage
+  const handleSelectWorkDoneBy = (stageId, workerOrContractor) => {
     const foundContractor = contractorList.find(
       (c) => c.name.toLowerCase() === workerOrContractor.toLowerCase()
     );
 
-    let updatedTools = [...formData.toolsVehicles];
-    let matchedType = formData.contractorType;
+    const targetStage = (wbsStructure.stages || []).find((s) => s.stageId === stageId);
+    let updatedTools = Array.isArray(targetStage?.toolsVehicles) ? [...targetStage.toolsVehicles] : [];
+    let matchedType = targetStage?.contractorType || "";
 
     if (foundContractor) {
       matchedType = foundContractor.contractorType || matchedType;
@@ -711,15 +1040,27 @@ const CreatePmsTemplateComponent = () => {
       if (!updatedTools.includes("DURMUT")) updatedTools.push("DURMUT");
     }
 
-    setFormData((prev) => ({
-      ...prev,
-      workWillDoneBy: workerOrContractor,
-      contractorType: matchedType,
-      toolsVehicles: updatedTools
+    setWbsStructure((prev) => ({
+      stages: (prev.stages || []).map((s) =>
+        s.stageId === stageId
+          ? {
+              ...s,
+              workWillDoneBy: workerOrContractor,
+              contractorType: matchedType,
+              toolsVehicles: updatedTools
+            }
+          : s
+      )
     }));
 
-    setIsContractorOpen(false);
-    if (errors.workWillDoneBy) setErrors((prev) => ({ ...prev, workWillDoneBy: "" }));
+    setActiveDropdown(null);
+    if (errors[`${stageId}_workWillDoneBy`]) {
+      setErrors((prev) => {
+        const next = { ...prev };
+        delete next[`${stageId}_workWillDoneBy`];
+        return next;
+      });
+    }
   };
 
   // Presales Client selection -> auto-fills Project Details
@@ -732,49 +1073,65 @@ const CreatePmsTemplateComponent = () => {
     setIsClientOpen(false);
   };
 
-  // Material selection -> auto-fills Material Details & Preferred Supplier
-  const handleSelectMaterial = (mat) => {
-    let autoSuppType = formData.supplierType;
-    let autoSuppName = formData.supplierName;
+  // Material selection -> auto-fills Material Details & Preferred Supplier for that Stage
+  const handleSelectMaterial = (stageId, mat) => {
+    const targetStage = (wbsStructure.stages || []).find((s) => s.stageId === stageId);
+    let autoSuppType = targetStage?.supplierType || "";
+    let autoSuppName = targetStage?.supplierName || "";
 
     if (mat.supplier) {
       autoSuppName = mat.supplier;
       if (mat.supplierType) autoSuppType = mat.supplierType;
     }
 
-    setFormData((prev) => ({
-      ...prev,
-      materialRequired: mat.name,
-      materialDetails: mat.details || prev.materialDetails,
-      supplierName: autoSuppName,
-      supplierType: autoSuppType
+    setWbsStructure((prev) => ({
+      stages: (prev.stages || []).map((s) =>
+        s.stageId === stageId
+          ? {
+              ...s,
+              materialRequired: mat.name,
+              materialDetails: mat.details || s.materialDetails,
+              supplierName: autoSuppName,
+              supplierType: autoSuppType
+            }
+          : s
+      )
     }));
 
-    setIsMaterialOpen(false);
+    setActiveDropdown(null);
   };
 
-  // Supplier selection -> auto-fills Supplier Type
-  const handleSelectSupplier = (supp) => {
-    setFormData((prev) => ({
-      ...prev,
-      supplierName: supp.name,
-      supplierType: supp.supplierType || prev.supplierType
+  // Supplier selection -> auto-fills Supplier Type for that Stage
+  const handleSelectSupplier = (stageId, supp) => {
+    setWbsStructure((prev) => ({
+      stages: (prev.stages || []).map((s) =>
+        s.stageId === stageId
+          ? {
+              ...s,
+              supplierName: supp.name,
+              supplierType: supp.supplierType || s.supplierType
+            }
+          : s
+      )
     }));
-    setIsSupplierOpen(false);
+
+    setActiveDropdown(null);
   };
 
-  // Toggle Tool / Vehicle multi-select
-  const handleToggleTool = (tool) => {
-    setFormData((prev) => {
-      const exists = prev.toolsVehicles.includes(tool);
-      const updated = exists
-        ? prev.toolsVehicles.filter((t) => t !== tool)
-        : [...prev.toolsVehicles, tool];
-      return { ...prev, toolsVehicles: updated };
-    });
+  // Toggle Tool / Vehicle multi-select for that Stage
+  const handleToggleTool = (stageId, tool) => {
+    setWbsStructure((prev) => ({
+      stages: (prev.stages || []).map((s) => {
+        if (s.stageId !== stageId) return s;
+        const cur = Array.isArray(s.toolsVehicles) ? s.toolsVehicles : [];
+        const exists = cur.includes(tool);
+        const updated = exists ? cur.filter((t) => t !== tool) : [...cur, tool];
+        return { ...s, toolsVehicles: updated };
+      })
+    }));
   };
 
-  // Validate form required fields
+  // Validate form required fields (including per-stage execution requirements)
   const validateForm = () => {
     const errs = {};
 
@@ -784,16 +1141,20 @@ const CreatePmsTemplateComponent = () => {
     // 2. WBS hierarchy (Requires at least one Stage selected)
     if (!wbsStructure.stages || wbsStructure.stages.length === 0) {
       errs.stage = "Please select at least one Stage";
-    }
-
-    // 5. Work Will Done By (Required)
-    if (!formData.workWillDoneBy || !formData.workWillDoneBy.trim()) {
-      errs.workWillDoneBy = "Executing party / worker is required";
-    }
-
-    // 6. Contractor Type (Conditional: required if contractor chosen)
-    if (formData.workWillDoneBy && !DEFAULT_WORK_WILL_DONE_BY.includes(formData.workWillDoneBy) && !formData.contractorType) {
-      errs.contractorType = "Contractor Type is required for contractor execution";
+    } else {
+      // Validate each stage has Work Will Done By & Contractor Type if applicable
+      wbsStructure.stages.forEach((stage) => {
+        if (!stage.workWillDoneBy || !stage.workWillDoneBy.trim()) {
+          errs[`${stage.stageId}_workWillDoneBy`] = `Work Done By is required for Stage ${stage.stageId}`;
+        }
+        if (
+          stage.workWillDoneBy &&
+          !DEFAULT_WORK_WILL_DONE_BY.includes(stage.workWillDoneBy) &&
+          !stage.contractorType
+        ) {
+          errs[`${stage.stageId}_contractorType`] = `Contractor Type is required for Stage ${stage.stageId}`;
+        }
+      });
     }
 
     setErrors(errs);
@@ -815,14 +1176,17 @@ const CreatePmsTemplateComponent = () => {
     setLoading(true);
 
     try {
-      const durationFormatted = `${formData.durationDays || 0} D ; ${formData.durationHours || 0} H`;
-
       const allStages = (wbsStructure.stages || []).map((s) => s.stageId);
       const allWorks = (wbsStructure.stages || []).flatMap((s) => (s.works || []).map((w) => w.workId));
-      const allTasks = (wbsStructure.stages || []).flatMap((s) => (s.works || []).flatMap((w) => w.tasks || []));
+      const allTasks = (wbsStructure.stages || []).flatMap((s) =>
+        (s.works || []).flatMap((w) => (w.tasks || []).map((t) => (typeof t === "object" ? t.taskId : t)))
+      );
 
       const primaryTaskCode =
         allTasks[0] || (formData.task && formData.task !== "--" ? formData.task : `TSK-${Date.now().toString().slice(-4)}`);
+
+      const firstStage = wbsStructure.stages[0] || {};
+      const durationFormatted = `${firstStage.durationDays || 0} D ; ${firstStage.durationHours || 0} H`;
 
       const taskPayload = {
         ...formData,
@@ -830,8 +1194,23 @@ const CreatePmsTemplateComponent = () => {
         work: allWorks.join(", ") || formData.work || "",
         task: primaryTaskCode,
         wbsStructure,
-        id: formData.id || "TSK-" + Math.floor(100 + Math.random() * 900),
+        // Backward compatibility fallback for table views
+        workWillDoneBy: firstStage.workWillDoneBy || "",
+        contractorType: firstStage.contractorType || "",
+        toolsVehicles: firstStage.toolsVehicles || [],
+        materialRequired: firstStage.materialRequired || "",
+        materialDetails: firstStage.materialDetails || "",
+        supplierType: firstStage.supplierType || "",
+        supplierName: firstStage.supplierName || "",
+        maxTimeToComplete: firstStage.maxTimeToComplete || "3",
+        timeUnit: firstStage.timeUnit || "Days",
+        deadlineDate: firstStage.deadlineDate || "",
+        durationDays: firstStage.durationDays || "3",
+        durationHours: firstStage.durationHours || "0",
         durationFormatted,
+        instruction: firstStage.instruction || "",
+        remark: firstStage.remark || "",
+        id: formData.id || "TSK-" + Math.floor(100 + Math.random() * 900),
         updatedAt: new Date().toISOString()
       };
 
@@ -1100,9 +1479,21 @@ const CreatePmsTemplateComponent = () => {
                     <span className="w-2 h-2 rounded-full bg-indigo-600"></span>
                     Select Stage(s) <span className="text-red-500">*</span>
                   </label>
-                  <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
-                    {wbsStages.length} Total Available
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {stagesList.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => handleStagesChange([])}
+                        className="text-[10px] font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2 py-0.5 rounded-md cursor-pointer transition-colors"
+                        title="Clear all selected stages"
+                      >
+                        Clear All
+                      </button>
+                    )}
+                    <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                      {wbsStages.length} Total Available
+                    </span>
+                  </div>
                 </div>
                 <ReactSelectMulti
                   options={stageOptions}
@@ -1117,7 +1508,7 @@ const CreatePmsTemplateComponent = () => {
               </div>
             </div>
 
-            {/* Stage Cards Body */}
+            {/* Stage Body */}
             <div className="p-4 sm:p-5 bg-slate-50/40 space-y-4">
               {stagesList.length === 0 ? (
                 <div className="py-12 text-center border-2 border-dashed border-slate-200 rounded-2xl bg-white">
@@ -1130,568 +1521,654 @@ const CreatePmsTemplateComponent = () => {
                   </p>
                 </div>
               ) : (
-                stagesList.map((stage) => {
-                  const sObj = wbsStages.find((s) => (s.stage_code || s.id) === stage.stageId);
-                  const availableWorks = getWorksForStage(stage.stageId);
-                  const selectedWorks = stage.works || [];
-                  const isExpanded = expandedStages[stage.stageId] !== false;
-                  const stageTasksCount = selectedWorks.reduce(
-                    (sum, w) => sum + (w.tasks?.length || 0),
-                    0
-                  );
+                /* ==================== 1. INTERACTIVE STEPPER FLOW VIEW (CHART UI) ==================== */
+                (() => {
+                  const activeStage =
+                    stagesList.find((s) => s.stageId === activeStageId) || stagesList[0];
+                  const activeStageWorks = activeStage?.works || [];
+                  const activeWork =
+                    activeStageWorks.find((w) => w.workId === activeWorkId) || activeStageWorks[0];
+                  const activeWorkTasks = activeWork?.tasks || [];
+                  const activeTaskRaw =
+                    activeWorkTasks.find(
+                      (t) => (typeof t === "object" ? t.taskId : t) === activeTaskId
+                    ) || activeWorkTasks[0];
+                  const activeTaskIdEffective =
+                    typeof activeTaskRaw === "object" ? activeTaskRaw.taskId : activeTaskRaw;
+                  const activeTaskObj =
+                    typeof activeTaskRaw === "object"
+                      ? activeTaskRaw
+                      : activeTaskRaw
+                      ? { taskId: activeTaskRaw, ...DEFAULT_STAGE_DETAILS }
+                      : null;
+
+                  // Bottom-up Hierarchical Completion Logic:
+                  // 1. Task complete when workWillDoneBy is filled
+                  const isTaskComplete = (task) => {
+                    if (!task) return false;
+                    const obj = typeof task === "object" ? task : null;
+                    if (!obj) return false;
+                    return Boolean(obj.workWillDoneBy && String(obj.workWillDoneBy).trim() !== "");
+                  };
+
+                  // 2. Work complete: Work must have at least 1 task, its own mandatory field filled, AND all child tasks complete
+                  const isWorkComplete = (work) => {
+                    if (!work) return false;
+                    const ownFilled = Boolean(work.workWillDoneBy && String(work.workWillDoneBy).trim() !== "");
+                    const tasks = work.tasks || [];
+                    if (tasks.length === 0) return false;
+                    const allTasksDone = tasks.every((t) => isTaskComplete(t));
+                    return ownFilled && allTasksDone;
+                  };
+
+                  // 3. Stage complete: Stage must have at least 1 work, its own mandatory field filled, AND all child works complete
+                  const isStageComplete = (stg) => {
+                    if (!stg) return false;
+                    const ownFilled = Boolean(stg.workWillDoneBy && String(stg.workWillDoneBy).trim() !== "");
+                    const works = stg.works || [];
+                    if (works.length === 0) return false;
+                    const allWorksDone = works.every((w) => isWorkComplete(w));
+                    return ownFilled && allWorksDone;
+                  };
+
+                  const sIdxCurrent = stagesList.findIndex((s) => s.stageId === activeStage?.stageId);
+                  const wIdxCurrent = activeStageWorks.findIndex((w) => w.workId === activeWork?.workId);
 
                   return (
-                    <div
-                      key={stage.stageId}
-                      className="rounded-xl border border-slate-200/90 bg-white shadow-xs border-l-4 border-l-indigo-600 overflow-hidden transition-all hover:shadow-sm"
-                    >
-                      {/* Stage Header */}
-                      <div className="px-4 py-3 bg-gradient-to-r from-slate-50 to-white border-b border-slate-100 flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2.5 min-w-0">
-                          <button
-                            type="button"
-                            onClick={() => toggleStageExpanded(stage.stageId)}
-                            className="w-7 h-7 rounded-lg bg-white border border-slate-200 text-slate-600 flex items-center justify-center hover:text-indigo-600 hover:border-indigo-300 transition-colors shadow-2xs cursor-pointer shrink-0"
-                            title={isExpanded ? "Collapse stage" : "Expand stage"}
-                          >
-                            <FaChevronDown
-                              className={`w-3 h-3 transition-transform duration-200 ${
-                                isExpanded ? "" : "-rotate-90"
-                              }`}
-                            />
-                          </button>
-                          <div className="flex items-center gap-2 flex-wrap min-w-0">
-                            <span className="px-2 py-0.5 rounded-md bg-indigo-600 text-white text-[11px] font-black tracking-wide shrink-0">
-                              STAGE {stage.stageId}
-                            </span>
-                            {sObj?.stage_name && (
-                              <span
-                                className="text-xs font-bold text-slate-800 truncate"
-                                title={sObj.stage_name}
-                              >
-                                {sObj.stage_name}
-                              </span>
-                            )}
-                          </div>
+                    <div className="space-y-4">
+                      {/* LEVEL 1: STAGE STEPPER PIPELINE (S1 ──➔── S2 ──➔── S3) */}
+                      <div className="bg-white p-4 rounded-xl border-2 border-indigo-200/90 shadow-xs">
+                        <div className="flex items-center justify-between mb-2.5">
+                          <span className="text-xs font-black uppercase tracking-wider text-indigo-900 flex items-center gap-1.5">
+                            <span className="w-2 h-2 rounded-full bg-indigo-600"></span>
+                            Stage Pipeline Stepper
+                          </span>
+                          <span className="text-[11px] text-slate-400 font-medium">
+                            Select a stage to view & define its field data, works & tasks
+                          </span>
                         </div>
+                        <div className="overflow-x-auto pb-2">
+                          <div className="flex items-center min-w-max py-2 px-1">
+                            {stagesList.map((stg, sIdx) => {
+                              const sMeta = wbsStages.find(
+                                (s) => (s.stage_code || s.id) === stg.stageId
+                              );
+                              const isStgActive = activeStage?.stageId === stg.stageId;
+                              const isStgDone = isStageComplete(stg);
+                              const stgWorks = stg.works || [];
+                              const stgWorksCount = stgWorks.length;
+                              const stgTasksCount = stgWorks.reduce(
+                                (sum, w) => sum + (w.tasks?.length || 0),
+                                0
+                              );
+                              const pendingWorksCount = stgWorks.filter((w) => !isWorkComplete(w)).length;
 
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-[10px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
-                            {selectedWorks.length} Work{selectedWorks.length === 1 ? "" : "s"}
-                          </span>
-                          <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                            {stageTasksCount} Task{stageTasksCount === 1 ? "" : "s"}
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => removeStage(stage.stageId)}
-                            className="w-7 h-7 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer ml-1"
-                            title="Remove stage"
-                          >
-                            <FaTimes className="w-3.5 h-3.5" />
-                          </button>
+                              return (
+                                <React.Fragment key={stg.stageId}>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setActiveStageId(stg.stageId);
+                                      const firstWork = stg.works?.[0];
+                                      if (firstWork) {
+                                        setActiveWorkId(firstWork.workId);
+                                        const firstTask = firstWork.tasks?.[0];
+                                        if (firstTask) {
+                                          setActiveTaskId(
+                                            typeof firstTask === "object"
+                                              ? firstTask.taskId
+                                              : firstTask
+                                          );
+                                        }
+                                      }
+                                    }}
+                                    className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border transition-all cursor-pointer text-left ${
+                                      isStgActive
+                                        ? "bg-white text-slate-900 border-2 border-indigo-600 shadow-xs ring-3 ring-indigo-100/70 scale-[1.01]"
+                                        : "bg-white text-slate-700 border border-slate-200/90 hover:border-slate-300 hover:bg-slate-50/70"
+                                    }`}
+                                  >
+                                    <div
+                                      className={`w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs shrink-0 transition-colors ${
+                                        isStgActive
+                                          ? "bg-indigo-600 text-white shadow-2xs"
+                                          : isStgDone
+                                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200 font-extrabold"
+                                          : "bg-slate-100 text-slate-600"
+                                      }`}
+                                    >
+                                      {stg.stageId}
+                                    </div>
+                                    <div className="min-w-0">
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-xs font-bold truncate max-w-[130px] text-slate-900">
+                                          {sMeta?.stage_name || `Stage ${stg.stageId}`}
+                                        </span>
+                                        {isStgDone ? (
+                                          <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 flex items-center gap-0.5 shrink-0">
+                                            <FaCheckCircle className="w-2 h-2 text-emerald-600" /> Complete
+                                          </span>
+                                        ) : pendingWorksCount > 0 ? (
+                                          <span
+                                            className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 flex items-center gap-0.5 shrink-0"
+                                            title={`${pendingWorksCount} work(s) incomplete`}
+                                          >
+                                            <FaExclamationCircle className="w-2 h-2 text-amber-500" /> {pendingWorksCount} Pending
+                                          </span>
+                                        ) : (
+                                          <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 flex items-center gap-0.5 shrink-0">
+                                            <FaExclamationCircle className="w-2 h-2 text-amber-500" /> Pending
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="text-[10px] font-medium text-slate-400 flex items-center gap-1.5 mt-0.5">
+                                        <span>{stgWorksCount} Works</span>
+                                        <span>•</span>
+                                        <span>{stgTasksCount} Tasks</span>
+                                      </div>
+                                    </div>
+                                  </button>
+
+                                  {/* Thick prominent connecting arrow with circular node */}
+                                  {sIdx < stagesList.length - 1 && (
+                                    <div className="flex items-center px-2 shrink-0 select-none">
+                                      <div
+                                        className={`w-4 h-[3px] rounded-l-full transition-colors ${
+                                          isStgDone ? "bg-emerald-400" : "bg-slate-300"
+                                        }`}
+                                      />
+                                      <div
+                                        className={`w-7 h-7 rounded-full flex items-center justify-center border-2 transition-all shadow-2xs shrink-0 ${
+                                          isStgDone
+                                            ? "bg-emerald-50 border-emerald-500 text-emerald-600"
+                                            : "bg-white border-slate-300 text-slate-400"
+                                        }`}
+                                        title={
+                                          isStgDone
+                                            ? "Stage & all its works/tasks completed - Ready for next stage"
+                                            : "Stage or child works/tasks pending"
+                                        }
+                                      >
+                                        <FaArrowRight className="w-3 h-3" />
+                                      </div>
+                                      <div
+                                        className={`w-4 h-[3px] rounded-r-full transition-colors ${
+                                          isStgDone ? "bg-emerald-400" : "bg-slate-300"
+                                        }`}
+                                      />
+                                    </div>
+                                  )}
+                                </React.Fragment>
+                              );
+                            })}
+                          </div>
                         </div>
                       </div>
 
-                      {/* Stage Body */}
-                      {isExpanded && (
-                        <div className="p-4 sm:p-5 space-y-4">
-                          {/* Level 2: Works Multi-Select */}
-                          <div>
-                            <div className="flex items-center justify-between mb-1.5">
-                              <label className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
-                                Works for Stage {stage.stageId}
-                              </label>
-                              <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full border border-blue-100">
-                                Select any number of works
-                              </span>
-                            </div>
-                            <ReactSelectMulti
-                              options={availableWorks}
-                              value={selectedWorks.map((w) => w.workId)}
-                              onChange={(newWorkIds) => handleWorksChange(stage.stageId, newWorkIds)}
-                              placeholder={`Search & select works for Stage ${stage.stageId}...`}
-                              themeColor="blue"
-                              allowSelectAll={true}
+                      {/* ACTIVE STAGE CARD */}
+                      {activeStage && (
+                        <div className="space-y-5 bg-white p-5 rounded-2xl border-[3px] border-indigo-500 shadow-md ring-4 ring-indigo-100/70">
+                          {/* 1. STAGE LEVEL EXECUTION & RESOURCE FIELD DATA */}
+                          <div className="space-y-2">
+                            <ExecutionResourceFieldData
+                              title={`STAGE ${activeStage.stageId} — EXECUTION & RESOURCE DETAILS`}
+                              subtitle={`Configure execution team, materials & timeline for Stage ${activeStage.stageId}`}
+                              level="stage"
+                              badge={`STAGE ${activeStage.stageId}`}
+                              data={activeStage}
+                              onChange={(field, val) =>
+                                updateStageField(activeStage.stageId, field, val)
+                              }
+                              onApplyToAllChildren={() => applyStageToAllWorks(activeStage.stageId)}
+                              applyToAllLabel={`Apply to All ${activeStageWorks.length} Works`}
+                              contractorList={contractorList}
+                              materialList={materialList}
+                              supplierList={supplierList}
+                              toolsOptions={TOOLS_VEHICLES_MASTER}
+                              errors={{
+                                workWillDoneBy: errors[`${activeStage.stageId}_workWillDoneBy`],
+                                contractorType: errors[`${activeStage.stageId}_contractorType`]
+                              }}
                             />
                           </div>
 
-                          {/* Level 3: Task Mapping for Selected Works (Image 2 Replica) */}
-                          {selectedWorks.length > 0 && (
-                            <div className="mt-4 pt-3 border-t border-slate-100 space-y-3">
-                              <div className="flex items-center gap-2">
-                                <div className="h-px flex-1 bg-slate-200" />
-                                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 bg-white px-2.5 py-0.5 rounded-md border border-slate-200 shadow-2xs">
-                                  Task Mapping Under Selected Works
-                                </span>
-                                <div className="h-px flex-1 bg-slate-200" />
+                          {/* 2. WORKS UNDER ACTIVE STAGE */}
+                          <div className="pt-4 border-t-2 border-indigo-200 space-y-4">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2.5 bg-blue-100 border-2 border-blue-300 px-3.5 py-1.5 rounded-xl shadow-2xs">
+                                <div className="w-2.5 h-2.5 rounded-full bg-blue-600 shrink-0" />
+                                <h4 className="text-xs font-black uppercase tracking-wider text-blue-950">
+                                  Works for Stage {activeStage.stageId}
+                                </h4>
                               </div>
-
-                              {selectedWorks.map((work) => {
-                                const wObj = wbsWorks.find(
-                                  (w) => (w.work_code || w.id) === work.workId
-                                );
-                                const availableTasks = getTasksForWork(work.workId);
-                                const selectedTasks = work.tasks || [];
-
-                                return (
-                                  <div
-                                    key={work.workId}
-                                    className="rounded-xl border border-slate-200/90 bg-slate-50/40 hover:bg-slate-50/80 p-3.5 space-y-2.5 border-l-4 border-l-blue-500 shadow-2xs transition-all"
+                              <div className="flex items-center gap-2">
+                                {activeStageWorks.length > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleWorksChange(activeStage.stageId, [])}
+                                    className="text-[10px] font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2 py-0.5 rounded-md cursor-pointer transition-colors"
+                                    title={`Clear all works for Stage ${activeStage.stageId}`}
                                   >
-                                    <div className="flex items-center justify-between gap-2">
-                                      <div className="flex items-center gap-2 min-w-0">
-                                        <div className="w-6 h-6 rounded-md bg-blue-600 text-white text-[10px] font-black flex items-center justify-center shrink-0 shadow-2xs">
-                                          W
-                                        </div>
-                                        <div className="truncate flex items-center gap-2">
-                                          <span className="text-xs font-bold text-slate-800 tracking-tight">
-                                            {work.workId}
-                                          </span>
-                                          {wObj?.work_name && (
-                                            <span
-                                              className="text-xs font-medium text-slate-600 truncate"
-                                              title={wObj.work_name}
-                                            >
-                                              - {wObj.work_name}
-                                            </span>
-                                          )}
-                                          <span className="text-[10px] font-semibold text-slate-500">
-                                            ({selectedTasks.length} task
-                                            {selectedTasks.length === 1 ? "" : "s"} selected)
-                                          </span>
-                                        </div>
-                                      </div>
-                                      <div className="flex items-center gap-2">
-                                        <button
-                                          type="button"
-                                          onClick={() => removeWork(stage.stageId, work.workId)}
-                                          className="p-1 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors cursor-pointer"
-                                          title="Remove work"
-                                        >
-                                          <FaTimes className="w-3 h-3" />
-                                        </button>
-                                      </div>
-                                    </div>
-
-                                    {/* Task multi-select dropdown */}
-                                    <ReactSelectMulti
-                                      options={availableTasks}
-                                      value={selectedTasks}
-                                      onChange={(newTaskIds) =>
-                                        handleTasksChange(stage.stageId, work.workId, newTaskIds)
-                                      }
-                                      placeholder={`Search & assign tasks for ${work.workId}...`}
-                                      themeColor="emerald"
-                                      allowSelectAll={true}
-                                    />
-                                  </div>
-                                );
-                              })}
+                                    Clear All
+                                  </button>
+                                )}
+                                <span className="text-[10px] font-bold text-blue-800 bg-blue-100 border border-blue-300 px-2.5 py-0.5 rounded-full">
+                                  {activeStageWorks.length} Selected
+                                </span>
+                              </div>
                             </div>
-                          )}
+                            <ReactSelectMulti
+                              options={getWorksForStage(activeStage.stageId)}
+                              value={activeStageWorks.map((w) => w.workId)}
+                              onChange={(newWorkIds) =>
+                                handleWorksChange(activeStage.stageId, newWorkIds)
+                              }
+                              placeholder={`Search & select works for Stage ${activeStage.stageId}...`}
+                              themeColor="blue"
+                              allowSelectAll={true}
+                            />
+
+                            {/* IF ACTIVE STAGE HAS WORKS */}
+                            {activeStageWorks.length > 0 && (
+                              <div className="mt-3 space-y-4">
+                                {/* LEVEL 2: WORK STEPPER PIPELINE (W1 ──➔── W2 ──➔── W3) */}
+                                <div className="bg-slate-50/90 p-3.5 rounded-xl border-2 border-blue-300 shadow-2xs">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[11px] font-bold uppercase tracking-wider text-blue-900 flex items-center gap-1.5">
+                                      <span className="w-1.5 h-1.5 rounded-full bg-blue-600"></span>
+                                      Work Pipeline Stepper
+                                    </span>
+                                    <span className="text-[10px] text-slate-400">
+                                      Click on any work to configure work-level field data & tasks
+                                    </span>
+                                  </div>
+                                  <div className="overflow-x-auto pb-1">
+                                    <div className="flex items-center min-w-max py-1 px-1">
+                                      {activeStageWorks.map((work, wIdx) => {
+                                        const wObj = wbsWorks.find(
+                                          (w) => (w.work_code || w.id) === work.workId
+                                        );
+                                        const isWorkActive = activeWork?.workId === work.workId;
+                                        const isWrkDone = isWorkComplete(work);
+                                        const workTasks = work.tasks || [];
+                                        const workTasksCount = workTasks.length;
+                                        const pendingTasksCount = workTasks.filter(
+                                          (t) => !isTaskComplete(t)
+                                        ).length;
+
+                                        return (
+                                          <React.Fragment key={work.workId}>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                setActiveWorkId(work.workId);
+                                                const firstTask = work.tasks?.[0];
+                                                if (firstTask) {
+                                                  setActiveTaskId(
+                                                    typeof firstTask === "object"
+                                                      ? firstTask.taskId
+                                                      : firstTask
+                                                  );
+                                                }
+                                              }}
+                                              className={`flex items-center gap-2.5 px-3.5 py-2 rounded-xl border transition-all cursor-pointer text-left ${
+                                                isWorkActive
+                                                  ? "bg-white text-slate-900 border-2 border-blue-600 shadow-xs ring-3 ring-blue-100/70"
+                                                  : "bg-white text-slate-700 border border-slate-200/90 hover:border-slate-300 hover:bg-slate-50/70"
+                                              }`}
+                                            >
+                                              <div
+                                                className={`w-6 h-6 rounded-md flex items-center justify-center font-black text-[11px] shrink-0 transition-colors ${
+                                                  isWorkActive
+                                                    ? "bg-blue-600 text-white shadow-2xs"
+                                                    : isWrkDone
+                                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200 font-extrabold"
+                                                    : "bg-blue-50 text-blue-700"
+                                                }`}
+                                              >
+                                                W
+                                              </div>
+                                              <div className="min-w-0">
+                                                <div className="flex items-center gap-1.5">
+                                                  <span className="text-xs font-bold truncate max-w-[110px] text-slate-900">
+                                                    {work.workId}
+                                                  </span>
+                                                  {isWrkDone ? (
+                                                    <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200 flex items-center gap-0.5 shrink-0">
+                                                      <FaCheckCircle className="w-2 h-2 text-emerald-600" /> Complete
+                                                    </span>
+                                                  ) : pendingTasksCount > 0 ? (
+                                                    <span
+                                                      className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200 flex items-center gap-0.5 shrink-0"
+                                                      title={`${pendingTasksCount} task(s) incomplete`}
+                                                    >
+                                                      <FaExclamationCircle className="w-2 h-2 text-amber-500" /> {pendingTasksCount} Pending
+                                                    </span>
+                                                  ) : (
+                                                    <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200 flex items-center gap-0.5 shrink-0">
+                                                      <FaExclamationCircle className="w-2 h-2 text-amber-500" /> Pending
+                                                    </span>
+                                                  )}
+                                                </div>
+                                                <div className="text-[10px] truncate max-w-[130px] text-slate-400 mt-0.5">
+                                                  {wObj?.work_name || `${workTasksCount} Tasks`}
+                                                </div>
+                                              </div>
+                                            </button>
+
+                                            {/* Thick connecting arrow between Works */}
+                                            {wIdx < activeStageWorks.length - 1 && (
+                                              <div className="flex items-center px-2 shrink-0 select-none">
+                                                <div
+                                                  className={`w-3.5 h-[3px] rounded-l-full transition-colors ${
+                                                    isWrkDone ? "bg-emerald-400" : "bg-slate-300"
+                                                  }`}
+                                                />
+                                                <div
+                                                  className={`w-6 h-6 rounded-full flex items-center justify-center border-2 transition-all shadow-2xs shrink-0 ${
+                                                    isWrkDone
+                                                      ? "bg-emerald-50 border-emerald-500 text-emerald-600"
+                                                      : "bg-white border-slate-300 text-slate-400"
+                                                  }`}
+                                                  title={
+                                                    isWrkDone
+                                                      ? "Work & all its tasks completed - Ready for next work"
+                                                      : "Work or tasks pending"
+                                                  }
+                                                >
+                                                  <FaArrowRight className="w-2.5 h-2.5" />
+                                                </div>
+                                                <div
+                                                  className={`w-3.5 h-[3px] rounded-r-full transition-colors ${
+                                                    isWrkDone ? "bg-emerald-400" : "bg-slate-300"
+                                                  }`}
+                                                />
+                                              </div>
+                                            )}
+                                          </React.Fragment>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* ACTIVE WORK DETAILS */}
+                                {activeWork && (
+                                  <div className="p-4 sm:p-5 rounded-2xl border-[3px] border-blue-500 bg-blue-50/25 space-y-4 shadow-md ring-4 ring-blue-100/70">
+                                    {/* WORK LEVEL EXECUTION & RESOURCE FIELD DATA */}
+                                    <ExecutionResourceFieldData
+                                      title={`WORK ${activeWork.workId} — EXECUTION & RESOURCE DETAILS`}
+                                      subtitle={`Configure execution team, materials & timeline for Work ${activeWork.workId}`}
+                                      level="work"
+                                      badge={`WORK ${activeWork.workId}`}
+                                      data={activeWork}
+                                      onChange={(field, val) =>
+                                        updateWorkField(
+                                          activeStage.stageId,
+                                          activeWork.workId,
+                                          field,
+                                          val
+                                        )
+                                      }
+                                      onCopyFromParent={() =>
+                                        copyStageToWork(activeStage.stageId, activeWork.workId)
+                                      }
+                                      copyLabel={`Copy from Stage ${activeStage.stageId}`}
+                                      onApplyToAllChildren={() =>
+                                        applyWorkToAllTasks(
+                                          activeStage.stageId,
+                                          activeWork.workId
+                                        )
+                                      }
+                                      applyToAllLabel={`Apply to All ${activeWorkTasks.length} Tasks`}
+                                      contractorList={contractorList}
+                                      materialList={materialList}
+                                      supplierList={supplierList}
+                                      toolsOptions={TOOLS_VEHICLES_MASTER}
+                                    />
+
+                                    {/* 3. TASKS UNDER ACTIVE WORK */}
+                                    <div className="pt-4 border-t-2 border-blue-200 space-y-4">
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2.5 bg-emerald-100 border-2 border-emerald-300 px-3.5 py-1.5 rounded-xl shadow-2xs">
+                                          <div className="w-2.5 h-2.5 rounded-full bg-emerald-600 shrink-0" />
+                                          <h4 className="text-xs font-black uppercase tracking-wider text-emerald-950">
+                                            Tasks for Work {activeWork.workId}
+                                          </h4>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                          {activeWorkTasks.length > 0 && (
+                                            <button
+                                              type="button"
+                                              onClick={() =>
+                                                handleTasksChange(
+                                                  activeStage.stageId,
+                                                  activeWork.workId,
+                                                  []
+                                                )
+                                              }
+                                              className="text-[10px] font-bold text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 px-2 py-0.5 rounded-md cursor-pointer transition-colors"
+                                              title={`Clear all tasks for Work ${activeWork.workId}`}
+                                            >
+                                              Clear All
+                                            </button>
+                                          )}
+                                          <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2.5 py-0.5 rounded-full">
+                                            {activeWorkTasks.length} Selected
+                                          </span>
+                                        </div>
+                                      </div>
+                                      <ReactSelectMulti
+                                        options={getTasksForWork(activeWork.workId)}
+                                        value={activeWorkTasks.map((t) =>
+                                          typeof t === "object" ? t.taskId : t
+                                        )}
+                                        onChange={(newTaskIds) =>
+                                          handleTasksChange(
+                                            activeStage.stageId,
+                                            activeWork.workId,
+                                            newTaskIds
+                                          )
+                                        }
+                                        placeholder={`Search & select tasks for Work ${activeWork.workId}...`}
+                                        themeColor="emerald"
+                                        allowSelectAll={true}
+                                      />
+
+                                      {/* IF ACTIVE WORK HAS TASKS */}
+                                      {activeWorkTasks.length > 0 && (
+                                        <div className="mt-3 space-y-4">
+                                          {/* LEVEL 3: TASK STEPPER PIPELINE (T1 ──➔── T2 ──➔── T3) */}
+                                          <div className="bg-slate-50/90 p-3.5 rounded-xl border-2 border-emerald-300 shadow-2xs">
+                                            <div className="flex items-center justify-between mb-2">
+                                              <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-950 flex items-center gap-1.5">
+                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>
+                                                Task Pipeline Stepper
+                                              </span>
+                                              <span className="text-[10px] text-slate-400">
+                                                Click on any task to configure task-specific execution details
+                                              </span>
+                                            </div>
+                                            <div className="overflow-x-auto pb-1">
+                                              <div className="flex items-center min-w-max py-1 px-1">
+                                                {activeWorkTasks.map((t, tIdx) => {
+                                                  const tId = typeof t === "object" ? t.taskId : t;
+                                                  const tObj = wbsTasks.find(
+                                                    (item) => (item.task_code || item.id) === tId
+                                                  );
+                                                  const isTaskActive =
+                                                    activeTaskIdEffective === tId;
+                                                  const isTskDone = isTaskComplete(t);
+
+                                                  return (
+                                                    <React.Fragment key={tId}>
+                                                      <button
+                                                        type="button"
+                                                        onClick={() => setActiveTaskId(tId)}
+                                                        className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all cursor-pointer text-left ${
+                                                          isTaskActive
+                                                            ? "bg-white text-slate-900 border-2 border-emerald-600 shadow-xs ring-3 ring-emerald-100/70"
+                                                            : "bg-white text-slate-700 border border-slate-200/90 hover:border-slate-300 hover:bg-slate-50/70"
+                                                        }`}
+                                                      >
+                                                        <span
+                                                          className={`w-4 h-4 rounded text-[10px] font-black flex items-center justify-center transition-colors ${
+                                                            isTaskActive
+                                                              ? "bg-emerald-600 text-white shadow-2xs"
+                                                              : isTskDone
+                                                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200 font-extrabold"
+                                                              : "bg-slate-100 text-slate-600"
+                                                          }`}
+                                                        >
+                                                          T
+                                                        </span>
+                                                        <span className="font-bold text-xs text-slate-900">
+                                                          {tId}
+                                                        </span>
+                                                        {tObj?.task_name && (
+                                                          <span className="font-normal text-slate-500 text-[11px] truncate max-w-[110px]">
+                                                            - {tObj.task_name}
+                                                          </span>
+                                                        )}
+                                                        {isTskDone ? (
+                                                          <span className="text-[9px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200 flex items-center gap-0.5 shrink-0">
+                                                            <FaCheckCircle className="w-2 h-2 text-emerald-600" /> Filled
+                                                          </span>
+                                                        ) : (
+                                                          <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200 flex items-center gap-0.5 shrink-0">
+                                                            <FaExclamationCircle className="w-2 h-2 text-amber-500" /> Pending
+                                                          </span>
+                                                        )}
+                                                      </button>
+
+                                                      {/* Thick connecting arrow between Tasks */}
+                                                      {tIdx < activeWorkTasks.length - 1 && (
+                                                        <div className="flex items-center px-1.5 shrink-0 select-none">
+                                                          <div
+                                                            className={`w-3 h-[3px] rounded-l-full transition-colors ${
+                                                              isTskDone
+                                                                ? "bg-emerald-400"
+                                                                : "bg-slate-300"
+                                                            }`}
+                                                          />
+                                                          <div
+                                                            className={`w-5 h-5 rounded-full flex items-center justify-center border-2 transition-all shadow-2xs shrink-0 ${
+                                                              isTskDone
+                                                                ? "bg-emerald-50 border-emerald-500 text-emerald-600"
+                                                                : "bg-white border-slate-300 text-slate-400"
+                                                            }`}
+                                                            title={
+                                                              isTskDone
+                                                                ? "Task filled - Ready for next task"
+                                                                : "Task details pending"
+                                                            }
+                                                          >
+                                                            <FaArrowRight className="w-2 h-2" />
+                                                          </div>
+                                                          <div
+                                                            className={`w-3 h-[3px] rounded-r-full transition-colors ${
+                                                              isTskDone
+                                                                ? "bg-emerald-400"
+                                                                : "bg-slate-300"
+                                                            }`}
+                                                          />
+                                                        </div>
+                                                      )}
+                                                    </React.Fragment>
+                                                  );
+                                                })}
+                                              </div>
+                                            </div>
+                                          </div>
+
+                                          {/* ACTIVE TASK DETAILS */}
+                                          {activeTaskObj && (
+                                            <div className="p-4 rounded-xl border-[3px] border-emerald-500 bg-emerald-50/25 shadow-md ring-4 ring-emerald-100/70">
+                                              <ExecutionResourceFieldData
+                                                title={`TASK ${activeTaskIdEffective} — EXECUTION & RESOURCE DETAILS`}
+                                                subtitle={`Configure execution team, materials & timeline for Task ${activeTaskIdEffective}`}
+                                                level="task"
+                                                badge={`TASK ${activeTaskIdEffective}`}
+                                                data={activeTaskObj}
+                                                onChange={(field, val) =>
+                                                  updateTaskField(
+                                                    activeStage.stageId,
+                                                    activeWork.workId,
+                                                    activeTaskIdEffective,
+                                                    field,
+                                                    val
+                                                  )
+                                                }
+                                                onCopyFromParent={() =>
+                                                  copyWorkToTask(
+                                                    activeStage.stageId,
+                                                    activeWork.workId,
+                                                    activeTaskIdEffective
+                                                  )
+                                                }
+                                                copyLabel={`Copy from Work ${activeWork.workId}`}
+                                                contractorList={contractorList}
+                                                materialList={materialList}
+                                                supplierList={supplierList}
+                                                toolsOptions={TOOLS_VEHICLES_MASTER}
+                                              />
+                                            </div>
+                                          )}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
                   );
-                })
+                })()
               )}
             </div>
           </div>
-
-          {/* 5. Work Will Done By (Contractor / Worker Lookup - Required *) */}
-          <div className="relative" ref={contractorDropdownRef}>
-            <label className="block text-sm font-bold text-slate-700 mb-1.5">
-              Work Will Done By <span className="text-red-500">*</span>
-            </label>
-            <div
-              onClick={() => setIsContractorOpen(!isContractorOpen)}
-              className={`w-full px-3.5 py-2.5 border rounded-lg text-sm font-semibold text-slate-800 flex items-center justify-between cursor-pointer bg-white ${
-                errors.workWillDoneBy ? "border-red-500 bg-red-50/50" : "border-slate-200"
-              }`}
-            >
-              <span className={formData.workWillDoneBy ? "text-slate-900 truncate" : "text-slate-400"}>
-                {formData.workWillDoneBy || "Select Contractor / Worker..."}
-              </span>
-              <FaChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1" />
-            </div>
-            {errors.workWillDoneBy && <p className="text-xs text-red-500 mt-1">{errors.workWillDoneBy}</p>}
-
-            {/* Dropdown popup */}
-            {isContractorOpen && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-xl border border-slate-200 z-50 p-2 max-h-60 overflow-y-auto">
-                <div className="relative mb-2">
-                  <FaSearch className="absolute left-2.5 top-2.5 text-slate-400 w-3 h-3" />
-                  <input
-                    type="text"
-                    placeholder="Search contractor or worker..."
-                    value={contractorSearch}
-                    onChange={(e) => setContractorSearch(e.target.value)}
-                    className="w-full pl-7 pr-3 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                    autoFocus
-                  />
-                </div>
-                <div className="space-y-1">
-                  <p className="text-[10px] uppercase font-bold text-slate-400 px-2 py-0.5">
-                    Standard Sheet Workers
-                  </p>
-                  {DEFAULT_WORK_WILL_DONE_BY.filter((w) =>
-                    w.toLowerCase().includes(contractorSearch.toLowerCase())
-                  ).map((w) => (
-                    <div
-                      key={w}
-                      onClick={() => handleSelectWorkDoneBy(w)}
-                      className={`px-3 py-2 rounded text-xs cursor-pointer hover:bg-indigo-50 flex items-center justify-between ${
-                        formData.workWillDoneBy === w ? "bg-indigo-50 font-bold text-indigo-900" : "text-slate-700"
-                      }`}
-                    >
-                      <span>{w}</span>
-                      {formData.workWillDoneBy === w && <FaCheck className="text-indigo-600 w-3 h-3" />}
-                    </div>
-                  ))}
-
-                  <p className="text-[10px] uppercase font-bold text-slate-400 px-2 pt-2 pb-0.5">
-                    Contractor Master List
-                  </p>
-                  {contractorList
-                    .filter((c) => c.name.toLowerCase().includes(contractorSearch.toLowerCase()))
-                    .map((c) => (
-                      <div
-                        key={c.id || c.name}
-                        onClick={() => handleSelectWorkDoneBy(c.name)}
-                        className={`px-3 py-2 rounded text-xs cursor-pointer hover:bg-indigo-50 flex items-center justify-between ${
-                          formData.workWillDoneBy === c.name ? "bg-indigo-50 font-bold text-indigo-900" : "text-slate-700"
-                        }`}
-                      >
-                        <div>
-                          <span className="block font-medium">{c.name}</span>
-                          <span className="text-[10px] text-slate-400">{c.contractorType}</span>
-                        </div>
-                        {formData.workWillDoneBy === c.name && <FaCheck className="text-indigo-600 w-3 h-3" />}
-                      </div>
-                    ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* 6. Contractor Type (Conditional) */}
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1.5">
-              Contractor Type <span className="text-slate-400 font-normal">(Conditional)</span>
-            </label>
-            <select
-              value={formData.contractorType}
-              onChange={(e) => setFormData({ ...formData, contractorType: e.target.value })}
-              className={`w-full px-3.5 py-2.5 border rounded-lg text-sm font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white ${
-                errors.contractorType ? "border-red-500 bg-red-50/50" : "border-slate-200"
-              }`}
-            >
-              <option value="">-- Select Contractor Type --</option>
-              {CONTRACTOR_TYPES_LIST.map((ct) => (
-                <option key={ct} value={ct}>
-                  {ct}
-                </option>
-              ))}
-            </select>
-            {errors.contractorType && <p className="text-xs text-red-500 mt-1">{errors.contractorType}</p>}
-          </div>
-
-          {/* 7. Tools / Vehicle (Resource Multi-select) */}
-          <div className="md:col-span-2">
-            <label className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center justify-between">
-              <span>Tools / Vehicle</span>
-              <span className="text-[10px] text-slate-400 font-medium">Optional multi-select</span>
-            </label>
-            <ReactSelectMulti
-              options={TOOLS_VEHICLES_MASTER.map((t) => ({ value: t, label: t }))}
-              value={formData.toolsVehicles}
-              onChange={(newTools) => setFormData((prev) => ({ ...prev, toolsVehicles: newTools }))}
-              placeholder="Search and select tools / vehicles..."
-              themeColor="indigo"
-              allowSelectAll={true}
-            />
-          </div>
-
-          {/* 8. Material Required (Material Master Lookup) */}
-          <div className="relative" ref={materialDropdownRef}>
-            <label className="block text-sm font-bold text-slate-700 mb-1.5">
-              Material Required
-            </label>
-            <div
-              onClick={() => setIsMaterialOpen(!isMaterialOpen)}
-              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-lg text-sm font-semibold text-slate-800 flex items-center justify-between cursor-pointer bg-white"
-            >
-              <span className={formData.materialRequired ? "text-slate-900 truncate" : "text-slate-400"}>
-                {formData.materialRequired || "Select Material Master..."}
-              </span>
-              <FaChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1" />
-            </div>
-
-            {isMaterialOpen && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-xl border border-slate-200 z-50 p-2 max-h-56 overflow-y-auto">
-                <div className="relative mb-2">
-                  <FaSearch className="absolute left-2.5 top-2.5 text-slate-400 w-3 h-3" />
-                  <input
-                    type="text"
-                    placeholder="Search material..."
-                    value={materialSearch}
-                    onChange={(e) => setMaterialSearch(e.target.value)}
-                    className="w-full pl-7 pr-3 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                    autoFocus
-                  />
-                </div>
-                <div className="space-y-1">
-                  {materialList
-                    .filter((m) => m.name.toLowerCase().includes(materialSearch.toLowerCase()))
-                    .map((m) => (
-                      <div
-                        key={m.id || m.name}
-                        onClick={() => handleSelectMaterial(m)}
-                        className={`px-3 py-2 rounded text-xs cursor-pointer hover:bg-indigo-50 ${
-                          formData.materialRequired === m.name ? "bg-indigo-50 font-bold text-indigo-900" : "text-slate-700"
-                        }`}
-                      >
-                        <span className="block font-medium">{m.name}</span>
-                        <span className="text-[10px] text-slate-400">{m.category}</span>
-                      </div>
-                    ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* 9. Material Details (Text / Multiline, Task Override) */}
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1.5">
-              Material Details
-            </label>
-            <input
-              type="text"
-              value={formData.materialDetails}
-              onChange={(e) => setFormData({ ...formData, materialDetails: e.target.value })}
-              placeholder="Auto-filled from Material Master, editable override..."
-              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white"
-            />
-          </div>
-
-          {/* 10. Supplier Type (Supplier Type Lookup) */}
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1.5">
-              Supplier Type
-            </label>
-            <select
-              value={formData.supplierType}
-              onChange={(e) => setFormData({ ...formData, supplierType: e.target.value })}
-              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-lg text-sm font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white"
-            >
-              <option value="">-- Select Supplier Type --</option>
-              {SUPPLIER_TYPES_LIST.map((st) => (
-                <option key={st} value={st}>
-                  {st}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* 11. Supplier Name (Supplier Lookup) */}
-          <div className="relative" ref={supplierDropdownRef}>
-            <label className="block text-sm font-bold text-slate-700 mb-1.5">
-              Supplier Name
-            </label>
-            <div
-              onClick={() => setIsSupplierOpen(!isSupplierOpen)}
-              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-lg text-sm font-semibold text-slate-800 flex items-center justify-between cursor-pointer bg-white"
-            >
-              <span className={formData.supplierName ? "text-slate-900 truncate" : "text-slate-400"}>
-                {formData.supplierName || "Select Supplier..."}
-              </span>
-              <FaChevronDown className="w-3.5 h-3.5 text-slate-400 shrink-0 ml-1" />
-            </div>
-
-            {isSupplierOpen && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-xl border border-slate-200 z-50 p-2 max-h-56 overflow-y-auto">
-                <div className="relative mb-2">
-                  <FaSearch className="absolute left-2.5 top-2.5 text-slate-400 w-3 h-3" />
-                  <input
-                    type="text"
-                    placeholder="Search supplier..."
-                    value={supplierSearch}
-                    onChange={(e) => setSupplierSearch(e.target.value)}
-                    className="w-full pl-7 pr-3 py-1.5 border border-slate-200 rounded text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                    autoFocus
-                  />
-                </div>
-                <div className="space-y-1">
-                  {supplierList
-                    .filter((s) => s.name.toLowerCase().includes(supplierSearch.toLowerCase()))
-                    .map((s) => (
-                      <div
-                        key={s.id || s.name}
-                        onClick={() => handleSelectSupplier(s)}
-                        className={`px-3 py-2 rounded text-xs cursor-pointer hover:bg-indigo-50 ${
-                          formData.supplierName === s.name ? "bg-indigo-50 font-bold text-indigo-900" : "text-slate-700"
-                        }`}
-                      >
-                        <span className="block font-medium">{s.name}</span>
-                        <span className="text-[10px] text-slate-400">
-                          {s.supplierType} • {s.city || "Direct"}
-                        </span>
-                      </div>
-                    ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* 12. Maximum Time to Complete Task (Number + Unit) */}
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1.5">
-              Maximum Time to Complete Task
-            </label>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                min="1"
-                value={formData.maxTimeToComplete}
-                onChange={(e) => setFormData({ ...formData, maxTimeToComplete: e.target.value })}
-                className="w-28 px-3.5 py-2.5 border border-slate-200 rounded-lg text-sm font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white"
-              />
-              <select
-                value={formData.timeUnit}
-                onChange={(e) => setFormData({ ...formData, timeUnit: e.target.value })}
-                className="flex-1 px-3 py-2.5 border border-slate-200 rounded-lg text-sm font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white"
-              >
-                <option value="Days">Days</option>
-                <option value="Hours">Hours</option>
-                <option value="Weeks">Weeks</option>
-              </select>
-            </div>
-          </div>
-
-          {/* 13. Deadline Date (Date) */}
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1.5">
-              Deadline Date
-            </label>
-            <input
-              type="date"
-              value={formData.deadlineDate}
-              onChange={(e) => setFormData({ ...formData, deadlineDate: e.target.value })}
-              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-lg text-sm font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white"
-            />
-          </div>
-
-          {/* 14. Maximum Time for Work Completion [D ; H] (Duration) */}
-          <div>
-            <label className="block text-sm font-bold text-slate-700 mb-1.5">
-              Maximum Time for Work Completion [D ; H]
-            </label>
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1 flex-1">
-                <input
-                  type="number"
-                  min="0"
-                  placeholder="Days"
-                  value={formData.durationDays}
-                  onChange={(e) => setFormData({ ...formData, durationDays: e.target.value })}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                />
-                <span className="text-xs font-bold text-slate-500">D</span>
-              </div>
-              <span className="text-slate-300 font-bold">;</span>
-              <div className="flex items-center gap-1 flex-1">
-                <input
-                  type="number"
-                  min="0"
-                  max="23"
-                  placeholder="Hours"
-                  value={formData.durationHours}
-                  onChange={(e) => setFormData({ ...formData, durationHours: e.target.value })}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-sm font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                />
-                <span className="text-xs font-bold text-slate-500">H</span>
-              </div>
-            </div>
-          </div>
-
-          {/* 15. Training Material / Instruction / Checklist (Multiline) */}
-          <div className="md:col-span-2 lg:col-span-3">
-            <label className="block text-sm font-bold text-slate-700 mb-1.5">
-              Training Material / Instruction / Checklist
-            </label>
-            <textarea
-              rows={2}
-              value={formData.instruction}
-              onChange={(e) => setFormData({ ...formData, instruction: e.target.value })}
-              placeholder="Site execution guidelines, training instructions, quality checklist points..."
-              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white"
-            />
-          </div>
-
-          {/* 16. Remark (Multiline) */}
-          <div className="md:col-span-2 lg:col-span-3">
-            <label className="block text-sm font-bold text-slate-700 mb-1.5">
-              Remark
-            </label>
-            <textarea
-              rows={2}
-              value={formData.remark}
-              onChange={(e) => setFormData({ ...formData, remark: e.target.value })}
-              placeholder="Internal remarks, site constraints, contractor coordination notes..."
-              className="w-full px-3.5 py-2.5 border border-slate-200 rounded-lg text-sm text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white"
-            />
-          </div>
         </div>
 
-        {/* Bottom Actions (Matching Material & Supplier format) */}
-        <div className="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
-          <button
-            type="button"
-            onClick={() => {
-              if (window.confirm("Reset this form?")) {
-                setFormData({
-                  id: "TSK-" + Math.floor(100 + Math.random() * 900),
-                  projectStatus: "On Track",
-                  stage: "S1",
-                  work: "S1-W1",
-                  task: "S1-W1-T1",
-                  workWillDoneBy: "",
-                  contractorType: "",
-                  toolsVehicles: [],
-                  materialRequired: "",
-                  materialDetails: "",
-                  supplierType: "",
-                  supplierName: "",
-                  maxTimeToComplete: "3",
-                  timeUnit: "Days",
-                  deadlineDate: "",
-                  durationDays: "3",
-                  durationHours: "0",
-                  instruction: "",
-                  remark: "",
-                  status: "Active"
-                });
-                setWbsStructure({
-                  stages: [
-                    {
-                      stageId: "S1",
-                      works: [{ workId: "S1-W1", tasks: ["S1-W1-T1", "S1-W1-T2"] }]
-                    },
-                    {
-                      stageId: "S2",
-                      works: [{ workId: "S2-W1", tasks: ["S2-W1-T1"] }]
-                    }
-                  ]
-                });
-              }
-            }}
-            className="px-4 py-2.5 border border-slate-200 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer flex items-center gap-1.5"
-          >
-            <FaRedo className="w-3 h-3" />
-            <span>Reset</span>
-          </button>
+      {/* Bottom Actions (Matching Material & Supplier format) */}
+      <div className="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm("Reset this form?")) {
+              setFormData({
+                id: "TSK-" + Math.floor(100 + Math.random() * 900),
+                clientName: "",
+                projectDetails: "",
+                projectStatus: "On Track",
+                stage: "S1",
+                work: "S1-W1",
+                task: "S1-W1-T1",
+                status: "Active"
+              });
+              setWbsStructure({
+                stages: [
+                  {
+                    stageId: "S1",
+                    works: [{ workId: "S1-W1", tasks: ["S1-W1-T1", "S1-W1-T2"] }],
+                    ...DEFAULT_STAGE_DETAILS
+                  },
+                  {
+                    stageId: "S2",
+                    works: [{ workId: "S2-W1", tasks: ["S2-W1-T1"] }],
+                    ...DEFAULT_STAGE_DETAILS
+                  }
+                ]
+              });
+            }
+          }}
+          className="px-4 py-2.5 border border-slate-200 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer flex items-center gap-1.5"
+        >
+          <FaRedo className="w-3 h-3" />
+          <span>Reset</span>
+        </button>
           <button
             type="button"
             onClick={() => navigate("/sales/master/pms-template")}

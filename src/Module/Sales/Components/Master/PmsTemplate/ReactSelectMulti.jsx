@@ -70,7 +70,14 @@ const CustomMultiValue = (props) => {
  */
 const CustomMenuList = (props) => {
   const { selectProps } = props;
-  const { onSelectAll, onClearAll, allSelected, totalCount, selectedCount } = selectProps;
+  const { onSelectAll, onClearAll, allSelected, totalCount, selectedCount, themeColor } = selectProps;
+
+  const selectAllColor = {
+    indigo: "text-indigo-600 hover:text-indigo-800",
+    blue: "text-blue-600 hover:text-blue-800",
+    emerald: "text-emerald-600 hover:text-emerald-800",
+    amber: "text-amber-600 hover:text-amber-800"
+  }[themeColor] || "text-indigo-600 hover:text-indigo-800";
 
   return (
     <components.MenuList {...props}>
@@ -83,10 +90,32 @@ const CustomMenuList = (props) => {
             {onSelectAll && (
               <button
                 type="button"
-                onClick={allSelected ? onClearAll : onSelectAll}
-                className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer"
+                onClick={onSelectAll}
+                disabled={allSelected}
+                className={`text-[11px] font-bold cursor-pointer transition-colors ${
+                  allSelected
+                    ? "text-slate-400 cursor-not-allowed"
+                    : `${selectAllColor} hover:underline`
+                }`}
               >
-                {allSelected ? "Clear All" : "Select All"}
+                Select All
+              </button>
+            )}
+            {onSelectAll && onClearAll && (
+              <span className="text-slate-300 select-none">•</span>
+            )}
+            {onClearAll && (
+              <button
+                type="button"
+                onClick={onClearAll}
+                disabled={selectedCount === 0}
+                className={`text-[11px] font-bold cursor-pointer transition-colors ${
+                  selectedCount > 0
+                    ? "text-red-600 hover:text-red-800 hover:underline"
+                    : "text-slate-400 cursor-not-allowed"
+                }`}
+              >
+                Clear All
               </button>
             )}
           </div>
@@ -155,7 +184,7 @@ export const ReactSelectMulti = ({
         closeMenuOnSelect={false}
         hideSelectedOptions={false}
         isSearchable
-        isClearable={false}
+        isClearable={true}
         isDisabled={isDisabled}
         options={normalizedOptions}
         value={selectedOptions}
@@ -205,7 +234,9 @@ export const ReactSelectMulti = ({
             padding: "3px 4px",
             gap: "2px",
             flexWrap: "wrap",
-            overflow: "hidden"
+            maxHeight: "135px",
+            overflowY: "auto",
+            scrollbarWidth: "thin"
           }),
           menu: (base) => ({
             ...base,
@@ -232,6 +263,15 @@ export const ReactSelectMulti = ({
             ...base,
             fontSize: "0.875rem",
             color: "#94a3b8"
+          }),
+          clearIndicator: (base) => ({
+            ...base,
+            cursor: "pointer",
+            color: "#94a3b8",
+            padding: "4px 6px",
+            "&:hover": {
+              color: "#ef4444"
+            }
           }),
           input: (base) => ({
             ...base,

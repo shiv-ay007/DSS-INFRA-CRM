@@ -310,8 +310,12 @@ const PmsWbsMasterComponent = () => {
   const handleSaveMaster = async (e) => {
     e.preventDefault();
 
-    if (!formData.code.trim() || !formData.name.trim()) {
-      toast.error("Please fill required Code and Name fields!");
+    if (entryType !== "status" && !formData.code.trim()) {
+      toast.error("Please fill required Code field!");
+      return;
+    }
+    if (!formData.name.trim()) {
+      toast.error("Please fill required Name field!");
       return;
     }
 
@@ -319,12 +323,12 @@ const PmsWbsMasterComponent = () => {
     try {
       if (entryType === "status") {
         const payload = {
-          status_code: formData.code.trim().toUpperCase(),
           status_name: formData.name.trim(),
           color: formData.color || "#3B82F6",
-          description: formData.description ? formData.description.trim() : "",
-          order: editingItem ? (editingItem.item.order || 1) : statuses.length + 1
         };
+        if (formData.code && formData.code.trim()) {
+          payload.status_code = formData.code.trim().toUpperCase();
+        }
 
         if (editingItem) {
           const res = await pmsWbsService.updateProjectStatus(editingItem.item._id, payload);
@@ -465,7 +469,7 @@ const PmsWbsMasterComponent = () => {
 
   // Delete Handlers
   const handleDeleteStatus = async (statusItem) => {
-    if (window.confirm(`Delete Status "${statusItem.status_code}: ${statusItem.status_name}"?`)) {
+    if (window.confirm(`Delete Status "${statusItem.status_name}"?`)) {
       try {
         if (statusItem._id) {
           await pmsWbsService.deleteProjectStatus(statusItem._id);
@@ -602,20 +606,10 @@ const PmsWbsMasterComponent = () => {
         </div>
       )
     },
-    status_code: {
-      label: "Status Code",
-      align: "center",
-      headerClass: "w-36 min-w-[120px]",
-      render: (val) => (
-        <span className="font-mono font-bold text-amber-700 bg-amber-50/80 px-2.5 py-1 rounded-md border border-amber-200/60">
-          {val}
-        </span>
-      )
-    },
     status_name: {
-      label: "Status Name & Badge Preview",
+      label: "Status Display Name",
       align: "left",
-      headerClass: "min-w-[260px]",
+      headerClass: "min-w-[240px]",
       render: (val, st) => (
         <div className="flex items-center gap-2.5">
           <span
@@ -637,34 +631,20 @@ const PmsWbsMasterComponent = () => {
         </div>
       )
     },
-    description: {
-      label: "Description",
-      align: "left",
-      headerClass: "min-w-[200px]",
-      render: (val) => (
-        <span className="text-xs text-slate-600 truncate block max-w-xs">{val || "-"}</span>
-      )
-    },
-    order: {
-      label: "Order",
+    color: {
+      label: "Color Code",
       align: "center",
-      headerClass: "w-20 min-w-[70px]",
+      headerClass: "w-36 min-w-[120px]",
       render: (val) => (
-        <span className="text-xs font-semibold text-slate-600">{val ?? 0}</span>
-      )
-    },
-    status: {
-      label: "State",
-      align: "center",
-      headerClass: "w-24 min-w-[80px]",
-      render: (val) => (
-        <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
-          val === "Active"
-            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-            : "bg-red-50 text-red-600 border border-red-200"
-        }`}>
-          {val || "Active"}
-        </span>
+        <div className="flex items-center justify-center gap-2">
+          <span
+            className="w-3.5 h-3.5 rounded-full shrink-0 border border-slate-300 shadow-xs"
+            style={{ backgroundColor: val || "#3B82F6" }}
+          />
+          <span className="font-mono text-xs font-semibold text-slate-700 uppercase">
+            {val || "#3B82F6"}
+          </span>
+        </div>
       )
     }
   }), []);
@@ -1110,28 +1090,29 @@ const PmsWbsMasterComponent = () => {
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* CODE INPUT */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    {entryType === "status" ? "Status Code" : entryType === "stage" ? "Stage Code" : entryType === "work" ? "Work Code" : "Task Code"} <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder={
-                      entryType === "status" ? "e.g. ON_TRACK or DELAYED" :
-                      entryType === "stage" ? "e.g. S1 or S24" :
-                      entryType === "work" ? "e.g. W1 or W2" :
-                      "e.g. T1 or T2"
-                    }
-                    value={formData.code}
-                    onChange={(e) => handleInputChange("code", e.target.value)}
-                    required
-                    className="w-full text-xs font-mono font-bold uppercase bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
-                  />
-                </div>
+                {/* CODE INPUT (FOR STAGE, WORK, TASK ONLY) */}
+                {entryType !== "status" && (
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      {entryType === "stage" ? "Stage Code" : entryType === "work" ? "Work Code" : "Task Code"} <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      placeholder={
+                        entryType === "stage" ? "e.g. S1 or S24" :
+                        entryType === "work" ? "e.g. W1 or W2" :
+                        "e.g. T1 or T2"
+                      }
+                      value={formData.code}
+                      onChange={(e) => handleInputChange("code", e.target.value)}
+                      required
+                      className="w-full text-xs font-mono font-bold uppercase bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
+                    />
+                  </div>
+                )}
 
                 {/* NAME INPUT */}
-                <div>
+                <div className={entryType === "status" ? "" : ""}>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
                     {entryType === "status" ? "Status Display Name" : entryType === "stage" ? "Stage Name" : entryType === "work" ? "Work Name / Description" : "Task Name / Activity"} <span className="text-red-500">*</span>
                   </label>
@@ -1161,7 +1142,7 @@ const PmsWbsMasterComponent = () => {
                         type="color"
                         value={formData.color || "#3B82F6"}
                         onChange={(e) => handleInputChange("color", e.target.value)}
-                        className="w-10 h-9 p-0.5 border border-slate-300 rounded-lg cursor-pointer bg-white"
+                        className="w-10 h-9 p-0.5 border border-slate-300 rounded-lg cursor-pointer bg-white shrink-0"
                       />
                       <input
                         type="text"
@@ -1174,15 +1155,15 @@ const PmsWbsMasterComponent = () => {
                   </div>
                 )}
 
-                {/* DESCRIPTION (STAGE OR STATUS) */}
-                {(entryType === "stage" || entryType === "status") && (
-                  <div className={entryType === "status" ? "" : "md:col-span-2"}>
+                {/* DESCRIPTION (STAGE ONLY) */}
+                {entryType === "stage" && (
+                  <div className="md:col-span-2">
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      Description {entryType === "status" ? "(Optional)" : "/ Milestone Details"}
+                      Description / Milestone Details
                     </label>
                     <input
                       type="text"
-                      placeholder={entryType === "status" ? "e.g. Project is executing as per plan" : "e.g. Initial land clearance, boundary marking"}
+                      placeholder="e.g. Initial land clearance, boundary marking"
                       value={formData.description}
                       onChange={(e) => handleInputChange("description", e.target.value)}
                       className="w-full text-xs font-medium bg-slate-50 border border-slate-300 rounded-xl px-3 py-2.5 focus:bg-white focus:border-indigo-500 outline-none"
