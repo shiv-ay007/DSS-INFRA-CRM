@@ -83,6 +83,16 @@ const SalesProjectDetailsCard = ({ lead, projectData, onAddProjectClick }) => {
 
       {/* 2. SPECIFICATION DETAILS GRID */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+        {/* Work Type */}
+        <div className="p-3 rounded-xl bg-indigo-50/60 border border-indigo-100">
+          <span className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider block mb-0.5">
+            Work Type
+          </span>
+          <span className="text-xs sm:text-sm font-bold text-indigo-950">
+            {Array.isArray(projectData.workType) ? projectData.workType.join(", ") : (projectData.workType || "--")}
+          </span>
+        </div>
+
         {/* Company Name */}
         <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
           <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">

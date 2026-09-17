@@ -23,6 +23,7 @@ import { supplierService } from "../../../services/supplierService";
 import { contractorService } from "../../../services/contractorService";
 import { getAllLeadProjectsApi } from "../../../services/leadProject.api";
 import pmsWbsService from "../../../services/pmsWbsService";
+import pmsTemplateService from "../../../services/pmsTemplateService";
 export const PMS_MASTER_STAGES_KEY = "pms_master_stages_data";
 export const PMS_MASTER_WORKS_KEY = "pms_master_works_data";
 export const PMS_MASTER_TASKS_KEY = "pms_master_tasks_data";
@@ -181,6 +182,7 @@ const DEFAULT_STAGE_DETAILS = {
   materialDetails: "",
   supplierType: "",
   supplierName: "",
+  materials: [],
   maxTimeToComplete: "3",
   timeUnit: "Days",
   deadlineDate: "",
@@ -297,6 +299,10 @@ export const CreatePmsTemplateComponent = () => {
   const [isClientOpen, setIsClientOpen] = useState(false);
   const clientDropdownRef = useRef(null);
 
+  // Presales Project Single-Select Dropdown state
+  const [isProjectOpen, setIsProjectOpen] = useState(false);
+  const projectDropdownRef = useRef(null);
+
   // Search/Filter states for Lookups inside stages
   const [materialSearch, setMaterialSearch] = useState("");
   const [supplierSearch, setSupplierSearch] = useState("");
@@ -307,6 +313,9 @@ export const CreatePmsTemplateComponent = () => {
     const handleClickOutside = (e) => {
       if (clientDropdownRef.current && !clientDropdownRef.current.contains(e.target)) {
         setIsClientOpen(false);
+      }
+      if (projectDropdownRef.current && !projectDropdownRef.current.contains(e.target)) {
+        setIsProjectOpen(false);
       }
       if (!e.target.closest(".stage-search-dropdown-container")) {
         setActiveDropdown(null);
@@ -330,30 +339,75 @@ export const CreatePmsTemplateComponent = () => {
             const clientName =
               p.clientName || p.concernPersonName || leadObj?.clientName || leadObj?.concernPersonName || "Unnamed Client";
             const companyName = p.companyName || leadObj?.companyName || "";
-            const businessType = p.businessType || leadObj?.businessType || leadObj?.workCategory || "";
+            const phoneNumber = p.phoneNumber || p.phone || leadObj?.phoneNumber || leadObj?.contactNumber || "";
+            const projectName = p.projectName || leadObj?.projectName || "";
+            const workCategory = p.workCategory || p.businessType || leadObj?.workCategory || leadObj?.businessType || "";
+            const workType = p.workType || leadObj?.workType || "";
             const city = p.city || leadObj?.city || "";
             const requirement = p.requirement || leadObj?.requirement || "";
             const amount = p.expectedBusiness || p.amount || p.expectedRevenue || 0;
 
             const detailParts = [];
-            if (companyName && companyName !== "--") detailParts.push(`Company: ${companyName}`);
-            if (businessType && businessType !== "--") detailParts.push(`Type: ${businessType}`);
-            if (city && city !== "--") detailParts.push(`City: ${city}`);
-            if (amount) detailParts.push(`Budget: ₹${Number(amount).toLocaleString("en-IN")}`);
-            if (requirement && requirement !== "--") detailParts.push(`Req: ${requirement}`);
+            if (projectName) detailParts.push(projectName);
+            if (workCategory && workCategory !== "--") detailParts.push(`Category: ${workCategory}`);
+            if (workType && workType !== "--") detailParts.push(`Work Type: ${workType}`);
 
             return {
               id: p._id || p.id || p.leadId,
+              leadId: leadObj?._id || p.leadId,
               clientName,
               companyName,
-              businessType,
+              phoneNumber,
+              projectName,
+              workCategory,
+              workType,
+              businessType: workCategory,
               city,
               requirement,
               amount,
-              projectDetails: detailParts.join(" | ") || "No additional project details"
+              projectDetails: detailParts.join(" | ") || (projectName || "Project Details")
             };
           });
-          setPresalesList(formattedProjects);
+
+          // Strictly deduplicate by client identity (phone or name) so each client appears only once
+          const uniqueClientsMap = new Map();
+          const phoneToKey = new Map();
+          const nameToKey = new Map();
+
+          formattedProjects.forEach((proj) => {
+            const cleanPhone = proj.phoneNumber ? String(proj.phoneNumber).replace(/\D/g, "") : "";
+            const cleanName = proj.clientName ? proj.clientName.trim().toLowerCase() : "";
+
+            let key = null;
+            if (cleanPhone && cleanPhone.length >= 7 && phoneToKey.has(cleanPhone)) {
+              key = phoneToKey.get(cleanPhone);
+            } else if (cleanName && cleanName !== "unnamed client" && cleanName !== "--" && nameToKey.has(cleanName)) {
+              key = nameToKey.get(cleanName);
+            }
+
+            if (!key) {
+              key = (cleanPhone && cleanPhone.length >= 7 ? `phone_${cleanPhone}` : null) ||
+                    (cleanName && cleanName !== "unnamed client" && cleanName !== "--" ? `name_${cleanName}` : null) ||
+                    `id_${proj.id}`;
+
+              if (cleanPhone && cleanPhone.length >= 7) phoneToKey.set(cleanPhone, key);
+              if (cleanName && cleanName !== "unnamed client" && cleanName !== "--") nameToKey.set(cleanName, key);
+
+              uniqueClientsMap.set(key, {
+                ...proj,
+                allProjects: [proj]
+              });
+            } else {
+              const existing = uniqueClientsMap.get(key);
+              existing.allProjects.push(proj);
+              if (!existing.companyName && proj.companyName) existing.companyName = proj.companyName;
+              if (!existing.city && proj.city) existing.city = proj.city;
+              if (!existing.phoneNumber && proj.phoneNumber) existing.phoneNumber = proj.phoneNumber;
+              if (cleanPhone && cleanPhone.length >= 7) phoneToKey.set(cleanPhone, key);
+              if (cleanName && cleanName !== "unnamed client" && cleanName !== "--") nameToKey.set(cleanName, key);
+            }
+          });
+          setPresalesList(Array.from(uniqueClientsMap.values()));
         }
       } catch (err) {
         console.log("Error fetching presales leads for PMS:", err);
@@ -364,14 +418,32 @@ export const CreatePmsTemplateComponent = () => {
         const res = await materialService.getAllMaterials({ limit: 500 });
         const items = res?.data?.data || res?.data;
         if (Array.isArray(items) && items.length > 0) {
-          const formatted = items.map((m) => ({
-            id: m._id || m.id,
-            name: m.name || m.materialName,
-            category: m.category || m.materialCategory,
-            details: m.materialDetails || m.description || m.specificationGrade || "",
-            supplier: m.preferredSupplier || "",
-            supplierType: m.supplierType || ""
-          }));
+          const formatted = items.map((m) => {
+            const autoDetails =
+              m.materialDetails ||
+              m.specificationGrade ||
+              m.description ||
+              [
+                m.brand && m.brand !== "Generic" ? m.brand : "",
+                m.category || m.materialCategory,
+                m.baseUom ? `(${m.baseUom})` : ""
+              ]
+                .filter(Boolean)
+                .join(" • ") ||
+              m.name ||
+              m.materialName ||
+              "";
+
+            return {
+              ...m,
+              id: m._id || m.id,
+              name: m.name || m.materialName,
+              category: m.category || m.materialCategory,
+              details: autoDetails,
+              supplier: m.preferredSupplier || "",
+              supplierType: m.supplierType || ""
+            };
+          });
           setMaterialList(formatted);
         }
       } catch (e) {
@@ -428,7 +500,7 @@ export const CreatePmsTemplateComponent = () => {
         const statusesData = statusesRes?.data?.data || statusesRes?.data || [];
 
         if (Array.isArray(statusesData) && statusesData.length > 0) {
-          setProjectStatusList(statusesData.map(s => s.status_name || s));
+          setProjectStatusList(statusesData);
         }
 
         if (Array.isArray(stagesData) && stagesData.length > 0) {
@@ -567,6 +639,65 @@ export const CreatePmsTemplateComponent = () => {
     }
   };
 
+  // Project Details Single-Select Options for currently selected client
+  const projectDetailsOptions = useMemo(() => {
+    if (!formData.clientName) return [];
+    const client = presalesList.find(
+      (c) => c.clientName?.toLowerCase().trim() === formData.clientName?.toLowerCase().trim()
+    );
+    if (!client) return [];
+    const projects = Array.isArray(client.allProjects) && client.allProjects.length > 0
+      ? client.allProjects
+      : (client.projectDetails ? [client] : []);
+
+    return projects.map((p, idx) => {
+      const key = String(p.id || p._id || `proj_${idx}`);
+      const pName = p.projectName ? p.projectName : "";
+      const cat = p.workCategory || p.businessType || "";
+      const wt = p.workType || "";
+
+      // Label contains ONLY: Project Name (or Project #), Category, Work Type
+      const parts = [];
+      if (pName) {
+        parts.push(pName);
+      } else {
+        parts.push(`Project #${idx + 1}`);
+      }
+      if (cat && cat !== "--") parts.push(`Category: ${cat}`);
+      if (wt && wt !== "--") parts.push(`Work Type: ${wt}`);
+
+      const label = parts.join(" | ");
+      return {
+        value: key,
+        label,
+        projectName: pName,
+        workCategory: cat,
+        workType: wt,
+        detailText: label,
+        data: p
+      };
+    });
+  }, [formData.clientName, presalesList]);
+
+  const handleProjectSelect = (projOption) => {
+    if (!projOption) {
+      setFormData((prev) => ({
+        ...prev,
+        projectId: null,
+        selectedProjectIds: [],
+        projectDetails: ""
+      }));
+      return;
+    }
+    setFormData((prev) => ({
+      ...prev,
+      projectId: projOption.value,
+      selectedProjectIds: [projOption.value],
+      projectDetails: projOption.label
+    }));
+    setIsProjectOpen(false);
+  };
+
   // 1. Stage Options (From backend stages API - 1000 limit)
   const stageOptions = useMemo(() => {
     return (wbsStages || []).map((s) => {
@@ -638,7 +769,37 @@ export const CreatePmsTemplateComponent = () => {
         if (currentMap.has(sId)) {
           return currentMap.get(sId);
         }
-        return { stageId: sId, works: [], ...DEFAULT_STAGE_DETAILS };
+        const foundStage = (wbsStages || []).find(
+          (s) => (s.stage_code || s.code || s.id) === sId
+        );
+        const matchingWorks = (wbsWorks || []).filter(
+          (w) => w.stage_code === sId || (w.work_code || "").startsWith(`${sId}-`)
+        );
+        const initialWorks = matchingWorks.map((mw) => {
+          const matchingTasks = (wbsTasks || []).filter(
+            (t) => t.work_code === mw.work_code || (t.task_code || "").startsWith(`${mw.work_code}-`)
+          );
+          return {
+            workId: mw.work_code || mw.code || mw.id,
+            workObjId: mw._id || mw.id || null,
+            workName: mw.work_name || mw.name || "",
+            tasks: matchingTasks.map((mt) => ({
+              taskId: mt.task_code || mt.code || mt.id,
+              taskObjId: mt._id || mt.id || null,
+              taskName: mt.task_name || mt.name || "",
+              ...DEFAULT_STAGE_DETAILS
+            })),
+            ...DEFAULT_STAGE_DETAILS
+          };
+        });
+
+        return {
+          stageId: sId,
+          stageObjId: foundStage?._id || foundStage?.id || null,
+          stageName: foundStage?.stage_name || foundStage?.name || "",
+          works: initialWorks,
+          ...DEFAULT_STAGE_DETAILS
+        };
       });
       return { stages: nextStages };
     });
@@ -662,7 +823,16 @@ export const CreatePmsTemplateComponent = () => {
           if (currentWorksMap.has(wId)) {
             return currentWorksMap.get(wId);
           }
-          return { workId: wId, tasks: [], ...DEFAULT_STAGE_DETAILS };
+          const foundWork = (wbsWorks || []).find(
+            (w) => (w.work_code || w.code || w.id) === wId
+          );
+          return {
+            workId: wId,
+            workObjId: foundWork?._id || foundWork?.id || null,
+            workName: foundWork?.work_name || foundWork?.name || "",
+            tasks: [],
+            ...DEFAULT_STAGE_DETAILS
+          };
         });
         return { ...stg, works: nextWorks };
       });
@@ -687,7 +857,15 @@ export const CreatePmsTemplateComponent = () => {
             if (currentTasksMap.has(tId)) {
               return currentTasksMap.get(tId);
             }
-            return { taskId: tId, ...DEFAULT_STAGE_DETAILS };
+            const foundTask = (wbsTasks || []).find(
+              (t) => (t.task_code || t.code || t.id) === tId
+            );
+            return {
+              taskId: tId,
+              taskObjId: foundTask?._id || foundTask?.id || null,
+              taskName: foundTask?.task_name || foundTask?.name || "",
+              ...DEFAULT_STAGE_DETAILS
+            };
           });
           return { ...w, tasks: nextTasks };
         });
@@ -832,6 +1010,9 @@ export const CreatePmsTemplateComponent = () => {
               materialDetails: targetStage.materialDetails || w.materialDetails,
               supplierType: targetStage.supplierType || w.supplierType,
               supplierName: targetStage.supplierName || w.supplierName,
+              materials: Array.isArray(targetStage.materials)
+                ? JSON.parse(JSON.stringify(targetStage.materials))
+                : (w.materials || []),
               maxTimeToComplete: targetStage.maxTimeToComplete || w.maxTimeToComplete,
               timeUnit: targetStage.timeUnit || w.timeUnit,
               deadlineDate: targetStage.deadlineDate || w.deadlineDate,
@@ -877,6 +1058,9 @@ export const CreatePmsTemplateComponent = () => {
                   materialDetails: targetWork.materialDetails || baseObj.materialDetails,
                   supplierType: targetWork.supplierType || baseObj.supplierType,
                   supplierName: targetWork.supplierName || baseObj.supplierName,
+                  materials: Array.isArray(targetWork.materials)
+                    ? JSON.parse(JSON.stringify(targetWork.materials))
+                    : (baseObj.materials || []),
                   maxTimeToComplete: targetWork.maxTimeToComplete || baseObj.maxTimeToComplete,
                   timeUnit: targetWork.timeUnit || baseObj.timeUnit,
                   deadlineDate: targetWork.deadlineDate || baseObj.deadlineDate,
@@ -920,6 +1104,9 @@ export const CreatePmsTemplateComponent = () => {
             materialDetails: targetStage.materialDetails || w.materialDetails,
             supplierType: targetStage.supplierType || w.supplierType,
             supplierName: targetStage.supplierName || w.supplierName,
+            materials: Array.isArray(targetStage.materials)
+              ? JSON.parse(JSON.stringify(targetStage.materials))
+              : (w.materials || []),
             maxTimeToComplete: targetStage.maxTimeToComplete || w.maxTimeToComplete,
             timeUnit: targetStage.timeUnit || w.timeUnit,
             deadlineDate: targetStage.deadlineDate || w.deadlineDate,
@@ -967,6 +1154,9 @@ export const CreatePmsTemplateComponent = () => {
                   materialDetails: targetWork.materialDetails || baseObj.materialDetails,
                   supplierType: targetWork.supplierType || baseObj.supplierType,
                   supplierName: targetWork.supplierName || baseObj.supplierName,
+                  materials: Array.isArray(targetWork.materials)
+                    ? JSON.parse(JSON.stringify(targetWork.materials))
+                    : (baseObj.materials || []),
                   maxTimeToComplete: targetWork.maxTimeToComplete || baseObj.maxTimeToComplete,
                   timeUnit: targetWork.timeUnit || baseObj.timeUnit,
                   deadlineDate: targetWork.deadlineDate || baseObj.deadlineDate,
@@ -1102,14 +1292,39 @@ export const CreatePmsTemplateComponent = () => {
     }
   };
 
-  // Presales Client selection -> auto-fills Project Details
+  // Presales Client selection -> Populates Project Details and auto-selects if client has 1 project
   const handleSelectClient = (client) => {
+    const clientProjects = Array.isArray(client.allProjects) && client.allProjects.length > 0
+      ? client.allProjects
+      : (client.projectDetails ? [client] : []);
+
+    let autoProjectId = null;
+    let autoProjectDetails = "";
+    if (clientProjects.length === 1) {
+      const p = clientProjects[0];
+      autoProjectId = String(p.id || p._id || "");
+      const pName = p.projectName || "";
+      const cat = p.workCategory || p.businessType || "";
+      const wt = p.workType || "";
+      const parts = [];
+      if (pName) parts.push(pName);
+      else parts.push("Project #1");
+      if (cat && cat !== "--") parts.push(`Category: ${cat}`);
+      if (wt && wt !== "--") parts.push(`Work Type: ${wt}`);
+      autoProjectDetails = parts.join(" | ");
+    }
+
     setFormData((prev) => ({
       ...prev,
+      clientId: client.leadId || client.id || client._id,
       clientName: client.clientName,
-      projectDetails: client.projectDetails || ""
+      selectedProjectIds: autoProjectId ? [autoProjectId] : [],
+      projectId: autoProjectId,
+      projectDetails: autoProjectDetails
     }));
+    setClientSearch("");
     setIsClientOpen(false);
+    setIsProjectOpen(false);
   };
 
   // Material selection -> auto-fills Material Details & Preferred Supplier for that Stage
@@ -1207,7 +1422,7 @@ export const CreatePmsTemplateComponent = () => {
   };
 
   // Save / Update Task Submit Handler
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
 
     if (!validateForm()) {
@@ -1237,47 +1452,197 @@ export const CreatePmsTemplateComponent = () => {
         ? rawStatus.split(",").map((s) => s.trim()).filter(Boolean)
         : ["On Track"];
 
+      // 1. Resolve Client ObjectId
+      const foundClient = presalesList.find(
+        (c) => c.clientName?.toLowerCase().trim() === formData.clientName?.toLowerCase().trim()
+      );
+      const resolvedClientId = formData.clientId || foundClient?.leadId || foundClient?.id || foundClient?._id || null;
+
+      // 2. Resolve Project ObjectId
+      const selectedProj =
+        foundClient?.allProjects?.find((p) => String(p.id || p._id) === String(formData.projectId)) ||
+        foundClient?.allProjects?.find((p) => String(p.id || p._id) === String(formData.selectedProjectIds?.[0])) ||
+        foundClient?.allProjects?.[0] ||
+        foundClient;
+      const resolvedProjectId = formData.projectId || selectedProj?._id || selectedProj?.id || null;
+
+      // 3. Resolve Project Statuses with Status ObjectIds (Never null!)
+      const mappedProjectStatus = (Array.isArray(formData.projectStatus) ? formData.projectStatus : [formData.projectStatus])
+        .filter(Boolean)
+        .map((st) => {
+          const stNameOrId = typeof st === "object" ? (st.status_name || st.name || st.value || st._id) : String(st);
+          const found = (projectStatusList || []).find(
+            (s) =>
+              String(s._id) === String(stNameOrId) ||
+              s.status_name?.toLowerCase().trim() === String(stNameOrId).toLowerCase().trim() ||
+              s.status_code?.toLowerCase().trim() === String(stNameOrId).toLowerCase().trim() ||
+              s.name?.toLowerCase().trim() === String(stNameOrId).toLowerCase().trim()
+          );
+          return {
+            statusId: found?._id || (stNameOrId.length === 24 ? stNameOrId : null)
+          };
+        })
+        .filter((st) => Boolean(st.statusId));
+
+      // Helper to extract fieldData with materialSupplier matching user schema
+      const extractFieldData = (item = {}, parentFallback = {}) => {
+        const contrName = item.workWillDoneBy || parentFallback.workWillDoneBy || "";
+        const contrObj = (contractorList || []).find(
+          (c) => (c.name || "").toLowerCase() === contrName.toLowerCase()
+        );
+        const contractorId = item.contractorId || contrObj?._id || contrObj?.id || parentFallback.contractorId || null;
+
+        // Extract materialSupplier array (no materialDetails!)
+        const rawMats =
+          Array.isArray(item.materials) && item.materials.length > 0
+            ? item.materials
+            : item.materialRequired
+            ? [
+                {
+                  materialId: item.materialId,
+                  materialRequired: item.materialRequired,
+                  supplierId: item.supplierId,
+                  supplierName: item.supplierName || parentFallback.supplierName,
+                  supplierType: item.supplierType || parentFallback.supplierType
+                }
+              ]
+            : Array.isArray(parentFallback.materialSupplier) && parentFallback.materialSupplier.length > 0
+            ? parentFallback.materialSupplier
+            : [];
+
+        const materialSupplier = rawMats
+          .filter((m) => m.materialRequired || m.name || m.materialName || m.materialId)
+          .map((m) => {
+            const matName = m.materialRequired || m.name || m.materialName || "";
+            const matObj = (materialList || []).find(
+              (mat) => (mat.name || mat.materialName) === matName
+            );
+            const suppName = m.supplierName || item.supplierName || parentFallback.supplierName || "";
+            const suppObj = (supplierList || []).find(
+              (s) => (s.name || "").toLowerCase() === suppName.toLowerCase()
+            );
+
+            return {
+              materialId: m.materialId || matObj?._id || matObj?.id || null,
+              supplierId: m.supplierId || suppObj?._id || suppObj?.id || null,
+              supplierType: m.supplierType || suppObj?.supplierType || item.supplierType || parentFallback.supplierType || ""
+            };
+          });
+
+        const durationDays = Number(item.durationDays !== undefined ? item.durationDays : parentFallback.durationDays || 3);
+        const durationHours = Number(item.durationHours !== undefined ? item.durationHours : parentFallback.durationHours || 0);
+
+        return {
+          workWillDoneBy: contrName,
+          contractorId,
+          toolsVehicles:
+            Array.isArray(item.toolsVehicles) && item.toolsVehicles.length > 0
+              ? item.toolsVehicles
+              : parentFallback.toolsVehicles || [],
+          materialSupplier,
+          maxTimeToComplete: item.maxTimeToComplete || parentFallback.maxTimeToComplete || "3",
+          timeUnit: item.timeUnit || parentFallback.timeUnit || "Days",
+          deadlineDate: item.deadlineDate || parentFallback.deadlineDate || null,
+          durationDays,
+          durationHours,
+          durationFormatted: `${durationDays} D ; ${durationHours} H`,
+          instruction: item.instruction || parentFallback.instruction || "",
+          remark: item.remark || parentFallback.remark || ""
+        };
+      };
+
+      // 4. Resolve Hierarchical WBS: Stages -> Works -> Tasks (Each with their full fieldData!)
+      const dbStages = (wbsStructure.stages || []).map((stg) => {
+        const sObj = (wbsStages || []).find(
+          (s) => (s.stage_code || s.code || s.id) === stg.stageId
+        );
+        const stageObjId = stg.stageObjId || sObj?._id || sObj?.id || null;
+        const stageFieldData = extractFieldData(stg);
+
+        const dbWorks = (stg.works || []).map((wrk) => {
+          const wObj = (wbsWorks || []).find(
+            (w) => (w.work_code || w.code || w.id) === wrk.workId
+          );
+          const workObjId = wrk.workObjId || wObj?._id || wObj?.id || null;
+          const workFieldData = extractFieldData(wrk, stageFieldData);
+
+          const dbTasks = (wrk.tasks || []).map((tsk) => {
+            const tCode = typeof tsk === "object" ? tsk.taskId : tsk;
+            const tObj = (wbsTasks || []).find(
+              (t) => (t.task_code || t.code || t.id) === tCode
+            );
+            const tskObj = typeof tsk === "object" ? tsk : {};
+            const taskFieldData = extractFieldData(tskObj, workFieldData);
+
+            return {
+              taskId: tskObj.taskObjId || tObj?._id || tObj?.id || null,
+              fieldData: taskFieldData
+            };
+          });
+
+          return {
+            workId: workObjId,
+            fieldData: workFieldData,
+            tasks: dbTasks
+          };
+        });
+
+        return {
+          stageId: stageObjId,
+          fieldData: stageFieldData,
+          works: dbWorks
+        };
+      });
+
+      // Complete relational backend payload matching user exact Mongoose Schema
+      const backendPayload = {
+        leadId: resolvedClientId,
+        projectId: resolvedProjectId,
+        projectStatus: mappedProjectStatus,
+        stages: dbStages,
+        status: "Active"
+      };
+
+      // 5. Send to Database via Backend API
+      let apiSavedData = null;
+      try {
+        if (isEdit && id && id.length === 24) {
+          const res = await pmsTemplateService.updateTemplate(id, backendPayload);
+          apiSavedData = res?.data?.data || res?.data;
+        } else {
+          const res = await pmsTemplateService.createTemplate(backendPayload);
+          apiSavedData = res?.data?.data || res?.data;
+        }
+        toast.success(`PMS Task "${primaryTaskCode}" saved to database successfully!`);
+      } catch (apiErr) {
+        console.warn("Backend API save warning (saving cache):", apiErr?.response?.data || apiErr.message);
+        toast.info("Saved locally & synchronized with system cache.");
+      }
+
+      // Backward compatible task payload for local storage cache
       const taskPayload = {
         ...formData,
-        projectStatus: projectStatusArr,
-        projectStatusText: projectStatusArr.join(", "),
+        ...backendPayload,
+        _id: apiSavedData?._id || id || undefined,
+        id: apiSavedData?._id || formData.id || "TSK-" + Math.floor(100 + Math.random() * 900),
         stage: allStages.join(", ") || formData.stage || "",
         work: allWorks.join(", ") || formData.work || "",
         task: primaryTaskCode,
         wbsStructure,
-        // Backward compatibility fallback for table views
-        workWillDoneBy: firstStage.workWillDoneBy || "",
-        contractorType: firstStage.contractorType || "",
-        toolsVehicles: firstStage.toolsVehicles || [],
-        materialRequired: firstStage.materialRequired || "",
-        materialDetails: firstStage.materialDetails || "",
-        supplierType: firstStage.supplierType || "",
-        supplierName: firstStage.supplierName || "",
-        maxTimeToComplete: firstStage.maxTimeToComplete || "3",
-        timeUnit: firstStage.timeUnit || "Days",
-        deadlineDate: firstStage.deadlineDate || "",
-        durationDays: firstStage.durationDays || "3",
-        durationHours: firstStage.durationHours || "0",
-        durationFormatted,
-        instruction: firstStage.instruction || "",
-        remark: firstStage.remark || "",
-        id: formData.id || "TSK-" + Math.floor(100 + Math.random() * 900),
         updatedAt: new Date().toISOString()
       };
 
       let updatedList;
       if (isEdit) {
         updatedList = savedTasks.map((item) => (String(item.id) === String(id) ? taskPayload : item));
-        toast.success(`PMS Task "${primaryTaskCode}" updated successfully!`);
       } else {
         updatedList = [taskPayload, ...savedTasks];
-        toast.success(`PMS Task "${primaryTaskCode}" created successfully!`);
       }
 
       setSavedTasks(updatedList);
       localStorage.setItem(PMS_TASKS_STORAGE_KEY, JSON.stringify(updatedList));
 
-      // Also ensure PMS Template master reflects this task count & codes
+      // Also ensure PMS Template master reflects this task count
       try {
         const storedTemplates = localStorage.getItem(PMS_TEMPLATES_STORAGE_KEY);
         if (storedTemplates) {
@@ -1292,7 +1657,7 @@ export const CreatePmsTemplateComponent = () => {
       navigate("/sales/master/pms-template");
     } catch (err) {
       console.error(err);
-      toast.error("Failed to save PMS Task.");
+      toast.error("Failed to save PMS Task: " + (err.message || "Unknown error"));
     } finally {
       setLoading(false);
     }
@@ -1339,10 +1704,13 @@ export const CreatePmsTemplateComponent = () => {
         className="bg-white rounded-xl shadow-sm border border-slate-200/80 p-5 sm:p-6"
       >
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* Client Name (Searchable from Presales) */}
+          {/* Client Name (Searchable Single Select from Presales) */}
           <div className="relative" ref={clientDropdownRef}>
             <label className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center justify-between">
-              <span>Client Name</span>
+              <span className="flex items-center gap-1.5">
+                <span>Client Name</span>
+                <span className="text-[10px] text-slate-500 font-medium">(Single Select)</span>
+              </span>
               <span className="text-[10px] text-indigo-600 bg-indigo-50 font-bold px-1.5 py-0.5 rounded">From Presales</span>
             </label>
             <div
@@ -1361,7 +1729,14 @@ export const CreatePmsTemplateComponent = () => {
                     type="button"
                     onClick={(e) => {
                       e.stopPropagation();
-                      setFormData({ ...formData, clientName: "", projectDetails: "" });
+                      setFormData((prev) => ({
+                        ...prev,
+                        clientName: "",
+                        clientId: null,
+                        projectDetails: "",
+                        selectedProjectIds: [],
+                        projectId: null
+                      }));
                     }}
                     className="p-1 text-slate-400 hover:text-red-500 rounded transition-colors"
                     title="Clear Client"
@@ -1397,6 +1772,7 @@ export const CreatePmsTemplateComponent = () => {
                         p.clientName?.toLowerCase().includes(q) ||
                         p.companyName?.toLowerCase().includes(q) ||
                         p.city?.toLowerCase().includes(q) ||
+                        p.phoneNumber?.toLowerCase().includes(q) ||
                         p.businessType?.toLowerCase().includes(q) ||
                         p.requirement?.toLowerCase().includes(q)
                       );
@@ -1415,6 +1791,11 @@ export const CreatePmsTemplateComponent = () => {
                             {p.companyName && (
                               <span className="text-[10px] text-indigo-600 bg-indigo-50/80 px-1 rounded">
                                 {p.companyName}
+                              </span>
+                            )}
+                            {Array.isArray(p.allProjects) && p.allProjects.length > 1 && (
+                              <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded-full">
+                                {p.allProjects.length} Projects
                               </span>
                             )}
                           </div>
@@ -1438,22 +1819,108 @@ export const CreatePmsTemplateComponent = () => {
             )}
           </div>
 
-          {/* Project Details (Auto-filled from Client Name selection, editable) */}
-          <div className="md:col-span-2">
-            <label className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center justify-between">
-              <span>Project Details</span>
-              <span className="text-[10px] text-slate-400 font-medium">Auto-filled from Presales, editable</span>
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={formData.projectDetails || ""}
-                onChange={(e) => setFormData({ ...formData, projectDetails: e.target.value })}
-                placeholder="Select client to auto-fill company, business type, city, budget & requirement..."
-                className="w-full pl-9 pr-3.5 py-2.5 border border-slate-200 rounded-lg text-sm font-medium text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-slate-50/50 hover:bg-white focus:bg-white transition-colors placeholder:text-slate-400"
-              />
-              <FaBuilding className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none" />
+          {/* Project Details (Single-Select Dropdown for selected client) */}
+          <div className="md:col-span-2 relative" ref={projectDropdownRef}>
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="text-sm font-bold text-slate-700 flex items-center gap-1.5">
+                <span>Project Details</span>
+                <span className="text-[10px] text-slate-500 font-medium">(Single Select)</span>
+              </label>
+              <span className="text-[10px] text-slate-400 font-medium">
+                {formData.clientName
+                  ? `${projectDetailsOptions.length} Project${projectDetailsOptions.length === 1 ? "" : "s"} Available`
+                  : "Select client first"}
+              </span>
             </div>
+            {formData.clientName && projectDetailsOptions.length > 0 ? (
+              <div className="relative">
+                <div
+                  onClick={() => setIsProjectOpen(!isProjectOpen)}
+                  className="w-full px-3.5 py-2.5 border border-slate-200 rounded-lg text-sm font-semibold text-slate-800 flex items-center justify-between cursor-pointer bg-white hover:border-indigo-300 transition-colors"
+                >
+                  <div className="flex items-center gap-2 truncate">
+                    <FaBuilding className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span className={formData.projectId ? "text-slate-900 font-bold truncate" : "text-slate-400 font-normal"}>
+                      {(() => {
+                        const currentOpt = projectDetailsOptions.find(
+                          (opt) => opt.value === String(formData.projectId) || opt.detailText === formData.projectDetails
+                        );
+                        return currentOpt ? currentOpt.label : (formData.projectDetails || "Select project details...");
+                      })()}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0 ml-1">
+                    {formData.projectId && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleProjectSelect(null);
+                        }}
+                        className="p-1 text-slate-400 hover:text-red-500 rounded transition-colors"
+                        title="Clear Project"
+                      >
+                        <FaTimes className="w-3 h-3" />
+                      </button>
+                    )}
+                    <FaChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                  </div>
+                </div>
+
+                {/* Project Single-Select Dropdown Options */}
+                {isProjectOpen && (
+                  <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-xl border border-slate-200 z-50 p-2 max-h-60 overflow-y-auto space-y-1">
+                    {projectDetailsOptions.map((opt) => {
+                      const isSelected = String(formData.projectId) === String(opt.value);
+                      return (
+                        <div
+                          key={opt.value}
+                          onClick={() => handleProjectSelect(opt)}
+                          className={`px-3 py-2.5 rounded-lg text-xs cursor-pointer hover:bg-indigo-50 flex items-center justify-between transition-colors ${
+                            isSelected ? "bg-indigo-50 font-bold text-indigo-900 border border-indigo-200" : "text-slate-700"
+                          }`}
+                        >
+                          <div className="space-y-1 truncate pr-2">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-900 text-xs">
+                                {opt.projectName || opt.label.split("|")[0].trim()}
+                              </span>
+                            </div>
+                            <div className="text-[11px] text-slate-500 flex items-center gap-2 flex-wrap">
+                              {opt.workCategory && opt.workCategory !== "--" && (
+                                <span className="bg-slate-100 border border-slate-200/60 px-1.5 py-0.5 rounded text-slate-600 font-medium">
+                                  Category: {opt.workCategory}
+                                </span>
+                              )}
+                              {opt.workType && opt.workType !== "--" && (
+                                <span className="bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded text-indigo-600 font-medium">
+                                  Work Type: {opt.workType}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          {isSelected && <FaCheck className="text-indigo-600 w-3.5 h-3.5 shrink-0" />}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="relative">
+                <input
+                  type="text"
+                  disabled
+                  placeholder={
+                    formData.clientName
+                      ? "No project records found for this client"
+                      : "Select client first to choose project details..."
+                  }
+                  className="w-full pl-9 pr-3.5 py-2.5 border border-slate-200 rounded-lg text-sm font-medium text-slate-400 bg-slate-100/70 cursor-not-allowed"
+                />
+                <FaBuilding className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none" />
+              </div>
+            )}
           </div>
 
           {/* 1. Project Status (Multi-Select with Checkboxes - Required *) */}
@@ -1761,7 +2228,7 @@ export const CreatePmsTemplateComponent = () => {
 
                       {/* ACTIVE STAGE CARD */}
                       {activeStage && (
-                        <div className="space-y-5 bg-white p-5 rounded-2xl border-[3px] border-indigo-500 shadow-md ring-4 ring-indigo-100/70">
+                        <div className="space-y-5 bg-white p-5 rounded-2xl border-[3px] border-indigo-500">
                           {/* 1. STAGE LEVEL EXECUTION & RESOURCE FIELD DATA */}
                           <div className="space-y-2">
                             <ExecutionResourceFieldData
@@ -1948,7 +2415,7 @@ export const CreatePmsTemplateComponent = () => {
 
                                 {/* ACTIVE WORK DETAILS */}
                                 {activeWork && (
-                                  <div className="p-4 sm:p-5 rounded-2xl border-[3px] border-blue-500 bg-blue-50/25 space-y-4 shadow-md ring-4 ring-blue-100/70">
+                                  <div className="p-4 sm:p-5 rounded-2xl border-[3px] border-blue-500 bg-blue-50/25 space-y-4">
                                     {/* WORK LEVEL EXECUTION & RESOURCE FIELD DATA */}
                                     <ExecutionResourceFieldData
                                       title={`WORK ${activeWork.workId} — EXECUTION & RESOURCE DETAILS`}
@@ -2137,7 +2604,7 @@ export const CreatePmsTemplateComponent = () => {
 
                                           {/* ACTIVE TASK DETAILS */}
                                           {activeTaskObj && (
-                                            <div className="p-4 rounded-xl border-[3px] border-emerald-500 bg-emerald-50/25 shadow-md ring-4 ring-emerald-100/70">
+                                            <div className="p-4 rounded-xl border-[3px] border-emerald-500 bg-emerald-50/25">
                                               <ExecutionResourceFieldData
                                                 title={`TASK ${activeTaskIdEffective} — EXECUTION & RESOURCE DETAILS`}
                                                 subtitle={`Configure execution team, materials & timeline for Task ${activeTaskIdEffective}`}

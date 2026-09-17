@@ -1,30 +1,11 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import {
-  FaUser,
-  FaPhoneAlt,
-  FaWhatsapp,
-  FaEnvelope,
-  FaBriefcase,
-  FaStar,
-  FaBuilding,
-  FaLayerGroup,
-  FaRupeeSign,
-  FaFlag,
-  FaTag,
-  FaUserTie,
-  FaCity,
-  FaMapMarkedAlt,
-  FaMapPin,
-  FaHome,
-  FaClipboardList,
-  FaCommentDots,
   FaCheck,
   FaTable,
   FaSpinner,
   FaSave,
-  FaArrowLeft,
-  FaCheckCircle
+  FaArrowLeft
 } from "react-icons/fa";
 import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
@@ -70,6 +51,8 @@ const SalesLeadForm = () => {
     whatsappNumber: "",
     emailAddress: "",
     companyName: "",
+    projectName: "",
+    workType: "",
     businessType: "Information Technology",
     clientDesignation: "Managing Director",
     expectedBusiness: 50000,
@@ -97,6 +80,10 @@ const SalesLeadForm = () => {
       whatsappNumber: leadData.whatsappNumber || leadData.phoneNumber || leadData.phone || "",
       emailAddress: leadData.emailAddress || leadData.email || "",
       companyName: leadData.companyName || leadData.company || "",
+      projectName: leadData.projectName || "",
+      workType: Array.isArray(leadData.workType)
+        ? leadData.workType.join(", ")
+        : (leadData.workType || ""),
       businessType: leadData.workCategory || leadData.businessType || "Information Technology",
       clientDesignation: leadData.clientDesignation || "Managing Director",
       expectedBusiness: Number(leadData.expectedBusiness || leadData.amount || leadData.budget || 50000),
@@ -270,6 +257,10 @@ const SalesLeadForm = () => {
         whatsappNumber: proj.whatsappNumber || proj.phoneNumber || "",
         emailAddress: proj.emailAddress || "",
         companyName: proj.companyName || "",
+        projectName: proj.projectName || "",
+        workType: Array.isArray(proj.workType)
+          ? proj.workType.join(", ")
+          : (proj.workType || (Array.isArray(location.state?.lead?.workType) ? location.state.lead.workType.join(", ") : location.state?.lead?.workType || "")),
         businessType: proj.businessType || "Information Technology",
         clientDesignation: proj.clientDesignation || "Managing Director",
         expectedBusiness: Number(proj.expectedBusiness || 50000),
@@ -340,6 +331,10 @@ const SalesLeadForm = () => {
     const formattedDate = new Date().toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
     const formattedTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
 
+    const finalWorkType = formData.workType
+      ? (typeof formData.workType === "string" ? formData.workType.split(",").map((s) => s.trim()).filter(Boolean) : formData.workType)
+      : (lead?.workType || []);
+
     const finalLeadData = {
       ...(lead || {}),
       clientName: formData.clientName,
@@ -351,7 +346,10 @@ const SalesLeadForm = () => {
       emailAddress: formData.emailAddress,
       email: formData.emailAddress,
       companyName: formData.companyName,
+      projectName: formData.projectName,
+      workType: finalWorkType,
       businessType: formData.businessType,
+      workCategory: formData.businessType,
       clientDesignation: formData.clientDesignation,
       amount: Number(formData.expectedBusiness) || 0,
       expectedBusiness: Number(formData.expectedBusiness) || 0,
@@ -486,496 +484,369 @@ const SalesLeadForm = () => {
         />
       </div>
 
-      {/* LEAD QUICK INFO BANNER */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-2xl p-4 sm:p-5 text-white shadow-sm flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center font-bold text-lg shadow-inner">
-            <FaUser />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h2 className="text-base sm:text-lg font-bold text-white">
-                {formData.clientName || "Lead Client"}
-              </h2>
-              {lead?.leadId && (
-                <span className="px-2 py-0.5 rounded-md bg-white/10 text-xs font-mono font-semibold text-slate-300">
-                  {lead.leadId}
-                </span>
-              )}
-            </div>
-            <div className="flex flex-wrap items-center gap-3 mt-1 text-xs sm:text-sm text-slate-300">
-              {formData.phoneNumber && (
-                <span className="flex items-center gap-1.5">
-                  <FaPhoneAlt className="text-emerald-400 text-xs" />
-                  <span className="font-mono">{formData.phoneNumber}</span>
-                </span>
-              )}
-              {formData.emailAddress && (
-                <span className="flex items-center gap-1.5">
-                  <FaEnvelope className="text-blue-400 text-xs" />
-                  <span>{formData.emailAddress}</span>
-                </span>
-              )}
-            </div>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <div className="bg-white/10 px-3.5 py-1.5 rounded-xl border border-white/10 text-right">
-            <span className="block text-[10px] font-semibold text-slate-300 uppercase tracking-wider">Expected Business</span>
-            <span className="text-base sm:text-lg font-bold text-emerald-400 font-mono">
-              ₹ {Number(formData.expectedBusiness || 0).toLocaleString("en-IN")}
-            </span>
-          </div>
-          <div className="bg-emerald-500/20 px-3.5 py-2 rounded-xl border border-emerald-400/30 text-center">
-            <span className="block text-[10px] font-bold text-emerald-300 uppercase tracking-wider">Status</span>
-            <span className="text-xs sm:text-sm font-bold text-emerald-300">INTERESTED</span>
-          </div>
-        </div>
-      </div>
-
-      {/* MAIN FORM CARD (Styled like AddLead form) */}
-      <form onSubmit={handleSubmit} autoComplete="off" className="bg-white rounded-2xl shadow-2xs px-3.5 sm:px-6 py-5 space-y-6">
+      {/* MAIN UNIFIED FORM CARD (Matches AddLead and CRM standard style) */}
+      <form onSubmit={handleSubmit} autoComplete="off" className="bg-white rounded-2xl shadow-2xs px-3.5 sm:px-6 py-5 space-y-3.5">
         
-        {/* SECTION 1: CLIENT INFORMATION */}
-        <div className="space-y-3.5">
-          <div className="flex items-center gap-2 pb-2.5 border-b border-slate-200 text-slate-900 font-bold text-sm sm:text-base">
-            <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center text-xs">
-              <FaUser />
-            </div>
-            <span>Client & Contact Information</span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-x-3 sm:gap-x-4 gap-y-3">
-            <div id="field-clientName">
-              <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-                Client Name <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs sm:text-sm">
-                  <FaUser />
-                </span>
-                <input
-                  type="text"
-                  required
-                  value={formData.clientName}
-                  onChange={(e) => handleInputChange("clientName", e.target.value)}
-                  placeholder="Enter Client Name"
-                  className={`w-full pl-9 pr-3 py-2 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400 ${
-                    errors.clientName ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
-                  }`}
-                />
-              </div>
-              {errors.clientName && <p className="text-xs text-red-500 font-medium mt-1">{errors.clientName}</p>}
-            </div>
-
-            <div id="field-phoneNumber">
-              <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-                Primary Phone Number <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs sm:text-sm">
-                  <FaPhoneAlt />
-                </span>
-                <input
-                  type="tel"
-                  required
-                  maxLength={10}
-                  value={formData.phoneNumber}
-                  onChange={(e) => handleInputChange("phoneNumber", e.target.value.replace(/\D/g, "").slice(0, 10))}
-                  placeholder="Enter 10-digit Phone Number"
-                  className={`w-full pl-9 pr-3 py-2 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium font-mono focus:outline-none transition-all placeholder:text-slate-400 ${
-                    errors.phoneNumber ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
-                  }`}
-                />
-              </div>
-              {errors.phoneNumber && <p className="text-xs text-red-500 font-medium mt-1">{errors.phoneNumber}</p>}
-            </div>
-
-            <div id="field-whatsappNumber">
-              <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-                WhatsApp / Alternate Number
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-500 text-sm">
-                  <FaWhatsapp />
-                </span>
-                <input
-                  type="tel"
-                  maxLength={10}
-                  value={formData.whatsappNumber}
-                  onChange={(e) => handleInputChange("whatsappNumber", e.target.value.replace(/\D/g, "").slice(0, 10))}
-                  placeholder="Enter WhatsApp / Alternate Number"
-                  className={`w-full pl-9 pr-3 py-2 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium font-mono focus:outline-none transition-all placeholder:text-slate-400 ${
-                    errors.whatsappNumber ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
-                  }`}
-                />
-              </div>
-              {errors.whatsappNumber && <p className="text-xs text-red-500 font-medium mt-1">{errors.whatsappNumber}</p>}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-x-3 sm:gap-x-4 gap-y-3 pt-1">
-            <div id="field-emailAddress">
-              <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-                Email Address
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs sm:text-sm">
-                  <FaEnvelope />
-                </span>
-                <input
-                  type="email"
-                  value={formData.emailAddress}
-                  onChange={(e) => handleInputChange("emailAddress", e.target.value)}
-                  placeholder="Enter Email Address"
-                  className={`w-full pl-9 pr-3 py-2 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400 ${
-                    errors.emailAddress ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
-                  }`}
-                />
-              </div>
-              {errors.emailAddress && <p className="text-xs text-red-500 font-medium mt-1">{errors.emailAddress}</p>}
-            </div>
-
-            <div>
-              <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-                Client Designation / Role
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs sm:text-sm">
-                  <FaBriefcase />
-                </span>
-                <input
-                  type="text"
-                  value={formData.clientDesignation}
-                  onChange={(e) => handleInputChange("clientDesignation", e.target.value)}
-                  placeholder="e.g. Managing Director, Owner"
-                  className="w-full pl-9 pr-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-                Client Rating
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-amber-500 text-xs sm:text-sm">
-                  <FaStar />
-                </span>
-                <select
-                  value={formData.clientRating}
-                  onChange={(e) => handleInputChange("clientRating", parseFloat(e.target.value))}
-                  className="w-full pl-9 pr-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all cursor-pointer"
-                >
-                  <option value={5}>5.0 ★ (Highest Potential)</option>
-                  <option value={4.5}>4.5 ★ (Very High Potential)</option>
-                  <option value={4}>4.0 ★ (High Potential)</option>
-                  <option value={3.5}>3.5 ★ (Medium)</option>
-                  <option value={3}>3.0 ★ (Average)</option>
-                </select>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* SECTION 2: COMPANY & DEAL FINANCIALS */}
-        <div className="space-y-3.5 pt-2">
-          <div className="flex items-center gap-2 pb-2.5 border-b border-slate-200 text-slate-900 font-bold text-sm sm:text-base">
-            <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center text-xs">
-              <FaBuilding />
-            </div>
-            <span>Company & Deal Financials</span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-x-3 sm:gap-x-4 gap-y-3">
-            <div>
-              <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-                Company Name
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs sm:text-sm">
-                  <FaBuilding />
-                </span>
-                <input
-                  type="text"
-                  value={formData.companyName}
-                  onChange={(e) => handleInputChange("companyName", e.target.value)}
-                  placeholder="Enter Company Name"
-                  className="w-full pl-9 pr-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-                Work Category <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs sm:text-sm">
-                  <FaLayerGroup />
-                </span>
-                <select
-                  value={formData.businessType}
-                  onChange={(e) => handleInputChange("businessType", e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all cursor-pointer"
-                >
-                  {workCategoryList.map((cat) => (
-                    <option key={cat} value={cat}>
-                      {cat}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div id="field-expectedBusiness">
-              <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-                Expected Business (₹ Amount) <span className="text-red-500">*</span>
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-emerald-600 font-bold text-sm">
-                  <FaRupeeSign />
-                </span>
-                <input
-                  type="number"
-                  required
-                  min={0}
-                  value={formData.expectedBusiness}
-                  onChange={(e) => handleInputChange("expectedBusiness", e.target.value)}
-                  placeholder="Enter Amount (₹)"
-                  className={`w-full pl-9 pr-3 py-2 rounded-lg border bg-white text-emerald-700 text-xs sm:text-sm font-bold font-mono focus:outline-none transition-all ${
-                    errors.expectedBusiness ? "border-red-500 bg-red-50/20 focus:border-red-500" : "border-black/20 focus:border-black/50"
-                  }`}
-                />
-              </div>
-              {errors.expectedBusiness && <p className="text-xs text-red-500 font-medium mt-1">{errors.expectedBusiness}</p>}
-            </div>
-
-            <div>
-              <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-                Lead Priority
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-amber-500 text-xs sm:text-sm">
-                  <FaFlag />
-                </span>
-                <select
-                  value={formData.priority}
-                  onChange={(e) => handleInputChange("priority", e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all cursor-pointer"
-                >
-                  <option value="high">🔴 High Priority</option>
-                  <option value="medium">🟡 Medium Priority</option>
-                  <option value="low">🟢 Low Priority</option>
-                </select>
-              </div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-x-3 sm:gap-x-4 gap-y-3 pt-1">
-            <div>
-              <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-                Job Type
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-blue-500 text-xs sm:text-sm">
-                  <FaTag />
-                </span>
-                <select
-                  value={formData.jobType}
-                  onChange={(e) => handleInputChange("jobType", e.target.value)}
-                  className="w-full pl-9 pr-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all cursor-pointer"
-                >
-                  <option value="NEW">NEW Client / Job</option>
-                  <option value="OLD">OLD / Repeat Client</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-                Next Person Name
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs sm:text-sm">
-                  <FaUser />
-                </span>
-                <input
-                  type="text"
-                  value={formData.nextPersonName}
-                  onChange={(e) => handleInputChange("nextPersonName", e.target.value)}
-                  placeholder="Enter Next Person Name"
-                  className="w-full pl-9 pr-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400"
-                />
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-                Designation
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs sm:text-sm">
-                  <FaBriefcase />
-                </span>
-                <input
-                  type="text"
-                  value={formData.designation}
-                  onChange={(e) => handleInputChange("designation", e.target.value)}
-                  placeholder="e.g. Project Manager, Site Engineer"
-                  className="w-full pl-9 pr-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400"
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* SECTION 3: LOCATION & SITE ADDRESS */}
-        <div className="space-y-3.5 pt-2">
-          <div className="flex items-center gap-2 pb-2.5 border-b border-slate-200 text-slate-900 font-bold text-sm sm:text-base">
-            <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center text-xs">
-              <FaCity />
-            </div>
-            <span>Location & Site Address</span>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-x-3 sm:gap-x-4 gap-y-3">
-            {/* PINCODE FIELD (FIRST FOR AUTO-FETCH) */}
-            <div id="field-pincode">
-              <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1 flex items-center justify-between">
-                <span>Pincode</span>
-                {isFetchingPincode && (
-                  <span className="text-[11px] text-blue-600 animate-pulse font-normal flex items-center gap-1">
-                    <FaSpinner className="animate-spin text-[10px]" /> Auto-fetching City & State...
-                  </span>
-                )}
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs sm:text-sm">
-                  <FaMapPin />
-                </span>
-                <input
-                  type="text"
-                  maxLength={6}
-                  value={formData.pincode}
-                  onChange={handlePincodeChange}
-                  placeholder="Enter 6-digit Pincode"
-                  className={`w-full pl-9 pr-3 py-2 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium font-mono focus:outline-none transition-all placeholder:text-slate-400 ${
-                    errors.pincode ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
-                  }`}
-                />
-              </div>
-              {errors.pincode && <p className="text-xs text-red-500 font-medium mt-1">{errors.pincode}</p>}
-            </div>
-
-            {/* CITY (AUTO-FETCHED OR MANUAL) */}
-            <div id="field-city">
-              <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-                City
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs sm:text-sm">
-                  <FaCity />
-                </span>
-                <input
-                  type="text"
-                  value={formData.city}
-                  onChange={(e) => handleInputChange("city", e.target.value)}
-                  placeholder="Enter City"
-                  className={`w-full pl-9 pr-3 py-2 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400 ${
-                    errors.city ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
-                  }`}
-                />
-              </div>
-              {errors.city && <p className="text-xs text-red-500 font-medium mt-1">{errors.city}</p>}
-            </div>
-
-            {/* STATE (AUTO-FETCHED OR SELECT) */}
-            <div id="field-state">
-              <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-                State
-              </label>
-              <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs sm:text-sm">
-                  <FaMapMarkedAlt />
-                </span>
-                <input
-                  type="text"
-                  value={formData.state}
-                  onChange={(e) => handleInputChange("state", e.target.value)}
-                  placeholder="Enter or select State"
-                  className={`w-full pl-9 pr-3 py-2 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400 ${
-                    errors.state ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
-                  }`}
-                />
-              </div>
-              {errors.state && <p className="text-xs text-red-500 font-medium mt-1">{errors.state}</p>}
-            </div>
-          </div>
-
-          <div id="field-address">
+        {/* ROW 1: Client Name | Primary Phone Number | WhatsApp / Alternate Number */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-3 sm:gap-x-4 gap-y-3">
+          <div id="field-clientName">
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-              Complete Site / Office Address
+              Client Name <span className="text-red-500">*</span>
             </label>
-            <div className="relative">
-              <span className="absolute left-3 top-3 text-slate-400 text-xs sm:text-sm">
-                <FaHome />
-              </span>
-              <textarea
-                rows={2}
-                value={formData.address}
-                onChange={(e) => handleInputChange("address", e.target.value)}
-                placeholder="Enter complete plot/site address, landmarks..."
-                className="w-full pl-9 pr-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400 resize-y"
-              />
-            </div>
+            <input
+              type="text"
+              required
+              value={formData.clientName}
+              onChange={(e) => handleInputChange("clientName", e.target.value)}
+              placeholder="Enter Client Name"
+              className={`w-full px-3 py-2 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400 ${
+                errors.clientName ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
+              }`}
+            />
+            {errors.clientName && <p className="text-xs text-red-500 font-medium mt-1">{errors.clientName}</p>}
+          </div>
+
+          <div id="field-phoneNumber">
+            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
+              Primary Phone Number <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="tel"
+              required
+              maxLength={10}
+              value={formData.phoneNumber}
+              onChange={(e) => handleInputChange("phoneNumber", e.target.value.replace(/\D/g, "").slice(0, 10))}
+              placeholder="Enter 10-digit Phone Number"
+              className={`w-full px-3 py-2 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium font-mono focus:outline-none transition-all placeholder:text-slate-400 ${
+                errors.phoneNumber ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
+              }`}
+            />
+            {errors.phoneNumber && <p className="text-xs text-red-500 font-medium mt-1">{errors.phoneNumber}</p>}
+          </div>
+
+          <div id="field-whatsappNumber">
+            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
+              WhatsApp / Alternate Number
+            </label>
+            <input
+              type="tel"
+              maxLength={10}
+              value={formData.whatsappNumber}
+              onChange={(e) => handleInputChange("whatsappNumber", e.target.value.replace(/\D/g, "").slice(0, 10))}
+              placeholder="Enter WhatsApp / Alternate Number"
+              className={`w-full px-3 py-2 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium font-mono focus:outline-none transition-all placeholder:text-slate-400 ${
+                errors.whatsappNumber ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
+              }`}
+            />
+            {errors.whatsappNumber && <p className="text-xs text-red-500 font-medium mt-1">{errors.whatsappNumber}</p>}
           </div>
         </div>
 
-        {/* SECTION 4: REQUIREMENT & REMARKS */}
-        <div className="space-y-3.5 pt-2">
-          <div className="flex items-center gap-2 pb-2.5 border-b border-slate-200 text-slate-900 font-bold text-sm sm:text-base">
-            <div className="w-7 h-7 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center text-xs">
-              <FaClipboardList />
-            </div>
-            <span>Requirement Details & Sales Management Notes</span>
+        {/* ROW 2: Email Address | Client Designation | Client Rating */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-3 sm:gap-x-4 gap-y-3 pt-0.5">
+          <div id="field-emailAddress">
+            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
+              Email Address
+            </label>
+            <input
+              type="email"
+              value={formData.emailAddress}
+              onChange={(e) => handleInputChange("emailAddress", e.target.value)}
+              placeholder="Enter Email Address"
+              className={`w-full px-3 py-2 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400 ${
+                errors.emailAddress ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
+              }`}
+            />
+            {errors.emailAddress && <p className="text-xs text-red-500 font-medium mt-1">{errors.emailAddress}</p>}
           </div>
 
+          <div>
+            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
+              Client Designation / Role
+            </label>
+            <input
+              type="text"
+              value={formData.clientDesignation}
+              onChange={(e) => handleInputChange("clientDesignation", e.target.value)}
+              placeholder="e.g. Managing Director, Owner"
+              className="w-full px-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
+              Client Rating
+            </label>
+            <select
+              value={formData.clientRating}
+              onChange={(e) => handleInputChange("clientRating", parseFloat(e.target.value))}
+              className="w-full px-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all cursor-pointer"
+            >
+              <option value={5}>5.0 ★ (Highest Potential)</option>
+              <option value={4.5}>4.5 ★ (Very High Potential)</option>
+              <option value={4}>4.0 ★ (High Potential)</option>
+              <option value={3.5}>3.5 ★ (Medium)</option>
+              <option value={3}>3.0 ★ (Average)</option>
+            </select>
+          </div>
+        </div>
+
+        {/* ROW 3: Company Name | Work Type | Work Category */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-3 sm:gap-x-4 gap-y-3 pt-0.5">
+          <div>
+            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
+              Company Name
+            </label>
+            <input
+              type="text"
+              value={formData.companyName}
+              onChange={(e) => handleInputChange("companyName", e.target.value)}
+              placeholder="Enter Company Name"
+              className="w-full px-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
+              Work Type
+            </label>
+            <input
+              type="text"
+              value={formData.workType}
+              onChange={(e) => handleInputChange("workType", e.target.value)}
+              placeholder="e.g. Concept Drawing, Elevation Drawing"
+              className="w-full px-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
+              Work Category <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={formData.businessType}
+              onChange={(e) => handleInputChange("businessType", e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all cursor-pointer"
+            >
+              {workCategoryList.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* ROW 4: Expected Business | Lead Priority | Job Type */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-3 sm:gap-x-4 gap-y-3 pt-0.5">
+          <div id="field-expectedBusiness">
+            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
+              Expected Business (₹ Amount) <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              required
+              min={0}
+              value={formData.expectedBusiness}
+              onChange={(e) => handleInputChange("expectedBusiness", e.target.value)}
+              placeholder="Enter Amount (₹)"
+              className={`w-full px-3 py-2 rounded-lg border bg-white text-emerald-700 text-xs sm:text-sm font-bold font-mono focus:outline-none transition-all ${
+                errors.expectedBusiness ? "border-red-500 bg-red-50/20 focus:border-red-500" : "border-black/20 focus:border-black/50"
+              }`}
+            />
+            {errors.expectedBusiness && <p className="text-xs text-red-500 font-medium mt-1">{errors.expectedBusiness}</p>}
+          </div>
+
+          <div>
+            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
+              Lead Priority
+            </label>
+            <select
+              value={formData.priority}
+              onChange={(e) => handleInputChange("priority", e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all cursor-pointer"
+            >
+              <option value="high">High Priority</option>
+              <option value="medium">Medium Priority</option>
+              <option value="low">Low Priority</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
+              Job Type
+            </label>
+            <select
+              value={formData.jobType}
+              onChange={(e) => handleInputChange("jobType", e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all cursor-pointer"
+            >
+              <option value="NEW">NEW Client / Job</option>
+              <option value="OLD">OLD / Repeat Client</option>
+            </select>
+          </div>
+        </div>
+
+        {/* ROW 5: Assigned To | Next Person Name | Designation */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-3 sm:gap-x-4 gap-y-3 pt-0.5">
+          <div>
+            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
+              Assigned To (Sales Person)
+            </label>
+            <select
+              value={formData.assignedTo}
+              onChange={(e) => handleInputChange("assignedTo", e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all cursor-pointer"
+            >
+              {teamMembers.map((member) => (
+                <option key={member} value={member}>
+                  {member}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div id="field-nextPersonName">
+            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
+              Next Person Name
+            </label>
+            <input
+              type="text"
+              value={formData.nextPersonName}
+              onChange={(e) => handleInputChange("nextPersonName", e.target.value)}
+              placeholder="Enter Next Person Name"
+              className={`w-full px-3 py-2 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400 ${
+                errors.nextPersonName ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
+              }`}
+            />
+            {errors.nextPersonName && <p className="text-xs text-red-500 font-medium mt-1">{errors.nextPersonName}</p>}
+          </div>
+
+          <div>
+            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
+              Next Person Designation
+            </label>
+            <input
+              type="text"
+              value={formData.designation}
+              onChange={(e) => handleInputChange("designation", e.target.value)}
+              placeholder="e.g. Project Manager, Site Engineer"
+              className="w-full px-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400"
+            />
+          </div>
+        </div>
+
+        {/* ROW 6: Pincode | City | State */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-3 sm:gap-x-4 gap-y-3 pt-0.5">
+          <div id="field-pincode">
+            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1 flex items-center justify-between">
+              <span>Pincode</span>
+              {isFetchingPincode && (
+                <span className="text-[11px] text-blue-600 animate-pulse font-normal flex items-center gap-1">
+                  <FaSpinner className="animate-spin text-[10px]" /> Auto-fetching City & State...
+                </span>
+              )}
+            </label>
+            <input
+              type="text"
+              maxLength={6}
+              value={formData.pincode}
+              onChange={handlePincodeChange}
+              placeholder="Enter 6-digit Pincode"
+              className={`w-full px-3 py-2 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium font-mono focus:outline-none transition-all placeholder:text-slate-400 ${
+                errors.pincode ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
+              }`}
+            />
+            {errors.pincode && <p className="text-xs text-red-500 font-medium mt-1">{errors.pincode}</p>}
+          </div>
+
+          <div id="field-city">
+            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
+              City
+            </label>
+            <input
+              type="text"
+              value={formData.city}
+              onChange={(e) => handleInputChange("city", e.target.value)}
+              placeholder="Enter City"
+              className={`w-full px-3 py-2 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400 ${
+                errors.city ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
+              }`}
+            />
+            {errors.city && <p className="text-xs text-red-500 font-medium mt-1">{errors.city}</p>}
+          </div>
+
+          <div id="field-state">
+            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
+              State
+            </label>
+            <input
+              type="text"
+              value={formData.state}
+              onChange={(e) => handleInputChange("state", e.target.value)}
+              placeholder="Enter or select State"
+              className={`w-full px-3 py-2 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400 ${
+                errors.state ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
+              }`}
+            />
+            {errors.state && <p className="text-xs text-red-500 font-medium mt-1">{errors.state}</p>}
+          </div>
+        </div>
+
+        {/* ROW: Project Name (Full Width Input above Site / Office Address) */}
+        <div id="field-projectName" className="pt-0.5">
+          <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
+            Project Name
+          </label>
+          <input
+            type="text"
+            value={formData.projectName}
+            onChange={(e) => handleInputChange("projectName", e.target.value)}
+            placeholder="Enter Project Name"
+            className="w-full px-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400"
+          />
+        </div>
+
+        {/* ROW: Complete Site / Office Address */}
+        <div id="field-address" className="pt-0.5">
+          <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
+            Complete Site / Office Address
+          </label>
+          <textarea
+            rows={2}
+            value={formData.address}
+            onChange={(e) => handleInputChange("address", e.target.value)}
+            placeholder="Enter complete plot/site address, landmarks..."
+            className="w-full px-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400 resize-y"
+          />
+        </div>
+
+        {/* ROW 8: Requirement Details & Sales Remarks */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 sm:gap-x-4 gap-y-3 pt-0.5">
           <div>
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
               Client Requirement Details
             </label>
-            <div className="relative">
-              <span className="absolute left-3 top-3 text-slate-400 text-xs sm:text-sm">
-                <FaClipboardList />
-              </span>
-              <textarea
-                rows={3}
-                value={formData.requirement}
-                onChange={(e) => setFormData({ ...formData, requirement: e.target.value })}
-                placeholder="Detail out client's specific demands, specifications, site area, timelines..."
-                className="w-full pl-9 pr-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400 resize-y"
-              />
-            </div>
+            <textarea
+              rows={3}
+              value={formData.requirement}
+              onChange={(e) => setFormData({ ...formData, requirement: e.target.value })}
+              placeholder="Detail out client's specific demands, specifications, site area, timelines..."
+              className="w-full px-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400 resize-y"
+            />
           </div>
 
           <div>
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
               Sales Management Notes / Remarks
             </label>
-            <div className="relative">
-              <span className="absolute left-3 top-3 text-slate-400 text-xs sm:text-sm">
-                <FaCommentDots />
-              </span>
-              <textarea
-                rows={2}
-                value={formData.transferRemark}
-                onChange={(e) => setFormData({ ...formData, transferRemark: e.target.value })}
-                placeholder="Add key highlights or instructions for the sales team..."
-                className="w-full pl-9 pr-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400 resize-y"
-              />
-            </div>
+            <textarea
+              rows={3}
+              value={formData.transferRemark}
+              onChange={(e) => setFormData({ ...formData, transferRemark: e.target.value })}
+              placeholder="Add key highlights or instructions for the sales team..."
+              className="w-full px-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400 resize-y"
+            />
           </div>
         </div>
 

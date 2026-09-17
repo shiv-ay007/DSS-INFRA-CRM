@@ -97,6 +97,9 @@ const SalesProjectDetailsTable = ({ lead, projects = [], onAddProjectClick }) =>
                 CLIENT
               </th>
               <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">
+                WORK TYPE
+              </th>
+              <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">
                 COMPANY
               </th>
               <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">
@@ -131,7 +134,7 @@ const SalesProjectDetailsTable = ({ lead, projects = [], onAddProjectClick }) =>
           <tbody className="divide-y divide-slate-100 bg-white">
             {projects.length === 0 ? (
               <tr>
-                <td colSpan={14} className="py-10 text-center text-slate-500 font-medium">
+                <td colSpan={15} className="py-10 text-center text-slate-500 font-medium">
                   <div className="flex flex-col items-center justify-center gap-2">
                     <FaBuilding className="text-3xl text-slate-300" />
                     <p className="text-sm font-bold text-slate-700">No Project Records Found</p>
@@ -210,6 +213,17 @@ const SalesProjectDetailsTable = ({ lead, projects = [], onAddProjectClick }) =>
                       <div className="text-[11px] text-slate-500 font-mono">{proj.phoneNumber || "--"}</div>
                       {proj.emailAddress && (
                         <div className="text-[10px] text-slate-400 truncate max-w-[140px]">{proj.emailAddress}</div>
+                      )}
+                    </td>
+
+                    {/* 5. WORK TYPE */}
+                    <td className="py-2.5 px-3 text-center border-r border-slate-100 whitespace-nowrap">
+                      {proj.workType ? (
+                        <span className="inline-block px-2.5 py-1 rounded-md text-indigo-800 bg-indigo-50 border border-indigo-200 font-bold text-xs max-w-[150px] truncate" title={Array.isArray(proj.workType) ? proj.workType.join(", ") : proj.workType}>
+                          {Array.isArray(proj.workType) ? proj.workType.join(", ") : proj.workType}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 font-medium">--</span>
                       )}
                     </td>
 
@@ -330,6 +344,12 @@ const SalesProjectDetailsTable = ({ lead, projects = [], onAddProjectClick }) =>
 
             {/* DETAILS GRID */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs">
+              <div className="p-3 rounded-xl bg-indigo-50/60 border border-indigo-100">
+                <span className="text-indigo-700 font-bold block mb-0.5">Work Type</span>
+                <span className="font-bold text-indigo-950 text-sm">
+                  {Array.isArray(selectedProject.workType) ? selectedProject.workType.join(", ") : (selectedProject.workType || "--")}
+                </span>
+              </div>
               <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
                 <span className="text-slate-400 font-bold block mb-0.5">Company Name</span>
                 <span className="font-bold text-slate-900 text-sm">{selectedProject.companyName || "--"}</span>

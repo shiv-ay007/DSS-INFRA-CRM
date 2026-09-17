@@ -102,7 +102,10 @@ const Presales = () => {
           whatsappNumber: bp.whatsappNumber || bp.phoneNumber || leadObj?.whatsappNumber || leadObj?.phoneNumber || "--",
           emailAddress: bp.emailAddress || bp.email || leadObj?.emailAddress || leadObj?.email || "",
           companyName: bp.companyName || leadObj?.companyName || "--",
-          businessType: bp.businessType || leadObj?.businessType || leadObj?.workCategory || "--",
+          projectName: bp.projectName || leadObj?.projectName || "",
+          workCategory: bp.workCategory || bp.businessType || leadObj?.workCategory || leadObj?.businessType || "--",
+          workType: bp.workType || leadObj?.workType || "--",
+          businessType: bp.workCategory || bp.businessType || leadObj?.workCategory || leadObj?.businessType || "--",
           jobType: bp.jobType || "NEW",
           priority: bp.priority || "High",
           clientDesignation: bp.clientDesignation || "--",
@@ -126,9 +129,80 @@ const Presales = () => {
         };
       });
 
-      setPresalesList(formatted);
-      if (formatted.length > 0) {
-        setSelectedPresaleId((prev) => (prev && formatted.some((p) => p.id === prev) ? prev : formatted[0].id));
+      // Deduplicate by Client so that each Client appears only once in Presales
+      const clientMap = new Map();
+      const phoneToKey = new Map();
+      const nameToKey = new Map();
+      const leadIdToKey = new Map();
+
+      formatted.forEach((item) => {
+        const rawLeadId = item.leadId;
+        const validLeadId = rawLeadId && String(rawLeadId).length >= 8 ? String(rawLeadId) : null;
+        const cleanPhone = item.phoneNumber && item.phoneNumber !== "--" ? String(item.phoneNumber).replace(/\D/g, "") : "";
+        const cleanName = item.clientName && item.clientName !== "--" ? item.clientName.trim().toLowerCase() : "";
+
+        let clientKey = null;
+        if (cleanPhone && cleanPhone.length >= 7 && phoneToKey.has(cleanPhone)) {
+          clientKey = phoneToKey.get(cleanPhone);
+        } else if (cleanName && cleanName !== "unnamed client" && nameToKey.has(cleanName)) {
+          clientKey = nameToKey.get(cleanName);
+        } else if (validLeadId && leadIdToKey.has(validLeadId)) {
+          clientKey = leadIdToKey.get(validLeadId);
+        }
+
+        if (!clientKey) {
+          clientKey = (cleanPhone && cleanPhone.length >= 7 ? `phone_${cleanPhone}` : null) ||
+                      (cleanName && cleanName !== "unnamed client" ? `name_${cleanName}` : null) ||
+                      (validLeadId ? `lead_${validLeadId}` : `id_${item.id}`);
+
+          if (cleanPhone && cleanPhone.length >= 7) phoneToKey.set(cleanPhone, clientKey);
+          if (cleanName && cleanName !== "unnamed client") nameToKey.set(cleanName, clientKey);
+          if (validLeadId) leadIdToKey.set(validLeadId, clientKey);
+
+          clientMap.set(clientKey, {
+            ...item,
+            projectsCount: 1,
+            allProjects: [item],
+            totalExpectedBusiness: item.expectedBusiness
+          });
+        } else {
+          const existing = clientMap.get(clientKey);
+          existing.projectsCount += 1;
+          existing.allProjects.push(item);
+          existing.totalExpectedBusiness = (existing.totalExpectedBusiness || 0) + item.expectedBusiness;
+
+          if (cleanPhone && cleanPhone.length >= 7) phoneToKey.set(cleanPhone, clientKey);
+          if (cleanName && cleanName !== "unnamed client") nameToKey.set(cleanName, clientKey);
+          if (validLeadId) leadIdToKey.set(validLeadId, clientKey);
+
+          // Keep the latest project's details as primary display data
+          const existingTime = existing.createdAt ? new Date(existing.createdAt).getTime() : 0;
+          const currentTime = item.createdAt ? new Date(item.createdAt).getTime() : 0;
+          if (currentTime >= existingTime) {
+            const projectsCount = existing.projectsCount;
+            const allProjects = existing.allProjects;
+            const totalExpectedBusiness = existing.totalExpectedBusiness;
+            Object.assign(existing, {
+              ...item,
+              projectsCount,
+              allProjects,
+              totalExpectedBusiness
+            });
+          }
+        }
+      });
+
+      // Sort each client's allProjects chronologically (P1, P2, P3...)
+      clientMap.forEach((clientData) => {
+        if (Array.isArray(clientData.allProjects) && clientData.allProjects.length > 1) {
+          clientData.allProjects.sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+        }
+      });
+
+      const deduplicatedList = Array.from(clientMap.values());
+      setPresalesList(deduplicatedList);
+      if (deduplicatedList.length > 0) {
+        setSelectedPresaleId((prev) => (prev && deduplicatedList.some((p) => p.id === prev) ? prev : deduplicatedList[0].id));
         setActiveStageId((prev) => prev || 1);
       }
     } catch (err) {
@@ -151,6 +225,15 @@ const Presales = () => {
   // View Details Modal State (Exact matching Details View)
   const [selectedProject, setSelectedProject] = useState(null);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
+
+  // Client Projects List Modal State (Clicked from PROJECTS column)
+  const [selectedClientProjects, setSelectedClientProjects] = useState(null);
+  const [isProjectsModalOpen, setIsProjectsModalOpen] = useState(false);
+
+  const handleOpenProjectsListModal = (clientItem) => {
+    setSelectedClientProjects(clientItem);
+    setIsProjectsModalOpen(true);
+  };
 
   // Search and Filters for Table (Master Form Pattern)
   const [showFilters, setShowFilters] = useState(true);
@@ -1323,6 +1406,7 @@ const Presales = () => {
                   <th className="py-3 px-3 text-center w-28 border-r border-slate-800 whitespace-nowrap">ACTIONS</th>
                   <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">AMOUNT</th>
                   <th className="py-3 px-3 text-left border-r border-slate-800 whitespace-nowrap">CLIENT</th>
+                  <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">PROJECTS</th>
                   <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">COMPANY</th>
                   <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">BUSINESS TYPE</th>
                   <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">JOB TYPE</th>
@@ -1338,7 +1422,7 @@ const Presales = () => {
               <tbody className="divide-y divide-slate-100 bg-white">
                 {loading ? (
                   <tr>
-                    <td colSpan={14} className="py-12 text-center text-slate-500 font-medium">
+                    <td colSpan={15} className="py-12 text-center text-slate-500 font-medium">
                       <div className="flex flex-col items-center justify-center gap-2">
                         <FaSpinner className="animate-spin text-blue-600 text-xl" />
                         <span className="text-xs font-semibold">Loading presales data from server...</span>
@@ -1347,7 +1431,7 @@ const Presales = () => {
                   </tr>
                 ) : filteredPresales.length === 0 ? (
                   <tr>
-                    <td colSpan={14} className="py-12 text-center text-slate-500 font-medium">
+                    <td colSpan={15} className="py-12 text-center text-slate-500 font-medium">
                       {presalesList.length === 0
                         ? "No Presale projects found in database."
                         : "No Presale records match your search or filters."}
@@ -1415,6 +1499,11 @@ const Presales = () => {
                           <span className="inline-block px-2.5 py-1 rounded-md text-emerald-800 bg-emerald-50 border border-emerald-300 font-mono font-bold text-xs">
                             ₹{amt.toLocaleString("en-IN")}
                           </span>
+                          {item.projectsCount > 1 && item.totalExpectedBusiness > amt && (
+                            <span className="block text-[10px] text-slate-500 font-semibold mt-0.5" title="Total Expected Business across all projects for this client">
+                              Total: ₹{Number(item.totalExpectedBusiness).toLocaleString("en-IN")}
+                            </span>
+                          )}
                         </td>
 
                         {/* 4. CLIENT */}
@@ -1451,13 +1540,30 @@ const Presales = () => {
                                   {item.emailAddress}
                                 </a>
                               </div>
-                            ) : (
-                              <div className="text-[10px] text-slate-400 font-mono">--</div>
-                            )}
+                            ) : null}
                           </div>
                         </td>
 
-                        {/* 5. COMPANY */}
+                        {/* 5. PROJECTS COUNT (CLICKABLE TO OPEN DETAILS MODAL) */}
+                        <td className="py-2.5 px-3 text-center border-r border-slate-100 whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenProjectsListModal(item)}
+                            className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition-all cursor-pointer shadow-xs hover:scale-105 active:scale-95 group ${
+                              (item.projectsCount || 1) > 1
+                                ? "bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-200"
+                                : "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-300"
+                            }`}
+                            title={`Click to view project details for ${item.clientName || "this client"}`}
+                          >
+                            <FaLayerGroup className={`w-3 h-3 group-hover:rotate-6 transition-transform ${(item.projectsCount || 1) > 1 ? "text-indigo-600" : "text-slate-500"}`} />
+                            <span className="underline decoration-dotted underline-offset-2">
+                              {item.projectsCount || 1} {(item.projectsCount || 1) === 1 ? "Project" : "Projects"}
+                            </span>
+                          </button>
+                        </td>
+
+                        {/* 7. COMPANY */}
                         <td className="py-2.5 px-3 text-center font-medium text-slate-800 border-r border-slate-100 whitespace-nowrap">
                           {item.companyName || "--"}
                         </td>
@@ -1953,6 +2059,215 @@ const Presales = () => {
             </>
           )}
 
+          </div>
+        </div>
+      )}
+
+
+
+      {/* ──────────────────────────────────────────────────────────────────
+          MODAL: CLIENT PROJECTS DETAILS (Triggered from PROJECTS column)
+      ────────────────────────────────────────────────────────────────── */}
+      {isProjectsModalOpen && selectedClientProjects && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50/80 rounded-t-2xl">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold shadow-xs">
+                  <FaBoxes className="text-lg" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                    <span>Project Details</span>
+                    <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                      {(selectedClientProjects.allProjects || [selectedClientProjects]).length} {(selectedClientProjects.allProjects || [selectedClientProjects]).length === 1 ? "Project" : "Projects"}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
+                    <span className="font-semibold text-slate-700">{selectedClientProjects.clientName}</span>
+                    {selectedClientProjects.companyName && selectedClientProjects.companyName !== "--" && (
+                      <>
+                        <span>•</span>
+                        <span>{selectedClientProjects.companyName}</span>
+                      </>
+                    )}
+                    {selectedClientProjects.phoneNumber && selectedClientProjects.phoneNumber !== "--" && (
+                      <>
+                        <span>•</span>
+                        <span>{selectedClientProjects.phoneNumber}</span>
+                      </>
+                    )}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsProjectsModalOpen(false);
+                  setSelectedClientProjects(null);
+                }}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors cursor-pointer"
+                title="Close"
+              >
+                <FaTimes className="text-sm" />
+              </button>
+            </div>
+
+            {/* Modal Body - Projects List */}
+            <div className="p-6 overflow-y-auto space-y-4 flex-1">
+              {(selectedClientProjects.allProjects && selectedClientProjects.allProjects.length > 0
+                ? selectedClientProjects.allProjects
+                : [selectedClientProjects]
+              ).map((proj, idx) => {
+                const pCategory = proj.workCategory || proj.businessType || "--";
+                const pWorkType = Array.isArray(proj.workType)
+                  ? proj.workType.filter(Boolean).join(", ")
+                  : (proj.workType && proj.workType !== "--" ? proj.workType : "--");
+                const pProjectName = proj.projectName && proj.projectName !== "--" ? proj.projectName : "";
+                const pCompany = proj.companyName && proj.companyName !== "--" ? proj.companyName : (selectedClientProjects.companyName || "--");
+                const pAmount = Number(proj.expectedBusiness || proj.amount || proj.expectedRevenue || 0);
+                const pJobType = proj.jobType || "NEW";
+                const pPriority = proj.priority || "High";
+                const pReq = proj.requirement && proj.requirement !== "--" ? proj.requirement : "";
+                const pRemarks = proj.transferRemark || proj.salesRemarks || proj.remark || "";
+
+                const pPriorityUpper = String(pPriority).toUpperCase();
+                const isHigh = pPriorityUpper === "HIGH" || pPriorityUpper === "HOT";
+                const isMedium = pPriorityUpper === "MEDIUM" || pPriorityUpper === "WARM";
+
+                return (
+                  <div
+                    key={proj.id || proj._id || idx}
+                    className="border border-slate-200 hover:border-indigo-300 rounded-xl p-4 bg-white shadow-xs transition-all hover:shadow-md"
+                  >
+                    {/* Top Row: Index Badge, Project Name, Company Name, Amount, Edit Button */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-slate-100">
+                      <div className="flex items-center gap-3">
+                        <span className="px-2.5 py-1 rounded-lg bg-indigo-600 text-white font-extrabold text-xs tracking-wider shrink-0">
+                          PROJECT #{idx + 1}
+                        </span>
+                        <div>
+                          <span className="text-[10px] text-indigo-600 font-bold uppercase tracking-wider block">Project Name</span>
+                          <span className="text-sm font-bold text-slate-900">
+                            {pProjectName || pCompany || "Untitled Project"}
+                          </span>
+                        </div>
+                        {pCompany && pCompany !== "--" && pProjectName && (
+                          <div className="border-l border-slate-200 pl-3">
+                            <span className="text-[10px] text-slate-400 font-semibold uppercase block">Company</span>
+                            <span className="text-xs font-semibold text-slate-700">{pCompany}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-3">
+                        <div className="text-right">
+                          <span className="text-[10px] text-slate-400 font-semibold uppercase block">Expected Business</span>
+                          <span className="text-sm font-mono font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
+                            ₹{pAmount.toLocaleString("en-IN")}
+                          </span>
+                        </div>
+
+                        {!isUserObserver && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsProjectsModalOpen(false);
+                              handleEditProject(proj);
+                            }}
+                            className="px-2.5 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                            title="Edit Project in Sales Form"
+                          >
+                            <FaEdit className="text-xs" />
+                            <span>Edit</span>
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Details Grid: Work Category, Work Type, Job Type, Priority */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 py-3 border-b border-slate-100 text-xs">
+                      {/* Work Category */}
+                      <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Work Category</span>
+                        <span className="font-semibold text-slate-800 inline-block px-2 py-0.5 rounded bg-white border border-slate-200">
+                          {pCategory}
+                        </span>
+                      </div>
+
+                      {/* Work Type */}
+                      <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Work Type</span>
+                        <span className="font-semibold text-indigo-700 inline-block px-2 py-0.5 rounded bg-indigo-50/60 border border-indigo-100">
+                          {pWorkType}
+                        </span>
+                      </div>
+
+                      {/* Job Type */}
+                      <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Job Type</span>
+                        <span className="font-semibold text-slate-700 uppercase">
+                          {pJobType}
+                        </span>
+                      </div>
+
+                      {/* Priority */}
+                      <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                        <span className="text-[10px] uppercase font-bold text-slate-400 block mb-1">Priority</span>
+                        <span
+                          className={`inline-block px-2 py-0.5 rounded text-[11px] font-bold ${
+                            isHigh
+                              ? "bg-rose-50 text-rose-700 border border-rose-200"
+                              : isMedium
+                              ? "bg-amber-50 text-amber-700 border border-amber-200"
+                              : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                          }`}
+                        >
+                          {pPriority}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Requirements & Remarks */}
+                    <div className="pt-3 space-y-2 text-xs">
+                      {pReq && (
+                        <div className="flex items-start gap-2 bg-slate-50 p-2.5 rounded-lg">
+                          <span className="font-bold text-slate-500 shrink-0 text-[11px]">Requirement:</span>
+                          <span className="text-slate-700 leading-relaxed">{pReq}</span>
+                        </div>
+                      )}
+                      {pRemarks && (
+                        <div className="flex items-start gap-2 bg-amber-50/50 p-2.5 rounded-lg border border-amber-100">
+                          <span className="font-bold text-amber-700 shrink-0 text-[11px]">Remarks:</span>
+                          <span className="text-slate-700 leading-relaxed">{pRemarks}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex items-center justify-between px-6 py-3.5 border-t border-slate-100 bg-slate-50/50 rounded-b-2xl">
+              <div className="text-xs text-slate-500 font-medium">
+                Total Portfolio Value:{" "}
+                <span className="font-bold font-mono text-emerald-700">
+                  ₹{Number(selectedClientProjects.totalExpectedBusiness || selectedClientProjects.expectedBusiness || 0).toLocaleString("en-IN")}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsProjectsModalOpen(false);
+                  setSelectedClientProjects(null);
+                }}
+                className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold transition-colors cursor-pointer shadow-xs"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

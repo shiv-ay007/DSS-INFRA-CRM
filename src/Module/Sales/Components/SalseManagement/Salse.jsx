@@ -285,10 +285,28 @@ const Salse = () => {
           );
         }
       },
-      businessType: {
-        label: "BUSINESS TYPE",
+      workCategory: {
+        label: "WORK CATEGORY",
         align: "center",
-        render: (val, row) => <span className="text-xs font-medium text-slate-700">{row.businessType || row.workCategory || "--"}</span>
+        render: (val, row) => (
+          <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+            {row.workCategory || row.businessType || "--"}
+          </span>
+        )
+      },
+      workType: {
+        label: "WORK TYPE",
+        align: "center",
+        render: (val, row) => {
+          const wt = Array.isArray(row.workType) && row.workType.length > 0
+            ? row.workType.join(", ")
+            : (typeof row.workType === "string" && row.workType.trim() ? row.workType : "--");
+          return (
+            <div className="max-w-[140px] truncate text-xs font-medium text-slate-700 mx-auto text-center" title={wt}>
+              {wt}
+            </div>
+          );
+        }
       },
       leadType: {
         label: "LEAD TYPE",
