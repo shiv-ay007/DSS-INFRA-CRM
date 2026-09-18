@@ -11,6 +11,7 @@ const Table = ({
   itemsPerPageOptions = [10, 25, 50, 100],
   isLoading = false,
   showSrNo = false,
+  renderExpandedRow = null,
 }) => {
   if (isLoading) {
     return (
@@ -71,52 +72,58 @@ const Table = ({
               </tr>
             ) : (
               data.map((row, idx) => (
-                <tr
-                  key={row.id || idx}
-                  className="hover:bg-slate-50/70 transition-colors"
-                >
-                  {showSrNo && (
-                    <td className="py-2 px-2.5 text-center font-mono font-bold text-slate-700 text-xs whitespace-nowrap border-r border-slate-100">
-                      {startItem > 0 ? startItem + idx : idx + 1}
-                    </td>
-                  )}
-                  {columns.map((col) => {
-                    const config = columnConfig[col];
-                    const alignClass =
-                      config?.align === "left"
-                        ? "text-left"
-                        : config?.align === "right"
-                        ? "text-right"
-                        : "text-center";
-
-                    return (
-                      <td
-                        key={col}
-                        className={`py-2 px-2.5 whitespace-nowrap border-r border-slate-100 ${alignClass} ${
-                          config?.cellClass || ""
-                        }`}
-                      >
-                        {(() => {
-                          const getValueByPath = (obj, path) =>
-                            path
-                              .replace(/\[(\d+)\]/g, ".$1")
-                              .split(".")
-                              .reduce((acc, key) => acc?.[key], obj);
-
-                          const value = getValueByPath(row, col);
-                          return config?.render
-                            ? config.render(value, row, idx)
-                            : value ?? "--";
-                        })()}
+                <React.Fragment key={row.id || idx}>
+                  <tr className="hover:bg-slate-50/70 transition-colors">
+                    {showSrNo && (
+                      <td className="py-2 px-2.5 text-center font-mono font-bold text-slate-700 text-xs whitespace-nowrap border-r border-slate-100">
+                        {startItem > 0 ? startItem + idx : idx + 1}
                       </td>
-                    );
-                  })}
-                </tr>
+                    )}
+                    {columns.map((col) => {
+                      const config = columnConfig[col];
+                      const alignClass =
+                        config?.align === "left"
+                          ? "text-left"
+                          : config?.align === "right"
+                          ? "text-right"
+                          : "text-center";
+
+                      return (
+                        <td
+                          key={col}
+                          className={`py-2 px-2.5 whitespace-nowrap border-r border-slate-100 ${alignClass} ${
+                            config?.cellClass || ""
+                          }`}
+                        >
+                          {(() => {
+                            const getValueByPath = (obj, path) =>
+                              path
+                                .replace(/\[(\d+)\]/g, ".$1")
+                                .split(".")
+                                .reduce((acc, key) => acc?.[key], obj);
+
+                            const value = getValueByPath(row, col);
+                            return config?.render
+                              ? config.render(value, row, idx)
+                              : value ?? "--";
+                          })()}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                  {renderExpandedRow && renderExpandedRow(row, idx) && (
+                    <tr key={`${row.id || idx}-expanded`} className="bg-slate-50/50">
+                      <td colSpan={(showSrNo ? 1 : 0) + columns.length} className="p-0 border-b border-slate-200">
+                        {renderExpandedRow(row, idx)}
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
               ))
-            )}
-          </tbody>
-        </table>
-      </div>
+          )}
+        </tbody>
+      </table>
+    </div>
 
       {/* 2. FIXED PAGINATION FOOTER */}
       {totalItems > 0 && (

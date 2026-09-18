@@ -13,6 +13,7 @@ import SalesLeadForm from '../Pages/SalesLeadForm'
 import Presales from '../Pages/Presales'
 import PmsTemplate from '../Pages/Master/PmsTemplate'
 import CreatePmsTemplatePage from '../Pages/Master/CreatePmsTemplatePage'
+import PmsTemplateDetailsPage from '../Pages/Master/PmsTemplateDetailsPage'
 import MaterialMaster from '../Pages/Master/MaterialMaster'
 import AddMaterialPage from '../Pages/Master/AddMaterialPage'
 import MaterialDetailsPage from '../Pages/Master/MaterialDetailsPage'
@@ -56,6 +57,7 @@ const SalesRoutes = () => {
         <Route path="master/pms-template/create-template" element={<CreatePmsTemplatePage />} />
         <Route path="master/pms-template/edit/:id" element={<CreatePmsTemplatePage />} />
         <Route path="master/pms-template/edit-template/:id" element={<CreatePmsTemplatePage />} />
+        <Route path="master/pms-template/details/:id" element={<PmsTemplateDetailsPage />} />
         <Route path="master/material" element={<MaterialMaster />} />
         <Route path="master/material/add-material" element={<AddMaterialPage />} />
         <Route path="master/material/edit-material/:id" element={<AddMaterialPage />} />

@@ -303,6 +303,9 @@ export const CreatePmsTemplateComponent = () => {
   const [isProjectOpen, setIsProjectOpen] = useState(false);
   const projectDropdownRef = useRef(null);
 
+  // Existing Templates Project IDs (to prevent duplicate creation)
+  const [existingProjectIds, setExistingProjectIds] = useState(new Set());
+
   // Search/Filter states for Lookups inside stages
   const [materialSearch, setMaterialSearch] = useState("");
   const [supplierSearch, setSupplierSearch] = useState("");
@@ -515,6 +518,32 @@ export const CreatePmsTemplateComponent = () => {
           setWbsTasks(tasksData);
           localStorage.setItem(PMS_MASTER_TASKS_KEY, JSON.stringify(tasksData));
         }
+
+        // 4. Fetch existing PMS templates to detect already configured projects
+        try {
+          const tRes = await pmsTemplateService.getAllTemplates({ limit: 1000 });
+          const templatesList = tRes?.data?.data || tRes?.data || [];
+          const ids = new Set();
+          if (Array.isArray(templatesList)) {
+            templatesList.forEach((t) => {
+              const pId = t.projectId?._id || t.projectId;
+              if (pId) ids.add(String(pId));
+            });
+          }
+          const stored = localStorage.getItem(PMS_TASKS_STORAGE_KEY);
+          if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed)) {
+              parsed.forEach((t) => {
+                const pId = t.projectId?._id || t.projectId || t.selectedProjectIds?.[0];
+                if (pId) ids.add(String(pId));
+              });
+            }
+          }
+          setExistingProjectIds(ids);
+        } catch (tErr) {
+          console.warn("Could not fetch existing templates for project duplicate check:", tErr);
+        }
       } catch (e) {
         console.log("Error loading WBS data via separate APIs:", e);
       } finally {
@@ -527,77 +556,175 @@ export const CreatePmsTemplateComponent = () => {
 
   // Load existing task if in Edit mode
   useEffect(() => {
-    if (isEdit) {
+    if (isEdit && id) {
       setFetching(true);
-      try {
-        const stored = localStorage.getItem(PMS_TASKS_STORAGE_KEY);
-        let list = INITIAL_PMS_TASKS;
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed)) list = parsed;
-        }
-        const found = list.find((t) => String(t.id) === String(id));
-        if (found) {
-          const rawProjectStatus = found.projectStatus;
-          const normalizedProjectStatus = Array.isArray(rawProjectStatus)
-            ? rawProjectStatus
-            : typeof rawProjectStatus === "string" && rawProjectStatus.trim()
-            ? rawProjectStatus.split(",").map((s) => s.trim()).filter(Boolean)
-            : ["On Track"];
+      const loadEditData = async () => {
+        try {
+          let found = null;
 
-          setFormData({
-            ...found,
-            projectStatus: normalizedProjectStatus
-          });
-          if (found.wbsStructure?.stages?.length > 0) {
-            const stagesWithDefaults = found.wbsStructure.stages.map((s) => ({
-              ...DEFAULT_STAGE_DETAILS,
-              ...s
-            }));
-            setWbsStructure({ stages: stagesWithDefaults });
-            const initialExpanded = {};
-            stagesWithDefaults.forEach((s) => {
-              initialExpanded[s.stageId] = true;
-            });
-            setExpandedStages(initialExpanded);
-          } else if (found.stage) {
-            const stg = found.stage;
-            const wrk = found.work;
-            const tsk = found.task;
-            setWbsStructure({
-              stages: [
-                {
-                  stageId: stg,
-                  works: wrk ? [{ workId: wrk, tasks: tsk ? [tsk] : [] }] : [],
-                  ...DEFAULT_STAGE_DETAILS,
-                  workWillDoneBy: found.workWillDoneBy || "",
-                  contractorType: found.contractorType || "",
-                  toolsVehicles: found.toolsVehicles || [],
-                  materialRequired: found.materialRequired || "",
-                  materialDetails: found.materialDetails || "",
-                  supplierType: found.supplierType || "",
-                  supplierName: found.supplierName || "",
-                  maxTimeToComplete: found.maxTimeToComplete || "3",
-                  timeUnit: found.timeUnit || "Days",
-                  deadlineDate: found.deadlineDate || "",
-                  durationDays: found.durationDays || "3",
-                  durationHours: found.durationHours || "0",
-                  instruction: found.instruction || "",
-                  remark: found.remark || ""
+          // 1. Try Backend API if ObjectId
+          if (id.length === 24) {
+            try {
+              const res = await pmsTemplateService.getTemplateById(id);
+              if (res?.data) {
+                const apiData = res.data.data || res.data;
+                if (apiData) {
+                  found = apiData;
                 }
-              ]
-            });
-            setExpandedStages({ [stg]: true });
+              }
+            } catch (apiErr) {
+              console.warn("Could not fetch template from API for edit, checking local storage:", apiErr);
+            }
           }
-        } else {
-          toast.error("Task not found with ID: " + id);
-          navigate("/sales/master/pms-template/create");
+
+          // 2. Check local storage cache
+          if (!found) {
+            const stored = localStorage.getItem(PMS_TASKS_STORAGE_KEY);
+            let list = INITIAL_PMS_TASKS;
+            if (stored) {
+              const parsed = JSON.parse(stored);
+              if (Array.isArray(parsed)) list = parsed;
+            }
+            found = list.find((t) => String(t._id || t.id) === String(id));
+          }
+
+          if (found) {
+            const rawProjectStatus = found.projectStatus;
+            const normalizedProjectStatus = Array.isArray(rawProjectStatus)
+              ? rawProjectStatus.map((st) => (typeof st === "object" ? st.status_name || st.name || st.value : String(st)))
+              : typeof rawProjectStatus === "string" && rawProjectStatus.trim()
+              ? rawProjectStatus.split(",").map((s) => s.trim()).filter(Boolean)
+              : ["On Track"];
+
+            setFormData((prev) => ({
+              ...prev,
+              ...found,
+              clientName: found.leadId?.clientName || found.clientName || "",
+              projectDetails: found.projectId?.projectName || found.projectDetails || "",
+              projectId: found.projectId?._id || found.projectId || found.selectedProjectIds?.[0] || null,
+              projectStatus: normalizedProjectStatus
+            }));
+
+            const mapMaterialSupplierToMaterials = (fieldData = {}) => {
+              if (Array.isArray(fieldData.materials) && fieldData.materials.length > 0) {
+                return fieldData.materials;
+              }
+              if (Array.isArray(fieldData.materialSupplier) && fieldData.materialSupplier.length > 0) {
+                return fieldData.materialSupplier.map((m) => {
+                  const mName =
+                    (typeof m.materialId === "object" ? m.materialId?.name || m.materialId?.materialName : null) ||
+                    m.materialName ||
+                    m.materialRequired ||
+                    m.name ||
+                    "";
+                  const sName =
+                    (typeof m.supplierId === "object" ? m.supplierId?.name : null) ||
+                    m.supplierName ||
+                    "";
+                  return {
+                    materialId: typeof m.materialId === "object" ? m.materialId?._id : m.materialId || null,
+                    materialRequired: mName,
+                    name: mName,
+                    supplierId: typeof m.supplierId === "object" ? m.supplierId?._id : m.supplierId || null,
+                    supplierName: sName,
+                    supplierType: m.supplierType || (typeof m.supplierId === "object" ? m.supplierId?.supplierType : "") || ""
+                  };
+                });
+              }
+              return [];
+            };
+
+            // If template has stages array from backend schema
+            if (Array.isArray(found.stages) && found.stages.length > 0) {
+              const formattedStages = found.stages.map((stg) => {
+                const fData = stg.fieldData || {};
+                const stgMaterials = mapMaterialSupplierToMaterials(fData);
+                return {
+                  stageId: stg.stageId?.stage_code || stg.stage_code || stg.stageId,
+                  stageObjId: stg.stageId?._id || stg.stageId,
+                  ...DEFAULT_STAGE_DETAILS,
+                  ...fData,
+                  materials: stgMaterials.length > 0 ? stgMaterials : fData.materials || [],
+                  works: (stg.works || []).map((wrk) => {
+                    const wfData = wrk.fieldData || {};
+                    const wrkMaterials = mapMaterialSupplierToMaterials(wfData);
+                    return {
+                      workId: wrk.workId?.work_code || wrk.work_code || wrk.workId,
+                      workObjId: wrk.workId?._id || wrk.workId,
+                      ...wfData,
+                      materials: wrkMaterials.length > 0 ? wrkMaterials : wfData.materials || [],
+                      tasks: (wrk.tasks || []).map((tsk) => {
+                        const tfData = tsk.fieldData || {};
+                        const tskMaterials = mapMaterialSupplierToMaterials(tfData);
+                        return {
+                          taskId: tsk.taskId?.task_code || tsk.task_code || tsk.taskId,
+                          taskObjId: tsk.taskId?._id || tsk.taskId,
+                          ...tfData,
+                          materials: tskMaterials.length > 0 ? tskMaterials : tfData.materials || []
+                        };
+                      })
+                    };
+                  })
+                };
+              });
+              setWbsStructure({ stages: formattedStages });
+              const initialExpanded = {};
+              formattedStages.forEach((s) => {
+                initialExpanded[s.stageId] = true;
+              });
+              setExpandedStages(initialExpanded);
+            } else if (found.wbsStructure?.stages?.length > 0) {
+              const stagesWithDefaults = found.wbsStructure.stages.map((s) => ({
+                ...DEFAULT_STAGE_DETAILS,
+                ...s
+              }));
+              setWbsStructure({ stages: stagesWithDefaults });
+              const initialExpanded = {};
+              stagesWithDefaults.forEach((s) => {
+                initialExpanded[s.stageId] = true;
+              });
+              setExpandedStages(initialExpanded);
+            } else if (found.stage) {
+              const stg = found.stage;
+              const wrk = found.work;
+              const tsk = found.task;
+              setWbsStructure({
+                stages: [
+                  {
+                    stageId: stg,
+                    works: wrk ? [{ workId: wrk, tasks: tsk ? [tsk] : [] }] : [],
+                    ...DEFAULT_STAGE_DETAILS,
+                    workWillDoneBy: found.workWillDoneBy || "",
+                    contractorType: found.contractorType || "",
+                    toolsVehicles: found.toolsVehicles || [],
+                    materialRequired: found.materialRequired || "",
+                    materialDetails: found.materialDetails || "",
+                    supplierType: found.supplierType || "",
+                    supplierName: found.supplierName || "",
+                    maxTimeToComplete: found.maxTimeToComplete || "3",
+                    timeUnit: found.timeUnit || "Days",
+                    deadlineDate: found.deadlineDate || "",
+                    durationDays: found.durationDays || "3",
+                    durationHours: found.durationHours || "0",
+                    instruction: found.instruction || "",
+                    remark: found.remark || ""
+                  }
+                ]
+              });
+              setExpandedStages({ [stg]: true });
+            }
+          } else {
+            toast.error("Template not found with ID: " + id);
+            navigate("/sales/master/pms-template");
+          }
+        } catch (err) {
+          console.error(err);
+        } finally {
+          setFetching(false);
         }
-      } catch (err) {
-        console.error(err);
-      } finally {
-        setFetching(false);
-      }
+      };
+
+      loadEditData();
     }
   }, [id, isEdit, navigate]);
 
@@ -667,6 +794,8 @@ export const CreatePmsTemplateComponent = () => {
       if (wt && wt !== "--") parts.push(`Work Type: ${wt}`);
 
       const label = parts.join(" | ");
+      const isAlreadyConfigured = existingProjectIds.has(key) && (!isEdit || String(formData.projectId) !== key);
+
       return {
         value: key,
         label,
@@ -674,10 +803,11 @@ export const CreatePmsTemplateComponent = () => {
         workCategory: cat,
         workType: wt,
         detailText: label,
-        data: p
+        data: p,
+        isAlreadyConfigured
       };
     });
-  }, [formData.clientName, presalesList]);
+  }, [formData.clientName, presalesList, existingProjectIds, isEdit, formData.projectId]);
 
   const handleProjectSelect = (projOption) => {
     if (!projOption) {
@@ -689,12 +819,24 @@ export const CreatePmsTemplateComponent = () => {
       }));
       return;
     }
+
+    // Prevent selecting a project whose template is already created
+    if (projOption.isAlreadyConfigured) {
+      toast.warning(
+        `A PMS Template has already been created for "${projOption.projectName || projOption.label}". You cannot create duplicate templates for the same project.`
+      );
+      return;
+    }
+
     setFormData((prev) => ({
       ...prev,
       projectId: projOption.value,
       selectedProjectIds: [projOption.value],
       projectDetails: projOption.label
     }));
+    if (errors.projectId) {
+      setErrors((prev) => ({ ...prev, projectId: "" }));
+    }
     setIsProjectOpen(false);
   };
 
@@ -1389,6 +1531,11 @@ export const CreatePmsTemplateComponent = () => {
   const validateForm = () => {
     const errs = {};
 
+    // 0. Project Validation (Check Duplicate)
+    if (formData.projectId && existingProjectIds.has(String(formData.projectId)) && !isEdit) {
+      errs.projectId = "A PMS Template already exists for this project. Cannot create duplicate.";
+    }
+
     // 1. Project Status (Required)
     const hasProjectStatus = Array.isArray(formData.projectStatus)
       ? formData.projectStatus.length > 0
@@ -1399,26 +1546,22 @@ export const CreatePmsTemplateComponent = () => {
     if (!wbsStructure.stages || wbsStructure.stages.length === 0) {
       errs.stage = "Please select at least one Stage";
     } else {
-      // Validate each stage has Work Will Done By & Contractor Type if applicable
+      // Validate each stage has Work Will Done By if needed
       wbsStructure.stages.forEach((stage) => {
         if (!stage.workWillDoneBy || !stage.workWillDoneBy.trim()) {
           errs[`${stage.stageId}_workWillDoneBy`] = `Work Done By is required for Stage ${stage.stageId}`;
-        }
-        if (
-          stage.workWillDoneBy &&
-          !DEFAULT_WORK_WILL_DONE_BY.includes(stage.workWillDoneBy) &&
-          !stage.contractorType
-        ) {
-          errs[`${stage.stageId}_contractorType`] = `Contractor Type is required for Stage ${stage.stageId}`;
         }
       });
     }
 
     setErrors(errs);
     if (Object.keys(errs).length > 0) {
+      const firstErrorKey = Object.keys(errs)[0];
+      toast.error(errs[firstErrorKey] || "Please fill all mandatory fields marked with *");
       window.scrollTo({ top: 0, behavior: "smooth" });
+      return false;
     }
-    return Object.keys(errs).length === 0;
+    return true;
   };
 
   // Save / Update Task Submit Handler
@@ -1426,7 +1569,6 @@ export const CreatePmsTemplateComponent = () => {
     e.preventDefault();
 
     if (!validateForm()) {
-      toast.error("Please fill in all mandatory fields marked with *");
       return;
     }
 
@@ -1465,6 +1607,13 @@ export const CreatePmsTemplateComponent = () => {
         foundClient?.allProjects?.[0] ||
         foundClient;
       const resolvedProjectId = formData.projectId || selectedProj?._id || selectedProj?.id || null;
+
+      // Duplicate project validation check
+      if (resolvedProjectId && existingProjectIds.has(String(resolvedProjectId)) && !isEdit) {
+        toast.error("A PMS Template already exists for this project. Duplicate templates cannot be created.");
+        setLoading(false);
+        return;
+      }
 
       // 3. Resolve Project Statuses with Status ObjectIds (Never null!)
       const mappedProjectStatus = (Array.isArray(formData.projectStatus) ? formData.projectStatus : [formData.projectStatus])
@@ -1506,70 +1655,85 @@ export const CreatePmsTemplateComponent = () => {
                   supplierType: item.supplierType || parentFallback.supplierType
                 }
               ]
-            : Array.isArray(parentFallback.materialSupplier) && parentFallback.materialSupplier.length > 0
-            ? parentFallback.materialSupplier
             : [];
 
-        const materialSupplier = rawMats
-          .filter((m) => m.materialRequired || m.name || m.materialName || m.materialId)
-          .map((m) => {
-            const matName = m.materialRequired || m.name || m.materialName || "";
-            const matObj = (materialList || []).find(
-              (mat) => (mat.name || mat.materialName) === matName
-            );
-            const suppName = m.supplierName || item.supplierName || parentFallback.supplierName || "";
-            const suppObj = (supplierList || []).find(
-              (s) => (s.name || "").toLowerCase() === suppName.toLowerCase()
-            );
+        const mappedMaterialSupplier = rawMats.map((mat) => {
+          const mName = mat.materialRequired || mat.name || "";
+          const foundMat = (materialList || []).find(
+            (m) =>
+              (m.name || m.materialName || "").toLowerCase() === mName.toLowerCase() ||
+              String(m.id || m._id) === String(mat.materialId)
+          );
 
-            return {
-              materialId: m.materialId || matObj?._id || matObj?.id || null,
-              supplierId: m.supplierId || suppObj?._id || suppObj?.id || null,
-              supplierType: m.supplierType || suppObj?.supplierType || item.supplierType || parentFallback.supplierType || ""
-            };
-          });
+          const sName = mat.supplierName || "";
+          const foundSupp = (supplierList || []).find(
+            (s) =>
+              (s.name || s.supplierName || "").toLowerCase() === sName.toLowerCase() ||
+              String(s.id || s._id) === String(mat.supplierId)
+          );
 
-        const durationDays = Number(item.durationDays !== undefined ? item.durationDays : parentFallback.durationDays || 3);
-        const durationHours = Number(item.durationHours !== undefined ? item.durationHours : parentFallback.durationHours || 0);
+          return {
+            materialId: foundMat?._id || foundMat?.id || (mat.materialId && String(mat.materialId).length === 24 ? mat.materialId : null),
+            materialName: mName,
+            materialRequired: mName,
+            supplierId: foundSupp?._id || foundSupp?.id || (mat.supplierId && String(mat.supplierId).length === 24 ? mat.supplierId : null),
+            supplierName: sName,
+            supplierType: mat.supplierType || foundSupp?.supplierType || ""
+          };
+        });
+
+        const dDays = Number(item.durationDays);
+        const dHours = Number(item.durationHours);
+        const calcDays = !isNaN(dDays) ? dDays : !isNaN(Number(item.maxTimeToComplete)) ? Number(item.maxTimeToComplete) : 3;
+        const calcHours = !isNaN(dHours) ? dHours : 0;
 
         return {
           workWillDoneBy: contrName,
-          contractorId,
-          toolsVehicles:
-            Array.isArray(item.toolsVehicles) && item.toolsVehicles.length > 0
-              ? item.toolsVehicles
-              : parentFallback.toolsVehicles || [],
-          materialSupplier,
-          maxTimeToComplete: item.maxTimeToComplete || parentFallback.maxTimeToComplete || "3",
-          timeUnit: item.timeUnit || parentFallback.timeUnit || "Days",
-          deadlineDate: item.deadlineDate || parentFallback.deadlineDate || null,
-          durationDays,
-          durationHours,
-          durationFormatted: `${durationDays} D ; ${durationHours} H`,
-          instruction: item.instruction || parentFallback.instruction || "",
-          remark: item.remark || parentFallback.remark || ""
+          contractorId: contractorId,
+          toolsVehicles: Array.isArray(item.toolsVehicles) ? item.toolsVehicles : [],
+          materialSupplier: mappedMaterialSupplier,
+          maxTimeToComplete: String(item.maxTimeToComplete || calcDays || 3),
+          timeUnit: item.timeUnit || "Days",
+          deadlineDate: item.deadlineDate || null,
+          durationDays: calcDays,
+          durationHours: calcHours,
+          durationFormatted: `${calcDays} D ; ${calcHours} H`,
+          instruction: item.instruction || "",
+          remark: item.remark || ""
         };
       };
 
-      // 4. Resolve Hierarchical WBS: Stages -> Works -> Tasks (Each with their full fieldData!)
-      const dbStages = (wbsStructure.stages || []).map((stg) => {
+      // 4. Transform stages -> works -> tasks hierarchy into Mongoose ObjectIds structure
+      const dbStages = (wbsStructure.stages || []).map((stage) => {
         const sObj = (wbsStages || []).find(
-          (s) => (s.stage_code || s.code || s.id) === stg.stageId
+          (s) =>
+            s.stage_code === stage.stageId ||
+            s.code === stage.stageId ||
+            s._id === stage.stageObjId ||
+            s.id === stage.stageObjId
         );
-        const stageObjId = stg.stageObjId || sObj?._id || sObj?.id || null;
-        const stageFieldData = extractFieldData(stg);
+        const stageObjId = stage.stageObjId || sObj?._id || sObj?.id || null;
+        const stageFieldData = extractFieldData(stage);
 
-        const dbWorks = (stg.works || []).map((wrk) => {
+        const dbWorks = (stage.works || []).map((work) => {
           const wObj = (wbsWorks || []).find(
-            (w) => (w.work_code || w.code || w.id) === wrk.workId
+            (w) =>
+              w.work_code === work.workId ||
+              w.code === work.workId ||
+              w._id === work.workObjId ||
+              w.id === work.workObjId
           );
-          const workObjId = wrk.workObjId || wObj?._id || wObj?.id || null;
-          const workFieldData = extractFieldData(wrk, stageFieldData);
+          const workObjId = work.workObjId || wObj?._id || wObj?.id || null;
+          const workFieldData = extractFieldData(work, stageFieldData);
 
-          const dbTasks = (wrk.tasks || []).map((tsk) => {
+          const dbTasks = (work.tasks || []).map((tsk) => {
             const tCode = typeof tsk === "object" ? tsk.taskId : tsk;
             const tObj = (wbsTasks || []).find(
-              (t) => (t.task_code || t.code || t.id) === tCode
+              (t) =>
+                t.task_code === tCode ||
+                t.code === tCode ||
+                t._id === tsk.taskObjId ||
+                t.id === tsk.taskObjId
             );
             const tskObj = typeof tsk === "object" ? tsk : {};
             const taskFieldData = extractFieldData(tskObj, workFieldData);
@@ -1615,8 +1779,11 @@ export const CreatePmsTemplateComponent = () => {
         }
         toast.success(`PMS Task "${primaryTaskCode}" saved to database successfully!`);
       } catch (apiErr) {
-        console.warn("Backend API save warning (saving cache):", apiErr?.response?.data || apiErr.message);
-        toast.info("Saved locally & synchronized with system cache.");
+        console.error("Backend API save error:", apiErr);
+        const errMsg = apiErr?.response?.data?.message || apiErr?.message || "Failed to save PMS Task";
+        toast.error(errMsg);
+        setLoading(false);
+        return; // Stop execution on backend validation error
       }
 
       // Backward compatible task payload for local storage cache
@@ -1828,7 +1995,11 @@ export const CreatePmsTemplateComponent = () => {
               </label>
               <span className="text-[10px] text-slate-400 font-medium">
                 {formData.clientName
-                  ? `${projectDetailsOptions.length} Project${projectDetailsOptions.length === 1 ? "" : "s"} Available`
+                  ? (() => {
+                      const total = projectDetailsOptions.length;
+                      const configured = projectDetailsOptions.filter((o) => o.isAlreadyConfigured).length;
+                      return `${total} Project${total === 1 ? "" : "s"} Available${configured > 0 ? ` (${configured} Configured)` : ""}`;
+                    })()
                   : "Select client first"}
               </span>
             </div>
@@ -1872,19 +2043,30 @@ export const CreatePmsTemplateComponent = () => {
                   <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-xl border border-slate-200 z-50 p-2 max-h-60 overflow-y-auto space-y-1">
                     {projectDetailsOptions.map((opt) => {
                       const isSelected = String(formData.projectId) === String(opt.value);
+                      const isConfigured = opt.isAlreadyConfigured;
                       return (
                         <div
                           key={opt.value}
                           onClick={() => handleProjectSelect(opt)}
-                          className={`px-3 py-2.5 rounded-lg text-xs cursor-pointer hover:bg-indigo-50 flex items-center justify-between transition-colors ${
-                            isSelected ? "bg-indigo-50 font-bold text-indigo-900 border border-indigo-200" : "text-slate-700"
+                          className={`px-3 py-2.5 rounded-lg text-xs flex items-center justify-between transition-colors ${
+                            isConfigured
+                              ? "bg-amber-50/50 border border-amber-200/70 cursor-not-allowed opacity-80"
+                              : isSelected
+                              ? "bg-indigo-50 font-bold text-indigo-900 border border-indigo-200 cursor-pointer"
+                              : "hover:bg-indigo-50 text-slate-700 cursor-pointer"
                           }`}
                         >
                           <div className="space-y-1 truncate pr-2">
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-slate-900 text-xs">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className={`font-bold text-xs ${isConfigured ? "text-slate-600 line-through decoration-slate-300" : "text-slate-900"}`}>
                                 {opt.projectName || opt.label.split("|")[0].trim()}
                               </span>
+                              {isConfigured && (
+                                <span className="bg-amber-100 text-amber-900 border border-amber-300 text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
+                                  <FaCheckCircle className="w-2.5 h-2.5 text-amber-600" />
+                                  Template Already Created
+                                </span>
+                              )}
                             </div>
                             <div className="text-[11px] text-slate-500 flex items-center gap-2 flex-wrap">
                               {opt.workCategory && opt.workCategory !== "--" && (
@@ -1898,8 +2080,19 @@ export const CreatePmsTemplateComponent = () => {
                                 </span>
                               )}
                             </div>
+                            {isConfigured && (
+                              <p className="text-[10px] text-amber-800 font-medium italic mt-0.5 flex items-center gap-1">
+                                <FaExclamationCircle className="w-2.5 h-2.5 text-amber-600 shrink-0" />
+                                Masterdata already filled for this project (Duplicate not allowed)
+                              </p>
+                            )}
                           </div>
-                          {isSelected && <FaCheck className="text-indigo-600 w-3.5 h-3.5 shrink-0" />}
+                          {isSelected && !isConfigured && <FaCheck className="text-indigo-600 w-3.5 h-3.5 shrink-0" />}
+                          {isConfigured && (
+                            <span className="text-[10px] text-amber-700 font-bold bg-amber-100/80 px-2 py-0.5 rounded border border-amber-300/60 shrink-0">
+                              Locked
+                            </span>
+                          )}
                         </div>
                       );
                     })}
@@ -1920,6 +2113,9 @@ export const CreatePmsTemplateComponent = () => {
                 />
                 <FaBuilding className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs pointer-events-none" />
               </div>
+            )}
+            {errors.projectId && (
+              <p className="text-xs text-red-500 mt-1 font-medium">{errors.projectId}</p>
             )}
           </div>
 

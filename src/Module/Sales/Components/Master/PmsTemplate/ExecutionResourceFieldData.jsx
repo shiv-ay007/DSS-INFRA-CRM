@@ -199,10 +199,29 @@ const ExecutionResourceFieldData = ({
     setActiveDropdown(null);
   };
 
-  // Derive materials array from data.materials or fallback to single fields
+  // Derive materials array from data.materials, data.materialSupplier or fallback to single fields
   const materialsList =
     Array.isArray(data.materials) && data.materials.length > 0
       ? data.materials
+      : Array.isArray(data.materialSupplier) && data.materialSupplier.length > 0
+      ? data.materialSupplier.map((m) => ({
+          materialRequired:
+            m.materialRequired ||
+            (typeof m.materialId === "object" ? m.materialId?.name || m.materialId?.materialName : "") ||
+            m.materialName ||
+            m.name ||
+            "",
+          materialId: typeof m.materialId === "object" ? m.materialId?._id : m.materialId || null,
+          supplierName:
+            m.supplierName ||
+            (typeof m.supplierId === "object" ? m.supplierId?.name : "") ||
+            "",
+          supplierId: typeof m.supplierId === "object" ? m.supplierId?._id : m.supplierId || null,
+          supplierType:
+            m.supplierType ||
+            (typeof m.supplierId === "object" ? m.supplierId?.supplierType : "") ||
+            ""
+        }))
       : [
           {
             materialRequired: data.materialRequired || "",
