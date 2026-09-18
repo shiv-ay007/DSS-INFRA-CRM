@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { toast } from "react-toastify";
 import {
   FaArrowLeft,
@@ -195,6 +195,7 @@ const DEFAULT_STAGE_DETAILS = {
 export const CreatePmsTemplateComponent = () => {
   const navigate = useNavigate();
   const { id } = useParams();
+  const [searchParams] = useSearchParams();
   const isEdit = Boolean(id);
 
   const [loading, setLoading] = useState(false);
@@ -1468,6 +1469,58 @@ export const CreatePmsTemplateComponent = () => {
     setIsClientOpen(false);
     setIsProjectOpen(false);
   };
+
+  // Auto-fill client & project from URL search parameters (e.g. from Active Projects "+ Add PMS" button)
+  useEffect(() => {
+    if (isEdit || presalesList.length === 0) return;
+    const qClientName = searchParams.get("clientName");
+    const qProjectId = searchParams.get("projectId");
+    const qProjectName = searchParams.get("projectName");
+
+    if (!qClientName && !qProjectId) return;
+
+    const matchedClient = presalesList.find((c) => {
+      if (qClientName && c.clientName?.toLowerCase().trim() === qClientName.toLowerCase().trim()) return true;
+      if (qProjectId && (String(c.id) === qProjectId || String(c.leadId) === qProjectId)) return true;
+      return false;
+    });
+
+    if (matchedClient) {
+      handleSelectClient(matchedClient);
+
+      if (qProjectId || qProjectName) {
+        const clientProjects = Array.isArray(matchedClient.allProjects) && matchedClient.allProjects.length > 0
+          ? matchedClient.allProjects
+          : (matchedClient.projectDetails ? [matchedClient] : []);
+
+        const matchedProj = clientProjects.find((p) => {
+          if (qProjectId && String(p.id || p._id) === qProjectId) return true;
+          if (qProjectName && p.projectName?.toLowerCase().trim() === qProjectName.toLowerCase().trim()) return true;
+          return false;
+        });
+
+        if (matchedProj) {
+          const key = String(matchedProj.id || matchedProj._id || "");
+          const pName = matchedProj.projectName || "";
+          const cat = matchedProj.workCategory || matchedProj.businessType || "";
+          const wt = matchedProj.workType || "";
+          const parts = [];
+          if (pName) parts.push(pName);
+          else parts.push("Project #1");
+          if (cat && cat !== "--") parts.push(`Category: ${cat}`);
+          if (wt && wt !== "--") parts.push(`Work Type: ${wt}`);
+          const autoProjectDetails = parts.join(" | ");
+
+          setFormData((prev) => ({
+            ...prev,
+            selectedProjectIds: [key],
+            projectId: key,
+            projectDetails: autoProjectDetails
+          }));
+        }
+      }
+    }
+  }, [searchParams, presalesList, isEdit]);
 
   // Material selection -> auto-fills Material Details & Preferred Supplier for that Stage
   const handleSelectMaterial = (stageId, mat) => {

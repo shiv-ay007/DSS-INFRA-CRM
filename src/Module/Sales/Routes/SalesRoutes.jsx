@@ -23,6 +23,8 @@ import AddContractorPage from '../Pages/Master/AddContractorPage'
 import SupplierContractorDetailsPage from '../Pages/Master/SupplierContractorDetailsPage'
 import PmsWbsMasterPage from '../Pages/Master/PmsWbsMasterPage'
 import ActiveProjectsPage from '../Pages/ActiveProjects/ActiveProjectsPage'
+import CreateActiveProjectPage from '../Pages/ActiveProjects/CreateActiveProjectPage'
+import ActiveProjectDetailsPage from '../Pages/ActiveProjects/ActiveProjectDetailsPage'
 import ActiveProjectExecutionPage from '../Pages/ActiveProjects/ActiveProjectExecutionPage'
 
 const SalesRoutes = () => {
@@ -48,6 +50,8 @@ const SalesRoutes = () => {
         <Route path="presales/:id" element={<Presales />} />
         {/* Module 3: Active Project Execution (Site Tracking) */}
         <Route path="active-projects" element={<ActiveProjectsPage />} />
+        <Route path="active-projects/create" element={<CreateActiveProjectPage />} />
+        <Route path="active-projects/details/:id" element={<ActiveProjectDetailsPage />} />
         <Route path="active-projects/:id" element={<ActiveProjectExecutionPage />} />
         {/* MasterForm Routes */}
         <Route path="master/pms-template" element={<PmsTemplate />} />
