@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useSearchParams } from "react-router-dom";
 import {
   FaArrowLeft,
   FaHardHat,
+  FaHammer,
+  FaTasks,
   FaCheckCircle,
   FaClock,
-  FaExclamationTriangle,
   FaUserTie,
   FaMapMarkerAlt,
   FaPhoneAlt,
@@ -13,83 +14,78 @@ import {
   FaBuilding,
   FaSave,
   FaCalendarAlt,
-  FaCamera,
   FaTimes,
   FaChevronDown,
   FaChevronUp,
   FaLock,
-  FaCheck,
-  FaTools,
-  FaComments,
-  FaFilter,
   FaSearch,
-  FaUsers,
+  FaClipboardList,
+  FaRupeeSign,
+  FaLayerGroup,
+  FaSpinner,
   FaPlus,
-  FaClipboardList
+  FaTrash
 } from "react-icons/fa";
-import { HiSparkles } from "react-icons/hi2";
 import { toast } from "react-toastify";
 import { useAuth } from "../../../../context/AuthContext";
-import activeProjectService, { isObjectId } from "../../services/activeProjectService";
+import activeProjectService, {
+  isObjectId,
+  mapPmsStagesToExecutionStages
+} from "../../services/activeProjectService";
 import { contractorService } from "../../services/contractorService";
 import { getAllLeadProjectsApi } from "../../services/leadProject.api";
 import pmsTemplateService from "../../services/pmsTemplateService";
 import { pmsWbsService } from "../../services/pmsWbsService";
 
-// Fallback seed contractors if API has none
-const FALLBACK_CONTRACTORS = [
-  "Apex Civil Infratech Pvt Ltd",
-  "National Shuttering & Scaffolding Works",
-  "Modern Bar Binders & Steel Works",
-  "Krishna Excavators & Earthmovers",
-  "Reliable MEP & Plumbing Solutions"
-];
-
 const ActiveProjectExecutionComponent = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const mode = searchParams.get("mode") || "view";
   const { user } = useAuth();
-  const isViewerOnly = user?.role === "Observer"; // 2-login system
+  const isViewerOnly = user?.role === "Observer";
+
+  const isEditMode = mode === "edit" && !isViewerOnly;
+  const isReadOnly = !isEditMode;
 
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [savingAll, setSavingAll] = useState(false);
 
-  // Editable header state
+  // Project header form
   const [headerForm, setHeaderForm] = useState({
     activePerson: "",
     projectStatus: "On Track",
-    projectSubStatus: "",
+    startDate: "",
+    targetDate: "",
     overallRemark: ""
   });
-  const [savingHeader, setSavingHeader] = useState(false);
 
-  // Contractor Master list
-  const [contractorsList, setContractorsList] = useState(FALLBACK_CONTRACTORS);
-
-  // UI States
+  // WBS stages/works/tasks data
+  const [stagesData, setStagesData] = useState([]);
   const [expandedStages, setExpandedStages] = useState({});
-  const [stageFilter, setStageFilter] = useState("ALL"); // ALL, IN_PROGRESS, COMPLETED, DELAYED
   const [taskSearch, setTaskSearch] = useState("");
+  const [contractorsList, setContractorsList] = useState([]);
 
-  // Tab: "EXECUTION" or "DAILY_LOGS"
-  const [activeViewTab, setActiveViewTab] = useState("EXECUTION");
-
-  // Daily Site Update Modal states
-  const [isDailyLogModalOpen, setIsDailyLogModalOpen] = useState(false);
-  const [submittingDailyLog, setSubmittingDailyLog] = useState(false);
-  const [dailyLogForm, setDailyLogForm] = useState({
+  // ============================================================
+  // DAILY SITE LOGS (NEW)
+  // ============================================================
+  const [dailyLogs, setDailyLogs] = useState([]);
+  const [newLog, setNewLog] = useState({
     date: new Date().toISOString().split("T")[0],
-    loggedBy: "",
+    loggedBy: user?.name || user?.username || "",
     stageId: "",
     workId: "",
     taskId: "",
     status: "In Progress",
-    summary: "",
     manpowerCount: "",
-    photoUrl: ""
+    summary: "",
+    remark: ""
   });
 
-  // Load project
+  // ============================================================
+  // LOAD PROJECT + SYNC
+  // ============================================================
   const loadProjectData = async () => {
     setLoading(true);
     try {
@@ -97,69 +93,119 @@ const ActiveProjectExecutionComponent = () => {
       let pmsList = [];
       let wbsData = null;
 
+      const [presalesRes, pmsRes, wbsRes] = await Promise.allSettled([
+        getAllLeadProjectsApi(),
+        pmsTemplateService.getAllTemplates({ limit: 1000 }),
+        pmsWbsService.getAllWbsData()
+      ]);
+
+      if (presalesRes.status === "fulfilled") {
+        const raw =
+          presalesRes.value?.data?.projects ||
+          presalesRes.value?.data?.data?.projects ||
+          presalesRes.value?.projects ||
+          (Array.isArray(presalesRes.value?.data) ? presalesRes.value.data : []);
+        if (Array.isArray(raw)) presales = raw;
+      }
+
+      if (pmsRes.status === "fulfilled") {
+        const rawTmpl = pmsRes.value?.data?.data || pmsRes.value?.data || [];
+        if (Array.isArray(rawTmpl)) pmsList = [...rawTmpl];
+      }
+
       try {
-        const [presalesRes, pmsRes, wbsRes] = await Promise.allSettled([
-          getAllLeadProjectsApi(),
-          pmsTemplateService.getAllTemplates({ limit: 1000 }),
-          pmsWbsService.getAllWbsData()
-        ]);
-
-        if (presalesRes.status === "fulfilled") {
-          const raw =
-            presalesRes.value?.data?.projects ||
-            presalesRes.value?.data?.data?.projects ||
-            presalesRes.value?.projects ||
-            (Array.isArray(presalesRes.value?.data) ? presalesRes.value.data : []);
-          if (Array.isArray(raw)) presales = raw;
+        const storedTasks = localStorage.getItem("dss_pms_tasks_master_data");
+        if (storedTasks) {
+          const parsed = JSON.parse(storedTasks);
+          if (Array.isArray(parsed)) pmsList = [...pmsList, ...parsed];
         }
-
-        if (pmsRes.status === "fulfilled") {
-          const rawTmpl = pmsRes.value?.data?.data || pmsRes.value?.data || [];
-          if (Array.isArray(rawTmpl)) pmsList = [...rawTmpl];
+        const storedTemplates = localStorage.getItem("dss_pms_templates_data");
+        if (storedTemplates) {
+          const parsedT = JSON.parse(storedTemplates);
+          if (Array.isArray(parsedT)) pmsList = [...pmsList, ...parsedT];
         }
+      } catch (e) {}
 
-        try {
-          const storedTasks = localStorage.getItem("dss_pms_tasks_master_data");
-          if (storedTasks) {
-            const parsed = JSON.parse(storedTasks);
-            if (Array.isArray(parsed)) pmsList = [...pmsList, ...parsed];
-          }
-        } catch (e) {}
+      const dedupMap = new Map();
+      pmsList.forEach((t) => {
+        const key = t?._id
+          ? String(t._id)
+          : `${t?.clientName}-${t?.projectName}-${t?.duration}`;
+        dedupMap.set(key, t);
+      });
+      pmsList = Array.from(dedupMap.values());
 
-        if (wbsRes.status === "fulfilled") {
-          wbsData = wbsRes.value?.data?.data || wbsRes.value?.data || null;
-        }
+      if (wbsRes.status === "fulfilled") {
+        wbsData = wbsRes.value?.data?.data || wbsRes.value?.data || null;
+      }
 
-        // Always sync with presales, templates and WBS data to repair any raw ObjectIds
+      try {
         activeProjectService.syncWithPresales(presales, pmsList, wbsData);
       } catch (syncErr) {
-        console.warn("Live sync error in execution component:", syncErr);
+        if (process.env.NODE_ENV !== "production") console.warn(syncErr);
       }
 
-      let data = activeProjectService.getActiveProjectById(id, wbsData);
+      const data = activeProjectService.getActiveProjectById(id, wbsData);
 
-      if (data) {
-        setProject(data);
-        setHeaderForm({
-          activePerson: data.activePerson || "",
-          projectStatus: data.projectStatus || "On Track",
-          projectSubStatus: data.projectSubStatus || "",
-          overallRemark: data.overallRemark || ""
-        });
-
-        // Expand the first stage by default if not set
-        setExpandedStages((prev) => {
-          if (Object.keys(prev).length === 0 && data.stages?.length > 0) {
-            return { [data.stages[0].stageId]: true };
-          }
-          return prev;
-        });
-      } else {
+      if (!data) {
         toast.error("Active Project not found with ID: " + id);
         navigate("/sales/active-projects");
+        return;
       }
+
+      const directTmpl = pmsList.find((t) => {
+        const pId = String(t.projectId?._id || t.projectId || "");
+        const lId = String(t.leadId?._id || t.leadId || "");
+        const tClient = (
+          t.clientName ||
+          t.projectId?.clientName ||
+          t.leadId?.clientName ||
+          ""
+        )
+          .toLowerCase()
+          .trim();
+        const pClient = (data.clientName || "").toLowerCase().trim();
+        return (
+          pId === String(id) ||
+          pId === String(data.projectId) ||
+          (data.leadId && lId === String(data.leadId)) ||
+          (tClient && pClient && tClient === pClient)
+        );
+      });
+
+      try {
+        if (directTmpl && Array.isArray(directTmpl.stages) && directTmpl.stages.length > 0) {
+          data.stages = mapPmsStagesToExecutionStages(directTmpl.stages, wbsData, data.stages);
+          if (typeof activeProjectService.saveFullProject === "function") {
+            activeProjectService.saveFullProject(data.id, data);
+          }
+        }
+      } catch (syncErr) {
+        if (process.env.NODE_ENV !== "production") console.warn(syncErr);
+      }
+
+      setProject(data);
+      setHeaderForm({
+        activePerson: data.activePerson || user?.name || "Site Engineer",
+        projectStatus: data.projectStatus || "On Track",
+        startDate: data.contractSignedDate || new Date().toISOString().split("T")[0],
+        targetDate: data.targetCompletionDate || "",
+        overallRemark: data.overallRemark || ""
+      });
+
+      const stgs = data.stages || [];
+      setStagesData(stgs);
+
+      // Load daily logs from project
+      setDailyLogs(Array.isArray(data.dailyLogs) ? data.dailyLogs : []);
+
+      const allExp = {};
+      stgs.forEach((s) => {
+        allExp[s.stageId] = true;
+      });
+      setExpandedStages(allExp);
     } catch (e) {
-      console.error(e);
+      if (process.env.NODE_ENV !== "production") console.error(e);
       toast.error("Failed to load project details.");
     } finally {
       setLoading(false);
@@ -170,7 +216,6 @@ const ActiveProjectExecutionComponent = () => {
     loadProjectData();
   }, [id]);
 
-  // Load Contractors from Module 5
   useEffect(() => {
     const fetchContractors = async () => {
       try {
@@ -178,1328 +223,1078 @@ const ActiveProjectExecutionComponent = () => {
         const items = res?.data?.data || res?.data || (Array.isArray(res) ? res : []);
         if (Array.isArray(items) && items.length > 0) {
           const names = items.map((c) => c.contractorName || c.name).filter(Boolean);
-          if (names.length > 0) {
-            setContractorsList(names);
-          }
+          if (names.length > 0) setContractorsList(names);
         }
       } catch (e) {
-        console.warn("Using fallback contractors list");
+        if (process.env.NODE_ENV !== "production") console.warn(e);
       }
     };
     fetchContractors();
   }, []);
 
-  // Save Project Header Metadata
-  const handleSaveHeader = (e) => {
-    e.preventDefault();
-    if (isViewerOnly) {
-      toast.warn("Viewers cannot modify project metadata.");
+  // ============================================================
+  // DAILY LOG HANDLERS
+  // ============================================================
+  const handleAddDailyLog = () => {
+    if (isReadOnly) {
+      toast.warn("View-Only mode: Cannot add daily log.");
       return;
     }
-    setSavingHeader(true);
-    try {
-      const updated = activeProjectService.updateProjectMetadata(id, headerForm);
-      if (updated) {
-        setProject(updated);
-        toast.success("Project status & site manager details updated!");
-      }
-    } catch (e) {
-      console.error(e);
-      toast.error("Failed to update project details.");
-    } finally {
-      setSavingHeader(false);
+    if (!newLog.summary?.trim()) {
+      toast.error("Please enter work summary.");
+      return;
     }
-  };
 
-  // Toggle stage accordion
-  const toggleStage = (stageId) => {
-    setExpandedStages((prev) => ({
+    const stg = stagesData.find((s) => s.stageId === newLog.stageId);
+    const wk = stg?.works?.find((w) => w.workId === newLog.workId);
+    const tk = wk?.tasks?.find((t) => t.taskId === newLog.taskId);
+
+    const logEntry = {
+      id: `LOG-${Date.now()}`,
+      date: newLog.date,
+      loggedBy: newLog.loggedBy || user?.name || "Site Engineer",
+      stageId: newLog.stageId || "",
+      stageName: stg?.stageName || "",
+      workId: newLog.workId || "",
+      workName: wk?.workName || "",
+      taskId: newLog.taskId || "",
+      taskName: tk?.taskName || "",
+      status: newLog.status || "In Progress",
+      manpowerCount: newLog.manpowerCount || "",
+      summary: newLog.summary,
+      remark: newLog.remark || "",
+      createdAt: new Date().toISOString()
+    };
+
+    // If task selected, auto-update task status/remark in stagesData
+    if (newLog.stageId && newLog.workId && newLog.taskId) {
+      handleTaskFieldChange(newLog.stageId, newLog.workId, newLog.taskId, "status", newLog.status);
+      if (newLog.remark) {
+        handleTaskFieldChange(newLog.stageId, newLog.workId, newLog.taskId, "remark", newLog.remark);
+      }
+    }
+
+    setDailyLogs((prev) => [logEntry, ...prev]);
+
+    // Reset form (keep date and loggedBy)
+    setNewLog((prev) => ({
       ...prev,
-      [stageId]: !prev[stageId]
-    }));
-  };
-
-  const expandAllStages = () => {
-    const next = {};
-    (project?.stages || []).forEach((s) => {
-      next[s.stageId] = true;
-    });
-    setExpandedStages(next);
-  };
-
-  const collapseAllStages = () => {
-    setExpandedStages({});
-  };
-
-  // Handle Task Updates (Status, Contractor, Deadline, Photo, Remark)
-  const handleTaskUpdate = (stageId, workId, taskId, updates) => {
-    if (isViewerOnly) {
-      toast.warn("Viewers cannot update task checklist.");
-      return;
-    }
-
-    try {
-      const updated = activeProjectService.updateTask(id, stageId, workId, taskId, updates);
-      if (updated) {
-        setProject(updated);
-        // Sync project status in header form if changed
-        setHeaderForm((prev) => ({
-          ...prev,
-          projectStatus: updated.projectStatus
-        }));
-      }
-    } catch (e) {
-      console.error(e);
-      toast.error("Failed to update task.");
-    }
-  };
-
-  // Handle Photo Upload (Base64)
-  const handlePhotoUpload = (stageId, workId, taskId, e) => {
-    if (isViewerOnly) return;
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error("Photo size must be less than 2MB.");
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      handleTaskUpdate(stageId, workId, taskId, { photoUrl: reader.result });
-      toast.success("Site photo attached!");
-    };
-    reader.readAsDataURL(file);
-  };
-
-  // Open daily update modal
-  const handleOpenDailyLog = (targetStageId = null, targetWorkId = null, targetTaskId = null) => {
-    const stage = targetStageId
-      ? project?.stages?.find((s) => s.stageId === targetStageId)
-      : project?.stages?.[0];
-    const work = targetWorkId
-      ? stage?.works?.find((w) => w.workId === targetWorkId)
-      : stage?.works?.[0];
-    const task = targetTaskId
-      ? work?.tasks?.find((t) => t.taskId === targetTaskId)
-      : work?.tasks?.[0];
-
-    setDailyLogForm({
-      date: new Date().toISOString().split("T")[0],
-      loggedBy: project?.activePerson || user?.name || "Site Engineer",
-      stageId: stage?.stageId || "",
-      workId: work?.workId || "",
-      taskId: task?.taskId || "",
-      status: task?.status || "In Progress",
-      summary: "",
+      stageId: "",
+      workId: "",
+      taskId: "",
+      status: "In Progress",
       manpowerCount: "",
-      photoUrl: ""
-    });
-    setIsDailyLogModalOpen(true);
+      summary: "",
+      remark: ""
+    }));
+
+    toast.success("Daily log added! Click 'Save Project Execution' to persist.");
   };
 
-  // Daily log photo upload
-  const handleDailyLogPhotoUpload = (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error("Photo size must be less than 2MB.");
-      return;
-    }
-    const reader = new FileReader();
-    reader.onload = () => {
-      setDailyLogForm((prev) => ({ ...prev, photoUrl: reader.result }));
-      toast.success("Site photo attached!");
-    };
-    reader.readAsDataURL(file);
+  const handleRemoveDailyLog = (logId) => {
+    if (isReadOnly) return;
+    setDailyLogs((prev) => prev.filter((l) => l.id !== logId));
   };
 
-  // Submit daily log
-  const handleSubmitDailyLog = (e) => {
-    e.preventDefault();
-    if (isViewerOnly) {
-      toast.warn("Viewers cannot add daily site updates.");
+  // ============================================================
+  // TASK FIELD UPDATE
+  // ============================================================
+  const handleTaskFieldChange = (stageId, workId, taskId, field, value) => {
+    if (isReadOnly) {
+      toast.warn("View-Only mode.");
       return;
     }
-    if (!dailyLogForm.summary?.trim()) {
-      toast.error("Please enter a summary of today's site work done.");
+    setStagesData((prevStages) =>
+      prevStages.map((stg) => {
+        if (stg.stageId !== stageId) return stg;
+        return {
+          ...stg,
+          works: (stg.works || []).map((w) => {
+            if (w.workId !== workId) return w;
+            return {
+              ...w,
+              tasks: (w.tasks || []).map((t) =>
+                t.taskId === taskId ? { ...t, [field]: value } : t
+              )
+            };
+          })
+        };
+      })
+    );
+  };
+
+  // ============================================================
+  // SAVE
+  // ============================================================
+  const handleSaveAll = async (e) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (isReadOnly) {
+      toast.warn("View-Only mode: Cannot modify.");
       return;
     }
 
-    setSubmittingDailyLog(true);
+    setSavingAll(true);
     try {
-      const targetStage = project?.stages?.find((s) => s.stageId === dailyLogForm.stageId);
-      const targetWork = targetStage?.works?.find((w) => w.workId === dailyLogForm.workId);
-      const targetTask = targetWork?.tasks?.find((t) => t.taskId === dailyLogForm.taskId);
-
-      // 1. If a specific task was selected, update its status & note
-      if (dailyLogForm.stageId && dailyLogForm.workId && dailyLogForm.taskId) {
-        activeProjectService.updateTask(id, dailyLogForm.stageId, dailyLogForm.workId, dailyLogForm.taskId, {
-          status: dailyLogForm.status,
-          remark: dailyLogForm.summary,
-          ...(dailyLogForm.photoUrl ? { photoUrl: dailyLogForm.photoUrl } : {})
-        });
-      }
-
-      // 2. Add daily site log
-      activeProjectService.addDailyLog(id, {
-        date: dailyLogForm.date,
-        loggedBy: dailyLogForm.loggedBy,
-        stageId: dailyLogForm.stageId,
-        stageName: targetStage?.stageName || "",
-        workId: dailyLogForm.workId,
-        workName: targetWork?.workName || "",
-        taskId: dailyLogForm.taskId,
-        taskName: targetTask?.taskName || "",
-        status: dailyLogForm.status,
-        summary: dailyLogForm.summary,
-        manpowerCount: dailyLogForm.manpowerCount,
-        photoUrl: dailyLogForm.photoUrl,
-        tasksUpdated: dailyLogForm.taskId ? [dailyLogForm.taskId] : []
+      const updated = activeProjectService.saveFullProject(id, {
+        activePerson: headerForm.activePerson,
+        projectStatus: headerForm.projectStatus,
+        contractSignedDate: headerForm.startDate,
+        targetCompletionDate: headerForm.targetDate,
+        overallRemark: headerForm.overallRemark,
+        stages: stagesData,
+        dailyLogs
       });
 
-      toast.success("Daily site progress logged successfully!");
-      setIsDailyLogModalOpen(false);
-      loadProjectData();
+      if (updated) {
+        setProject(updated);
+        setStagesData(updated.stages || []);
+        setDailyLogs(updated.dailyLogs || []);
+        toast.success("Project execution + daily logs saved successfully! 🎯");
+      } else {
+        toast.error("Could not save. Record not found.");
+      }
     } catch (err) {
-      console.error(err);
-      toast.error("Failed to save daily log.");
+      if (process.env.NODE_ENV !== "production") console.error(err);
+      toast.error("Failed to save.");
     } finally {
-      setSubmittingDailyLog(false);
+      setSavingAll(false);
     }
   };
 
-  // Filtered Stages
+  // ============================================================
+  // DERIVED COUNTS
+  // ============================================================
+  const totalStagesCount = stagesData.length;
+  const totalWorksCount = useMemo(
+    () => stagesData.reduce((sum, s) => sum + (s.works?.length || 0), 0),
+    [stagesData]
+  );
+  const totalTasksCount = useMemo(
+    () =>
+      stagesData.reduce(
+        (sum, s) => sum + (s.works || []).reduce((wSum, w) => wSum + (w.tasks?.length || 0), 0),
+        0
+      ),
+    [stagesData]
+  );
+  const completedTasksCount = useMemo(
+    () =>
+      stagesData.reduce(
+        (sum, s) =>
+          sum +
+          (s.works || []).reduce(
+            (wSum, w) => wSum + (w.tasks || []).filter((t) => t.status === "Completed").length,
+            0
+          ),
+        0
+      ),
+    [stagesData]
+  );
+  const progressPercent =
+    totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0;
+
+  // Cascading for daily log form
+  const logStageObj = useMemo(
+    () => stagesData.find((s) => s.stageId === newLog.stageId) || null,
+    [stagesData, newLog.stageId]
+  );
+  const logWorksAvail = useMemo(() => logStageObj?.works || [], [logStageObj]);
+  const logWorkObj = useMemo(
+    () => logWorksAvail.find((w) => w.workId === newLog.workId) || null,
+    [logWorksAvail, newLog.workId]
+  );
+  const logTasksAvail = useMemo(() => logWorkObj?.tasks || [], [logWorkObj]);
+
+  // Search filter
   const filteredStages = useMemo(() => {
-    if (!project?.stages) return [];
-    return project.stages.filter((stg) => {
-      // Stage filter
-      if (stageFilter === "COMPLETED" && stg.status !== "Completed") return false;
-      if (stageFilter === "IN_PROGRESS" && stg.status !== "In Progress") return false;
-      if (stageFilter === "NOT_STARTED" && stg.status !== "Not Started") return false;
-
-      // Task search
-      if (taskSearch) {
-        const q = taskSearch.toLowerCase();
-        const stageMatch = stg.stageName.toLowerCase().includes(q) || stg.stageId.toLowerCase().includes(q);
-        const taskMatch = (stg.works || []).some((w) =>
-          w.workName.toLowerCase().includes(q) ||
-          (w.tasks || []).some((t) => t.taskName.toLowerCase().includes(q) || t.taskId.toLowerCase().includes(q))
-        );
-        return stageMatch || taskMatch;
-      }
-
-      return true;
+    if (!taskSearch) return stagesData;
+    const q = taskSearch.toLowerCase();
+    return stagesData.filter((stg) => {
+      const stageMatch =
+        stg.stageName?.toLowerCase().includes(q) || stg.stageId?.toLowerCase().includes(q);
+      const taskMatch = (stg.works || []).some(
+        (w) =>
+          w.workName?.toLowerCase().includes(q) ||
+          w.workId?.toLowerCase().includes(q) ||
+          (w.tasks || []).some(
+            (t) => t.taskName?.toLowerCase().includes(q) || t.taskId?.toLowerCase().includes(q)
+          )
+      );
+      return stageMatch || taskMatch;
     });
-  }, [project?.stages, stageFilter, taskSearch]);
+  }, [stagesData, taskSearch]);
+
+  const toggleStage = (stageId) =>
+    setExpandedStages((prev) => ({ ...prev, [stageId]: !prev[stageId] }));
 
   if (loading || !project) {
     return (
-      <div className="py-24 text-center text-slate-400">
-        <div className="w-8 h-8 border-3 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-        <p className="text-sm font-semibold">Loading Site Tracking Screen...</p>
+      <div className="py-24 text-center text-slate-400 font-sans">
+        <FaSpinner className="w-8 h-8 text-indigo-600 animate-spin mx-auto mb-3" />
+        <p className="text-sm font-semibold text-slate-600">Loading...</p>
       </div>
     );
   }
 
-  const completedStagesCount = (project.stages || []).filter((s) => s.status === "Completed").length;
-  const totalStagesCount = (project.stages || []).length;
+  const projectStatusBadgeClasses =
+    headerForm.projectStatus === "Completed"
+      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+      : headerForm.projectStatus === "In Progress"
+      ? "bg-blue-50 text-blue-700 border-blue-200"
+      : headerForm.projectStatus === "Delayed"
+      ? "bg-rose-50 text-rose-700 border-rose-200"
+      : headerForm.projectStatus === "On Hold"
+      ? "bg-amber-50 text-amber-700 border-amber-200"
+      : "bg-indigo-50 text-indigo-700 border-indigo-200";
 
   return (
-    <div className="space-y-4 pb-20 font-sans">
-      {/* ================= FIXED / STICKY HEADER BANNER ================= */}
-      <div className="sticky -top-2.5 sm:-top-4 z-30 bg-slate-100 pt-1 pb-1">
-        <div className="bg-gradient-to-r from-blue-900 via-indigo-950 to-purple-950 text-white rounded-xl px-4 py-3 shadow-md border border-indigo-700/50 overflow-hidden relative">
-          <div className="absolute top-0 right-0 -mt-8 -mr-8 w-48 h-48 bg-cyan-500/20 rounded-full blur-2xl pointer-events-none" />
-          <div className="absolute bottom-0 left-1/3 -mb-8 w-48 h-48 bg-pink-500/20 rounded-full blur-2xl pointer-events-none" />
+    <div className="max-w-7xl mx-auto space-y-4 font-sans pb-20 px-1 sm:px-3">
+      {/* ================= 1. HEADER ================= */}
+      <div className="bg-white border border-slate-200 rounded-xl p-3.5 sm:p-4 shadow-2xs">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-start gap-3 flex-1 min-w-0">
+            <button
+              type="button"
+              onClick={() => navigate("/sales/active-projects")}
+              className="p-2 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 shadow-2xs transition-colors cursor-pointer flex items-center justify-center shrink-0 mt-0.5"
+            >
+              <FaArrowLeft className="w-3.5 h-3.5" />
+            </button>
 
-          <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-3">
-            <div className="flex items-start gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-xs font-bold px-2 py-0.5 rounded bg-sky-50 text-sky-800 border border-sky-200">
+                  Type: {project.workType || "Turnkey Construction"}
+                </span>
+                <span className="text-xs font-bold px-2 py-0.5 rounded bg-purple-50 text-purple-800 border border-purple-200">
+                  Category: {project.workCategory || "Construction"}
+                </span>
+                <span
+                  className={`text-xs font-bold px-2 py-0.5 rounded border flex items-center gap-1.5 ${projectStatusBadgeClasses}`}
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-current" />
+                  {headerForm.projectStatus}
+                </span>
+                {isReadOnly ? (
+                  <span className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                    <FaLock className="w-2.5 h-2.5 text-slate-500" /> View-Only
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                    Editor Mode
+                  </span>
+                )}
+              </div>
+
+              <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight mt-1 truncate">
+                {project.clientName}
+                {project.projectName &&
+                project.projectName !== "Site Execution" &&
+                project.projectName !== "Site Workflow"
+                  ? ` — ${project.projectName}`
+                  : ""}
+              </h1>
+              <p className="text-xs text-slate-500 font-normal">
+                Multi-stage Construction Checklist & daily task execution tracking.
+              </p>
+            </div>
+          </div>
+
+          {isEditMode && (
+            <div className="flex items-center gap-2.5 self-end sm:self-auto flex-wrap">
               <button
                 type="button"
                 onClick={() => navigate("/sales/active-projects")}
-                className="w-8 h-8 rounded-lg bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all cursor-pointer shadow-xs active:scale-95 shrink-0 border border-white/10 mt-0.5"
-                title="Back to Active Projects"
+                className="px-3.5 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-200 transition-colors cursor-pointer"
               >
-                <FaArrowLeft className="text-xs" />
+                Cancel
               </button>
-              <div className="p-2.5 bg-gradient-to-br from-cyan-400 to-blue-600 rounded-lg shadow-md flex items-center justify-center shrink-0">
-                <FaHardHat className="w-5 h-5 text-white" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-mono text-xs font-bold text-cyan-300 bg-white/10 px-2 py-0.5 rounded border border-white/20">
-                    {project.displayId || project.leadIdCode || (project.id && project.id.length === 24 ? `PRJ-${project.id.slice(-5).toUpperCase()}` : project.id)}
-                  </span>
-                  <h1 className="text-base sm:text-lg font-black tracking-tight text-white leading-tight">
-                    {project.clientName}
-                    {project.projectName && project.projectName !== "Site Execution" && project.projectName !== "Site Workflow" ? ` — ${project.projectName}` : ""}
-                  </h1>
-                  <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-cyan-500/20 text-cyan-300 border border-cyan-400/30">
-                    Site Execution
-                  </span>
-                  {isViewerOnly ? (
-                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-400/30">
-                      <FaLock className="w-2.5 h-2.5" /> Read-Only
-                    </span>
-                  ) : (
-                    <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
-                      Editor Mode
-                    </span>
-                  )}
-                </div>
-                <p className="text-[11px] text-indigo-200/90 mt-0.5 leading-none font-normal">
-                  {project.workType || "Design + Construction"} • {project.city || "Lucknow"} • {totalStagesCount} Major Stages Execution
-                </p>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2.5 flex-wrap">
               <button
                 type="button"
-                onClick={() => handleOpenDailyLog()}
-                className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-lg text-xs font-black transition-all shadow-md shadow-emerald-950/30 cursor-pointer flex items-center gap-1.5 active:scale-95 border border-emerald-400/30"
+                onClick={handleSaveAll}
+                disabled={savingAll}
+                className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black text-xs rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
-                <FaCalendarAlt className="w-3.5 h-3.5" />
-                <span>+ Daily Site Update</span>
+                {savingAll ? (
+                  <>
+                    <FaSpinner className="w-3.5 h-3.5 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <FaSave className="w-3.5 h-3.5" />
+                    <span>Save Project Execution</span>
+                  </>
+                )}
               </button>
-              <span className="px-3 py-1.5 rounded-lg text-xs font-bold bg-white/10 text-white border border-white/15">
-                {project.overallProgress || 0}% Complete ({completedStagesCount}/{totalStagesCount} Stages)
-              </span>
             </div>
-          </div>
+          )}
         </div>
       </div>
 
-      {/* Read-Only Alert Banner if Observer */}
-      {isViewerOnly && (
-        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-center gap-2">
-          <FaLock className="w-4 h-4 text-amber-600 shrink-0" />
+      {isReadOnly && (
+        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 flex items-center gap-2">
+          <FaLock className="w-3.5 h-3.5 text-slate-500 shrink-0" />
           <span>
-            <strong>Viewer Role:</strong> You are browsing in read-only mode. Task status toggles, contractor assignments, and notes are disabled.
+            <strong>View-Only Mode:</strong> This project is read-only.
           </span>
         </div>
       )}
 
-      {/* ================= PROJECT OVERVIEW & METADATA CARD (Presale Carry-Forward) ================= */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Left: Presale Carry-Forward Details (Cols 1-7) */}
-          <div className="lg:col-span-7 space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-100">
-                Presale Details (Carry-Forward)
-              </span>
-              <span className="text-xs font-bold text-slate-500">
-                Contract: {project.contractSignedDate || "Signed"}
-              </span>
-            </div>
-
+      {/* ================= 2. FORM ================= */}
+      <form
+        onSubmit={handleSaveAll}
+        className="bg-white rounded-xl border border-slate-200 p-5 sm:p-6 shadow-xs space-y-6"
+      >
+        {/* --- CLIENT & PROJECT INFO --- */}
+        <div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 text-xs">
             <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-mono text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded">
-                  {project.displayId || project.leadIdCode || (project.id && project.id.length === 24 ? `PRJ-${project.id.slice(-5).toUpperCase()}` : project.id)}
-                </span>
-                <h1 className="text-xl sm:text-2xl font-black text-slate-900">
-                  {project.clientName}
-                  {project.companyName ? ` (${project.companyName})` : ""}
-                </h1>
-              </div>
-              {project.projectName && project.projectName !== "Site Execution" && project.projectName !== "Site Workflow" && (
-                <p className="text-xs font-bold text-indigo-900 mt-1">
-                  Project: {project.projectName}
-                </p>
-              )}
-              <div className="text-xs font-semibold text-slate-600 mt-1 flex items-center gap-2 flex-wrap">
-                <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-bold">
-                  {project.workType || "Design + Construction"}
-                </span>
-                <span className="text-slate-300">•</span>
-                <span className="text-indigo-600 font-extrabold">{project.engagementScope}</span>
-                {project.revenue && (
-                  <>
-                    <span className="text-slate-300">•</span>
-                    <span className="text-emerald-700 font-black">Revenue: {project.revenue}</span>
-                  </>
-                )}
-              </div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Client Name</label>
+              <input
+                type="text"
+                readOnly
+                value={project.clientName || ""}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 bg-slate-50"
+              />
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs text-slate-600 pt-2 border-t border-slate-100">
-              <div className="flex items-center gap-2">
-                <FaMapMarkerAlt className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                <span className="truncate">{project.address || `${project.city}, UP`}</span>
-              </div>
-              {project.phone && (
-                <div className="flex items-center gap-2">
-                  <FaPhoneAlt className="w-3 h-3 text-slate-400 shrink-0" />
-                  <span>{project.phone}</span>
-                </div>
-              )}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Contact</label>
+              <input
+                type="text"
+                readOnly
+                value={project.phone || "—"}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-mono bg-slate-50"
+              />
             </div>
-
-            {/* Overall Progress Gauge */}
-            <div className="mt-4 p-4 rounded-xl bg-gradient-to-br from-slate-50 to-indigo-50/40 border border-indigo-100 space-y-2">
-              <div className="flex items-center justify-between">
-                <div>
-                  <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">
-                    Overall Site Execution Progress
-                  </span>
-                  <div className="text-2xl font-black text-slate-900 mt-0.5">
-                    {project.overallProgress || 0}%
-                  </div>
-                </div>
-                <div className="text-right">
-                  <span className="text-xs font-black text-indigo-700">
-                    {completedStagesCount} of {totalStagesCount} Stages Completed
-                  </span>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    {project.completedTasks || 0} / {project.totalTasks || 0} Tasks Done
-                  </p>
-                </div>
-              </div>
-
-              {/* Progress Bar */}
-              <div className="w-full bg-slate-200 rounded-full h-3 overflow-hidden shadow-inner">
-                <div
-                  className={`h-full rounded-full transition-all duration-700 ${
-                    project.overallProgress === 100
-                      ? "bg-emerald-500"
-                      : project.projectStatus === "Delayed"
-                      ? "bg-red-500"
-                      : "bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600"
-                  }`}
-                  style={{ width: `${project.overallProgress || 0}%` }}
-                ></div>
-              </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Project Name</label>
+              <input
+                type="text"
+                readOnly
+                value={project.projectName || "Site Workflow"}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-bold bg-slate-50"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Site Location</label>
+              <input
+                type="text"
+                readOnly
+                value={project.address || project.city || "—"}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-slate-50"
+              />
             </div>
           </div>
+        </div>
 
-          {/* Right: Editable Site Operations Metadata Form (Cols 8-12) */}
-          <div className="lg:col-span-5 bg-slate-50/80 p-4 rounded-xl border border-slate-200 space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                <FaUserTie className="w-3.5 h-3.5 text-indigo-600" />
-                <span>Site Management Entry</span>
-              </h3>
-              {!isViewerOnly && (
-                <button
-                  type="button"
-                  onClick={handleSaveHeader}
-                  disabled={savingHeader}
-                  className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                >
-                  <FaSave className="w-3 h-3" />
-                  <span>{savingHeader ? "Saving..." : "Save"}</span>
-                </button>
-              )}
-            </div>
+        <hr className="border-slate-200" />
 
-            {/* Current Active Person */}
+        {/* --- SITE MANAGEMENT --- */}
+        <div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3.5 text-xs">
             <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                Current Active Person in Project (Site Lead / PM)
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Active Person (Site Lead) {isEditMode && <span className="text-rose-500">*</span>}
               </label>
               <input
                 type="text"
-                disabled={isViewerOnly}
+                disabled={isReadOnly}
                 value={headerForm.activePerson}
                 onChange={(e) => setHeaderForm({ ...headerForm, activePerson: e.target.value })}
-                placeholder="e.g. Er. Amit Sharma (Site Engineer)"
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white disabled:bg-slate-100"
+                placeholder="e.g. Er. Amit Sharma"
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-400 disabled:bg-slate-50"
               />
             </div>
-
-            {/* Project Status & Sub-Status */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                  Project Status
-                </label>
-                <select
-                  disabled={isViewerOnly}
-                  value={headerForm.projectStatus}
-                  onChange={(e) => setHeaderForm({ ...headerForm, projectStatus: e.target.value })}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white disabled:bg-slate-100"
-                >
-                  <option value="On Track">On Track</option>
-                  <option value="In Progress">In Progress</option>
-                  <option value="Delayed">Delayed</option>
-                  <option value="On Hold">On Hold</option>
-                  <option value="Completed">Completed</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                  Project Sub-Status
-                </label>
-                <input
-                  type="text"
-                  disabled={isViewerOnly}
-                  value={headerForm.projectSubStatus}
-                  onChange={(e) => setHeaderForm({ ...headerForm, projectSubStatus: e.target.value })}
-                  placeholder="Current site situation..."
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white disabled:bg-slate-100"
-                />
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Overall Status {isEditMode && <span className="text-rose-500">*</span>}
+              </label>
+              <select
+                disabled={isReadOnly}
+                value={headerForm.projectStatus}
+                onChange={(e) => setHeaderForm({ ...headerForm, projectStatus: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-bold focus:outline-none focus:ring-1 focus:ring-indigo-400 disabled:bg-slate-50"
+              >
+                <option value="On Track">On Track</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Delayed">Delayed</option>
+                <option value="On Hold">On Hold</option>
+                <option value="Completed">Completed</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Start Date</label>
+              <input
+                type="date"
+                disabled={isReadOnly}
+                value={headerForm.startDate}
+                onChange={(e) => setHeaderForm({ ...headerForm, startDate: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-400 disabled:bg-slate-50"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Target Date</label>
+              <input
+                type="date"
+                disabled={isReadOnly}
+                value={headerForm.targetDate}
+                onChange={(e) => setHeaderForm({ ...headerForm, targetDate: e.target.value })}
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-400 disabled:bg-slate-50"
+              />
+            </div>
+            <div className="md:col-span-2 flex flex-col justify-center">
+              <span className="text-xs font-bold text-slate-700 mb-1">Progress</span>
+              <div className="flex items-center gap-2.5">
+                <div className="flex-1 bg-slate-100 rounded-full h-2.5 overflow-hidden border">
+                  <div
+                    className="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all duration-300 rounded-full"
+                    style={{ width: `${progressPercent}%` }}
+                  />
+                </div>
+                <span className="text-xs font-black text-slate-800 whitespace-nowrap">
+                  {completedTasksCount}/{totalTasksCount} ({progressPercent}%)
+                </span>
               </div>
             </div>
-
-            {/* Overall Remark */}
-            <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                Overall Project Remark
-              </label>
+            <div className="sm:col-span-2 md:col-span-3">
+              <label className="block text-xs font-bold text-slate-700 mb-1">Overall Remark</label>
               <textarea
                 rows={2}
-                disabled={isViewerOnly}
+                disabled={isReadOnly}
                 value={headerForm.overallRemark}
                 onChange={(e) => setHeaderForm({ ...headerForm, overallRemark: e.target.value })}
-                placeholder="Site execution notes, client feedback, or pending approvals..."
-                className="w-full px-3 py-1.5 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white disabled:bg-slate-100"
+                placeholder="Project-level notes..."
+                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400 disabled:bg-slate-50"
               />
             </div>
           </div>
         </div>
-      </div>
 
-      {/* ================= TABS: STAGE CHECKLIST & EXECUTION vs DAILY SITE LOGS FEED ================= */}
-      <div className="flex items-center gap-2 border-b border-slate-200 pb-2 flex-wrap">
-        <button
-          type="button"
-          onClick={() => setActiveViewTab("EXECUTION")}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
-            activeViewTab === "EXECUTION"
-              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
-              : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
-          }`}
-        >
-          <FaHardHat className="w-3.5 h-3.5" />
-          <span>Stage Checklist & Execution ({totalStagesCount} Stages)</span>
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveViewTab("DAILY_LOGS")}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 ${
-            activeViewTab === "DAILY_LOGS"
-              ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
-              : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
-          }`}
-        >
-          <FaClipboardList className="w-3.5 h-3.5" />
-          <span>Daily Site Logs Feed ({(project.dailyLogs || []).length})</span>
-        </button>
-        <div className="ml-auto">
-          <button
-            type="button"
-            onClick={() => handleOpenDailyLog()}
-            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer flex items-center gap-1.5"
-          >
-            <FaPlus className="w-3 h-3" />
-            <span>+ Record Daily Progress</span>
-          </button>
-        </div>
-      </div>
+        <hr className="border-slate-200" />
 
-      {/* ================= TAB 1: 23 MAJOR STAGES CHECKLIST ACCORDION ================= */}
-      {activeViewTab === "EXECUTION" && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
-        <div className="px-4 sm:px-6 py-4 bg-gradient-to-r from-slate-50 via-white to-slate-50 border-b border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center text-xs font-black shadow-xs">
-                {totalStagesCount}
-              </div>
-              <h2 className="text-base font-extrabold text-slate-900">
-                {totalStagesCount}-Stage Construction Execution Checklist
-              </h2>
-            </div>
-            <p className="text-xs text-slate-500 mt-0.5">
-              Cloned from PMS Master. Click task status to update: <strong>Not Started → In Progress → Completed</strong>.
-            </p>
+        {/* ============================================================
+            --- DAILY SITE TRACKING (NEW SECTION) ---
+            ============================================================ */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <FaClipboardList className="text-indigo-600 w-4 h-4" />
+            <h3 className="text-sm font-black text-slate-900">
+              Daily Site Tracking Log
+            </h3>
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+              {dailyLogs.length} Entries
+            </span>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Filter buttons */}
-            <div className="flex items-center bg-slate-100 p-1 rounded-lg text-[11px] font-bold">
-              <button
-                type="button"
-                onClick={() => setStageFilter("ALL")}
-                className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer ${
-                  stageFilter === "ALL" ? "bg-white text-indigo-700 shadow-2xs" : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                All ({totalStagesCount})
-              </button>
-              <button
-                type="button"
-                onClick={() => setStageFilter("IN_PROGRESS")}
-                className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer ${
-                  stageFilter === "IN_PROGRESS" ? "bg-white text-blue-700 shadow-2xs" : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                In Progress
-              </button>
-              <button
-                type="button"
-                onClick={() => setStageFilter("COMPLETED")}
-                className={`px-2.5 py-1 rounded-md transition-colors cursor-pointer ${
-                  stageFilter === "COMPLETED" ? "bg-white text-emerald-700 shadow-2xs" : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                Completed ({completedStagesCount})
-              </button>
-            </div>
-
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={expandAllStages}
-                className="px-2.5 py-1.5 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
-              >
-                Expand All
-              </button>
-              <button
-                type="button"
-                onClick={collapseAllStages}
-                className="px-2.5 py-1.5 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-lg text-[11px] font-bold transition-colors cursor-pointer"
-              >
-                Collapse
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Quick Search */}
-        <div className="p-3 border-b border-slate-100 bg-slate-50/40">
-          <div className="relative max-w-md">
-            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 w-3 h-3" />
-            <input
-              type="text"
-              value={taskSearch}
-              onChange={(e) => setTaskSearch(e.target.value)}
-              placeholder="Search stage name, work, or task description..."
-              className="w-full pl-8 pr-3 py-1.5 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white"
-            />
-          </div>
-        </div>
-
-        {/* ================= STAGES LIST ================= */}
-        <div className="divide-y divide-slate-200/80">
-          {filteredStages.map((stage, stageIndex) => {
-            const isExpanded = Boolean(expandedStages[stage.stageId]);
-            const isCompleted = stage.status === "Completed";
-            const isInProgress = stage.status === "In Progress";
-            const cleanStageCode = !isObjectId(stage.stageId) ? stage.stageId : `S${stageIndex + 1}`;
-            const cleanStageName = stage.stageName && !isObjectId(stage.stageName) && !stage.stageName.includes("6a") ? stage.stageName : `Stage ${cleanStageCode}`;
-
-            return (
-              <div key={stage.stageId} className="transition-colors">
-                {/* Stage Collapsible Header */}
-                <div
-                  onClick={() => toggleStage(stage.stageId)}
-                  className={`px-4 sm:px-6 py-3.5 flex items-center justify-between cursor-pointer transition-colors ${
-                    isCompleted
-                      ? "bg-emerald-50/40 hover:bg-emerald-50/70"
-                      : isInProgress
-                      ? "bg-indigo-50/30 hover:bg-indigo-50/60"
-                      : "hover:bg-slate-50"
-                  }`}
-                >
-                  <div className="flex items-center gap-3 min-w-0 pr-3">
-                    <div
-                      className={`w-7 h-7 rounded-lg flex items-center justify-center font-black text-xs shrink-0 ${
-                        isCompleted
-                          ? "bg-emerald-600 text-white"
-                          : isInProgress
-                          ? "bg-indigo-600 text-white"
-                          : "bg-slate-200 text-slate-700"
-                      }`}
-                    >
-                      {isCompleted ? <FaCheck className="w-3 h-3" /> : cleanStageCode}
-                    </div>
-
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <h4 className="font-extrabold text-slate-900 text-xs sm:text-sm truncate">
-                          {cleanStageCode}: {cleanStageName}
-                        </h4>
-                        <span
-                          className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full ${
-                            isCompleted
-                              ? "bg-emerald-100 text-emerald-800"
-                              : isInProgress
-                              ? "bg-blue-100 text-blue-800"
-                              : "bg-slate-100 text-slate-600"
-                          }`}
-                        >
-                          {stage.status}
-                        </span>
-                      </div>
-                      <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-2 flex-wrap font-medium">
-                        <span className="bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded font-bold">
-                          {stage.completedWorksCount || 0} / {stage.totalWorksCount || (stage.works || []).length} Works Completed
-                        </span>
-                        <span>•</span>
-                        <span className="bg-indigo-50 text-indigo-700 px-1.5 py-0.5 rounded font-bold">
-                          {stage.completedTasksCount || 0} / {stage.totalTasksCount || 0} Tasks Done
-                        </span>
-                        <span>•</span>
-                        <span className="font-extrabold text-slate-600">
-                          {stage.progressPercent || 0}% Done
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 shrink-0">
-                    <div className="hidden sm:flex items-center gap-2 w-28">
-                      <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${
-                            isCompleted ? "bg-emerald-500" : "bg-indigo-600"
-                          }`}
-                          style={{ width: `${stage.progressPercent || 0}%` }}
-                        ></div>
-                      </div>
-                      <span className="text-[10px] font-bold text-slate-600 min-w-[28px] text-right">
-                        {stage.progressPercent || 0}%
-                      </span>
-                    </div>
-
-                    <div className="p-1 text-slate-400">
-                      {isExpanded ? <FaChevronUp className="w-3.5 h-3.5" /> : <FaChevronDown className="w-3.5 h-3.5" />}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Stage Body: Works & Tasks */}
-                {isExpanded && (
-                  <div className="px-4 sm:px-6 py-4 bg-slate-50/50 space-y-4 border-t border-slate-100">
-                    {(stage.works || []).map((work, workIndex) => {
-                      const isWorkDone = work.status === "Completed";
-                      const cleanWorkCode = !isObjectId(work.workId) ? work.workId : `${cleanStageCode}-W${workIndex + 1}`;
-                      const cleanWorkName = work.workName && !isObjectId(work.workName) ? work.workName : cleanWorkCode;
-
-                      return (
-                        <div
-                          key={work.workId}
-                          className="rounded-xl border border-slate-200 bg-white p-4 shadow-2xs space-y-3"
-                        >
-                          {/* Work Header */}
-                          <div className="flex items-center justify-between pb-2.5 border-b border-slate-100 gap-2">
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono text-[10px] font-extrabold px-1.5 py-0.5 rounded bg-slate-100 text-slate-700">
-                                {cleanWorkCode}
-                              </span>
-                              <h5 className="font-extrabold text-slate-800 text-xs sm:text-sm">
-                                {cleanWorkName}
-                              </h5>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <span
-                                className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full shrink-0 ${
-                                  isWorkDone
-                                    ? "bg-emerald-100 text-emerald-800"
-                                    : "bg-indigo-50 text-indigo-700 border border-indigo-100"
-                                }`}
-                              >
-                                {work.completedTasksCount || 0}/{work.totalTasksCount || 0} Tasks Done
-                              </span>
-                              {!isViewerOnly && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenDailyLog(stage.stageId, work.workId)}
-                                  className="px-2 py-0.5 rounded text-[10px] font-bold text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 border border-indigo-200 transition-colors flex items-center gap-1 cursor-pointer"
-                                  title="Log daily site update on this work"
-                                >
-                                  <FaPlus className="w-2.5 h-2.5" />
-                                  <span>Log Update</span>
-                                </button>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Tasks Under this Work */}
-                          <div className="space-y-3">
-                            {(work.tasks || []).map((task, taskIndex) => {
-                              const isTaskDone = task.status === "Completed";
-                              const isTaskInProg = task.status === "In Progress";
-                              const cleanTaskCode = !isObjectId(task.taskId) ? task.taskId : `${cleanWorkCode}-T${taskIndex + 1}`;
-                              const cleanTaskName = task.taskName && !isObjectId(task.taskName) ? task.taskName : cleanTaskCode;
-
-                              return (
-                                <div
-                                  key={task.taskId}
-                                  className={`p-3.5 rounded-xl border transition-all ${
-                                    isTaskDone
-                                      ? "bg-emerald-50/20 border-emerald-200/70"
-                                      : task.isOverdue
-                                      ? "bg-red-50/30 border-red-200 ring-1 ring-red-300"
-                                      : isTaskInProg
-                                      ? "bg-blue-50/20 border-blue-200"
-                                      : "bg-slate-50/40 border-slate-200/80"
-                                  }`}
-                                >
-                                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-                                    {/* Task Name & Code */}
-                                    <div className="min-w-0 flex-1">
-                                      <div className="flex items-center gap-2 flex-wrap">
-                                        <span className="font-mono text-[10px] font-bold text-slate-500 bg-slate-100 px-1 rounded">
-                                          {cleanTaskCode}
-                                        </span>
-                                        <span className="font-extrabold text-xs sm:text-sm text-slate-900">
-                                          {cleanTaskName}
-                                        </span>
-                                        {task.isOverdue && (
-                                          <span className="px-1.5 py-0.5 rounded text-[10px] font-black bg-red-600 text-white animate-pulse">
-                                            OVERDUE
-                                          </span>
-                                        )}
-                                      </div>
-
-                                      {/* Contractor & Deadline Display / Selector */}
-                                      <div className="flex items-center gap-3 mt-2 flex-wrap text-xs text-slate-600">
-                                        {/* Contractor Assignment */}
-                                        <div className="flex items-center gap-1.5">
-                                          <FaHardHat className="w-3 h-3 text-amber-500 shrink-0" />
-                                          <select
-                                            disabled={isViewerOnly}
-                                            value={task.assignedContractor || ""}
-                                            onChange={(e) =>
-                                              handleTaskUpdate(stage.stageId, work.workId, task.taskId, {
-                                                assignedContractor: e.target.value
-                                              })
-                                            }
-                                            className="px-2 py-1 border border-slate-200 rounded text-[11px] font-semibold text-slate-700 bg-white disabled:bg-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                                          >
-                                            <option value="">-- Assign Contractor --</option>
-                                            {contractorsList.map((c) => (
-                                              <option key={c} value={c}>
-                                                {c}
-                                              </option>
-                                            ))}
-                                          </select>
-                                        </div>
-
-                                        {/* Target Deadline Date */}
-                                        <div className="flex items-center gap-1.5">
-                                          <FaCalendarAlt className="w-3 h-3 text-indigo-500 shrink-0" />
-                                          <input
-                                            type="date"
-                                            disabled={isViewerOnly}
-                                            value={task.deadlineDate || ""}
-                                            onChange={(e) =>
-                                              handleTaskUpdate(stage.stageId, work.workId, task.taskId, {
-                                                deadlineDate: e.target.value
-                                              })
-                                            }
-                                            className="px-2 py-0.5 border border-slate-200 rounded text-[11px] font-semibold text-slate-700 bg-white disabled:bg-slate-100 focus:outline-none focus:ring-1 focus:ring-indigo-400"
-                                          />
-                                        </div>
-
-                                        {/* Photo Upload Attachment */}
-                                        <div className="flex items-center gap-1.5">
-                                          <label
-                                            className={`cursor-pointer px-2 py-1 rounded border text-[11px] font-semibold flex items-center gap-1 transition-colors ${
-                                              task.photoUrl
-                                                ? "bg-emerald-50 border-emerald-300 text-emerald-800"
-                                                : "bg-white border-slate-200 text-slate-600 hover:bg-slate-50"
-                                            } ${isViewerOnly ? "pointer-events-none opacity-60" : ""}`}
-                                          >
-                                            <FaCamera className="w-3 h-3 text-slate-400" />
-                                            <span>{task.photoUrl ? "Photo Attached" : "Site Photo"}</span>
-                                            <input
-                                              type="file"
-                                              accept="image/*"
-                                              disabled={isViewerOnly}
-                                              onChange={(e) =>
-                                                handlePhotoUpload(stage.stageId, work.workId, task.taskId, e)
-                                              }
-                                              className="hidden"
-                                            />
-                                          </label>
-                                          {task.photoUrl && (
-                                            <a
-                                              href={task.photoUrl}
-                                              target="_blank"
-                                              rel="noreferrer"
-                                              className="text-[10px] text-indigo-600 font-bold underline"
-                                            >
-                                              View
-                                            </a>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </div>
-
-                                    {/* Task Status Toggles: Not Started -> In Progress -> Completed */}
-                                    <div className="flex items-center gap-1 bg-white p-1 rounded-lg border border-slate-200 shrink-0">
-                                      <button
-                                        type="button"
-                                        disabled={isViewerOnly}
-                                        onClick={() =>
-                                          handleTaskUpdate(stage.stageId, work.workId, task.taskId, {
-                                            status: "Not Started"
-                                          })
-                                        }
-                                        className={`px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer ${
-                                          task.status === "Not Started"
-                                            ? "bg-slate-600 text-white shadow-xs"
-                                            : "text-slate-500 hover:text-slate-800 hover:bg-slate-100"
-                                        } disabled:opacity-50`}
-                                      >
-                                        Not Started
-                                      </button>
-
-                                      <button
-                                        type="button"
-                                        disabled={isViewerOnly}
-                                        onClick={() =>
-                                          handleTaskUpdate(stage.stageId, work.workId, task.taskId, {
-                                            status: "In Progress"
-                                          })
-                                        }
-                                        className={`px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer ${
-                                          isTaskInProg
-                                            ? "bg-blue-600 text-white shadow-xs"
-                                            : "text-slate-500 hover:text-blue-700 hover:bg-blue-50"
-                                        } disabled:opacity-50`}
-                                      >
-                                        In Progress
-                                      </button>
-
-                                      <button
-                                        type="button"
-                                        disabled={isViewerOnly}
-                                        onClick={() =>
-                                          handleTaskUpdate(stage.stageId, work.workId, task.taskId, {
-                                            status: "Completed"
-                                          })
-                                        }
-                                        className={`px-2.5 py-1 rounded text-xs font-bold transition-all cursor-pointer flex items-center gap-1 ${
-                                          isTaskDone
-                                            ? "bg-emerald-600 text-white shadow-xs"
-                                            : "text-slate-500 hover:text-emerald-700 hover:bg-emerald-50"
-                                        } disabled:opacity-50`}
-                                      >
-                                        <FaCheck className="w-2.5 h-2.5" />
-                                        <span>Completed</span>
-                                      </button>
-                                    </div>
-                                  </div>
-
-                                  {/* Task Notes / Remarks Field */}
-                                  <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-2">
-                                    <FaComments className="w-3 h-3 text-slate-300 shrink-0" />
-                                    <input
-                                      type="text"
-                                      disabled={isViewerOnly}
-                                      value={task.remark || ""}
-                                      onChange={(e) =>
-                                        handleTaskUpdate(stage.stageId, work.workId, task.taskId, {
-                                          remark: e.target.value
-                                        })
-                                      }
-                                      placeholder="Site log note, delay reason, or inspection point..."
-                                      className="w-full text-xs text-slate-700 bg-transparent placeholder:text-slate-300 focus:outline-none disabled:bg-transparent"
-                                    />
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-      )}
-
-      {/* ================= TAB 2: DAILY SITE LOGS FEED ================= */}
-      {activeViewTab === "DAILY_LOGS" && (
-        <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-5 space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100">
-            <div>
-              <h3 className="text-base font-black text-slate-900 flex items-center gap-2">
-                <FaClipboardList className="w-4 h-4 text-indigo-600" />
-                <span>Daily Site Progress Logs & Inspection Updates</span>
-              </h3>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Chronological timeline of everyday site execution, workforce attendance, notes, and photos.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => handleOpenDailyLog()}
-              className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer flex items-center gap-1.5 self-start sm:self-auto"
-            >
-              <FaPlus className="w-3 h-3" />
-              <span>+ Record Daily Progress</span>
-            </button>
-          </div>
-
-          {(!project.dailyLogs || project.dailyLogs.length === 0) ? (
-            <div className="py-16 text-center text-slate-400 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
-              <FaCalendarAlt className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-              <p className="text-xs font-bold text-slate-600">No daily site logs recorded yet.</p>
-              <p className="text-[11px] text-slate-400 mt-1 max-w-sm mx-auto">
-                Site engineers can click "+ Record Daily Progress" to log everyday work completed, manpower strength, and site photos.
-              </p>
-              <button
-                type="button"
-                onClick={() => handleOpenDailyLog()}
-                className="mt-3 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all cursor-pointer inline-flex items-center gap-1.5"
-              >
+          {/* --- ENTRY FORM (DDL CASCADING) --- */}
+          {!isReadOnly && (
+            <div className="bg-gradient-to-br from-indigo-50/60 to-white border-2 border-indigo-200 rounded-xl p-4 space-y-3">
+              <div className="flex items-center gap-2 text-xs font-bold text-indigo-900">
                 <FaPlus className="w-3 h-3" />
-                <span>Add First Daily Log</span>
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {project.dailyLogs.map((log) => (
-                <div
-                  key={log.id}
-                  className="p-4 rounded-xl border border-slate-200 bg-slate-50/40 hover:bg-slate-50 transition-colors space-y-2.5"
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-200/60 pb-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-indigo-100 text-indigo-800">
-                        📅 {log.date}
-                      </span>
-                      {log.stageId && (
-                        <span className="font-mono text-xs font-bold px-2 py-0.5 rounded bg-slate-200 text-slate-800">
-                          {log.stageId} {log.stageName ? `• ${log.stageName}` : ""}
-                        </span>
-                      )}
-                      {log.workName && (
-                        <span className="text-xs font-semibold text-slate-700">
-                          › {log.workName}
-                        </span>
-                      )}
-                      {log.taskName && (
-                        <span className="text-xs font-semibold text-indigo-700">
-                          › {log.taskName}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-slate-500">
-                      <span className="font-semibold text-slate-700">By: {log.loggedBy}</span>
-                      {log.status && (
-                        <span
-                          className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            log.status === "Completed"
-                              ? "bg-emerald-100 text-emerald-800"
-                              : "bg-blue-100 text-blue-800"
-                          }`}
-                        >
-                          {log.status}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-
-                  <p className="text-xs text-slate-800 leading-relaxed font-medium">
-                    {log.summary}
-                  </p>
-
-                  <div className="flex items-center justify-between gap-3 pt-1 text-xs text-slate-500 flex-wrap">
-                    {log.manpowerCount && (
-                      <div className="flex items-center gap-1.5 text-slate-600 font-semibold text-[11px]">
-                        <FaUsers className="w-3.5 h-3.5 text-amber-600" />
-                        <span>Manpower On Site: {log.manpowerCount}</span>
-                      </div>
-                    )}
-                    {log.photoUrl && (
-                      <div className="flex items-center gap-2 ml-auto">
-                        <FaCamera className="w-3.5 h-3.5 text-indigo-600" />
-                        <a
-                          href={log.photoUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-xs font-bold text-indigo-600 hover:underline"
-                        >
-                          View Site Photo ↗
-                        </a>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ================= DAILY SITE PROGRESS UPDATE MODAL ================= */}
-      {isDailyLogModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto animate-fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-xl w-full p-5 sm:p-6 space-y-4 max-h-[92vh] flex flex-col">
-            {/* Modal Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-emerald-100 text-emerald-700 rounded-xl">
-                  <FaCalendarAlt className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-base font-black text-slate-900">
-                    Daily Site Progress Update
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Record daily site execution, worker attendance, task progress, and photos
-                  </p>
-                </div>
+                <span>Add Today's Progress</span>
               </div>
-              <button
-                type="button"
-                onClick={() => setIsDailyLogModalOpen(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-600 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
-              >
-                <FaTimes className="w-4 h-4" />
-              </button>
-            </div>
 
-            {/* Modal Form */}
-            <form onSubmit={handleSubmitDailyLog} className="space-y-3 overflow-y-auto flex-1 pr-1 text-xs">
-              {/* Date & Logged By */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                {/* Date */}
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                    Date <span className="text-red-500">*</span>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                    Date
                   </label>
                   <input
                     type="date"
-                    required
-                    value={dailyLogForm.date}
-                    onChange={(e) => setDailyLogForm({ ...dailyLogForm, date: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white"
+                    value={newLog.date}
+                    onChange={(e) => setNewLog({ ...newLog, date: e.target.value })}
+                    className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-400"
                   />
                 </div>
+
+                {/* Logged By */}
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                    Site Incharge / Logged By
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                    Logged By
                   </label>
                   <input
                     type="text"
-                    value={dailyLogForm.loggedBy}
-                    onChange={(e) => setDailyLogForm({ ...dailyLogForm, loggedBy: e.target.value })}
-                    placeholder="e.g. Er. Amit Sharma"
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white"
+                    value={newLog.loggedBy}
+                    onChange={(e) => setNewLog({ ...newLog, loggedBy: e.target.value })}
+                    placeholder="Site Engineer name"
+                    className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
                   />
                 </div>
-              </div>
 
-              {/* Stage Selection */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                  Stage Worked On Today
-                </label>
-                <select
-                  value={dailyLogForm.stageId}
-                  onChange={(e) => {
-                    const selectedStg = project?.stages?.find((s) => s.stageId === e.target.value);
-                    const firstWork = selectedStg?.works?.[0];
-                    const firstTask = firstWork?.tasks?.[0];
-                    setDailyLogForm({
-                      ...dailyLogForm,
-                      stageId: e.target.value,
-                      workId: firstWork?.workId || "",
-                      taskId: firstTask?.taskId || "",
-                      status: firstTask?.status || "In Progress"
-                    });
-                  }}
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white"
-                >
-                  {(project?.stages || []).map((stg, sIdx) => {
-                    const stgCode = !isObjectId(stg.stageId) ? stg.stageId : `S${sIdx + 1}`;
-                    const stgName = stg.stageName && !isObjectId(stg.stageName) && !stg.stageName.includes("6a") ? stg.stageName : `Stage ${stgCode}`;
-                    return (
-                      <option key={stg.stageId} value={stg.stageId}>
-                        {stgCode}: {stgName} ({stg.progressPercent || 0}%)
-                      </option>
-                    );
-                  })}
-                </select>
-              </div>
-
-              {/* Work & Task Selection */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Manpower */}
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                    Work Item
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                    Manpower Count
                   </label>
-                  <select
-                    value={dailyLogForm.workId}
-                    onChange={(e) => {
-                      const currentStg = project?.stages?.find((s) => s.stageId === dailyLogForm.stageId);
-                      const selectedWork = currentStg?.works?.find((w) => w.workId === e.target.value);
-                      const firstTask = selectedWork?.tasks?.[0];
-                      setDailyLogForm({
-                        ...dailyLogForm,
-                        workId: e.target.value,
-                        taskId: firstTask?.taskId || "",
-                        status: firstTask?.status || "In Progress"
-                      });
-                    }}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white"
-                  >
-                    {(project?.stages?.find((s) => s.stageId === dailyLogForm.stageId)?.works || []).map((w, wIdx) => {
-                      const wCode = !isObjectId(w.workId) ? w.workId : `W${wIdx + 1}`;
-                      const wName = w.workName && !isObjectId(w.workName) ? w.workName : wCode;
-                      return (
-                        <option key={w.workId} value={w.workId}>
-                          {wCode}: {wName}
-                        </option>
-                      );
-                    })}
-                  </select>
+                  <input
+                    type="number"
+                    min="0"
+                    value={newLog.manpowerCount}
+                    onChange={(e) => setNewLog({ ...newLog, manpowerCount: e.target.value })}
+                    placeholder="e.g. 12"
+                    className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                  />
                 </div>
 
+                {/* Status */}
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                    Specific Task Item
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                    Status
                   </label>
                   <select
-                    value={dailyLogForm.taskId}
-                    onChange={(e) => {
-                      const currentStg = project?.stages?.find((s) => s.stageId === dailyLogForm.stageId);
-                      const currentWork = currentStg?.works?.find((w) => w.workId === dailyLogForm.workId);
-                      const selectedTask = currentWork?.tasks?.find((t) => t.taskId === e.target.value);
-                      setDailyLogForm({
-                        ...dailyLogForm,
-                        taskId: e.target.value,
-                        status: selectedTask?.status || "In Progress"
-                      });
-                    }}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white"
+                    value={newLog.status}
+                    onChange={(e) => setNewLog({ ...newLog, status: e.target.value })}
+                    className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-bold focus:outline-none focus:ring-1 focus:ring-indigo-400"
                   >
-                    <option value="">-- General Stage Work (No specific task) --</option>
-                    {(project?.stages
-                      ?.find((s) => s.stageId === dailyLogForm.stageId)
-                      ?.works?.find((w) => w.workId === dailyLogForm.workId)
-                      ?.tasks || []
-                    ).map((t, tIdx) => {
-                      const tCode = !isObjectId(t.taskId) ? t.taskId : `T${tIdx + 1}`;
-                      const tName = t.taskName && !isObjectId(t.taskName) ? t.taskName : tCode;
-                      return (
-                        <option key={t.taskId} value={t.taskId}>
-                          {tCode}: {tName} ({t.status})
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
-              </div>
-
-              {/* Task Status & Manpower Count */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                    Task Progress Status
-                  </label>
-                  <select
-                    value={dailyLogForm.status}
-                    onChange={(e) => setDailyLogForm({ ...dailyLogForm, status: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white"
-                  >
+                    <option value="Not Started">Not Started</option>
                     <option value="In Progress">In Progress</option>
                     <option value="Completed">Completed</option>
-                    <option value="Not Started">Not Started</option>
+                    <option value="Delayed">Delayed</option>
+                    <option value="On Hold">On Hold</option>
                   </select>
                 </div>
 
+                {/* Stage DDL */}
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                    Manpower / Labour on Site
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                    Stage
+                  </label>
+                  <select
+                    value={newLog.stageId}
+                    onChange={(e) =>
+                      setNewLog({
+                        ...newLog,
+                        stageId: e.target.value,
+                        workId: "",
+                        taskId: ""
+                      })
+                    }
+                    className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                  >
+                    <option value="">-- Select Stage --</option>
+                    {stagesData.map((s) => (
+                      <option key={s.stageId} value={s.stageId}>
+                        {s.stageId} - {s.stageName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Work DDL */}
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                    Work
+                  </label>
+                  <select
+                    value={newLog.workId}
+                    disabled={!newLog.stageId}
+                    onChange={(e) =>
+                      setNewLog({ ...newLog, workId: e.target.value, taskId: "" })
+                    }
+                    className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-400 disabled:bg-slate-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="">
+                      {!newLog.stageId ? "-- Select Stage First --" : "-- Select Work --"}
+                    </option>
+                    {logWorksAvail.map((w) => (
+                      <option key={w.workId} value={w.workId}>
+                        {w.workName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Task DDL */}
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                    Task
+                  </label>
+                  <select
+                    value={newLog.taskId}
+                    disabled={!newLog.workId}
+                    onChange={(e) => setNewLog({ ...newLog, taskId: e.target.value })}
+                    className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs font-semibold focus:outline-none focus:ring-1 focus:ring-indigo-400 disabled:bg-slate-50 disabled:cursor-not-allowed"
+                  >
+                    <option value="">
+                      {!newLog.workId ? "-- Select Work First --" : "-- Select Task --"}
+                    </option>
+                    {logTasksAvail.map((t) => (
+                      <option key={t.taskId} value={t.taskId}>
+                        {t.taskName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Summary + Remark */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                    Work Summary <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="text"
-                    value={dailyLogForm.manpowerCount}
-                    onChange={(e) => setDailyLogForm({ ...dailyLogForm, manpowerCount: e.target.value })}
-                    placeholder="e.g. 14 Mason + 6 Helpers"
-                    className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white"
+                    value={newLog.summary}
+                    onChange={(e) => setNewLog({ ...newLog, summary: e.target.value })}
+                    placeholder="e.g. Slab casting 40% done, 12 workers deployed"
+                    className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
+                    Remark
+                  </label>
+                  <input
+                    type="text"
+                    value={newLog.remark}
+                    onChange={(e) => setNewLog({ ...newLog, remark: e.target.value })}
+                    placeholder="Any site issue, delay reason..."
+                    className="w-full px-2.5 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400"
                   />
                 </div>
               </div>
 
-              {/* Work Done Summary */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                  Work Done Summary / Daily Progress Notes <span className="text-red-500">*</span>
-                </label>
-                <textarea
-                  required
-                  rows={3}
-                  value={dailyLogForm.summary}
-                  onChange={(e) => setDailyLogForm({ ...dailyLogForm, summary: e.target.value })}
-                  placeholder="Describe what was executed on site today, material arrived, inspections done, or issues..."
-                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white"
-                />
-              </div>
-
-              {/* Site Photo */}
-              <div>
-                <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                  Site Photo Attachment
-                </label>
-                <div className="flex items-center gap-3">
-                  <label className="cursor-pointer px-3 py-2 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors flex items-center gap-2 text-slate-700 font-semibold text-xs">
-                    <FaCamera className="text-slate-400 w-3.5 h-3.5" />
-                    <span>Choose Photo (Max 2MB)</span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleDailyLogPhotoUpload}
-                      className="hidden"
-                    />
-                  </label>
-                  {dailyLogForm.photoUrl && (
-                    <div className="flex items-center gap-2">
-                      <img
-                        src={dailyLogForm.photoUrl}
-                        alt="Daily site upload preview"
-                        className="w-9 h-9 object-cover rounded-lg border border-slate-200"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setDailyLogForm({ ...dailyLogForm, photoUrl: "" })}
-                        className="text-[10px] text-red-600 font-bold hover:underline cursor-pointer"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Modal Footer */}
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2.5">
+              <div className="flex justify-end">
                 <button
                   type="button"
-                  onClick={() => setIsDailyLogModalOpen(false)}
-                  className="px-4 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 hover:bg-slate-50 cursor-pointer"
+                  onClick={handleAddDailyLog}
+                  className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-blue-600 hover:from-indigo-400 hover:to-blue-500 text-white text-xs font-bold rounded-lg shadow-sm flex items-center gap-1.5 cursor-pointer"
                 >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={submittingDailyLog}
-                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow-md shadow-emerald-600/20 cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
-                >
-                  <FaCheck className="w-3 h-3" />
-                  <span>{submittingDailyLog ? "Recording..." : "Record Daily Progress"}</span>
+                  <FaPlus className="w-3 h-3" />
+                  <span>Add Daily Log</span>
                 </button>
               </div>
-            </form>
+            </div>
+          )}
+
+          {/* --- DAILY LOGS LIST --- */}
+          <div className="space-y-2">
+            {dailyLogs.length === 0 ? (
+              <div className="py-8 text-center text-slate-400 border border-dashed border-slate-200 rounded-xl text-xs">
+                No daily logs added yet. {!isReadOnly && "Add the first entry above."}
+              </div>
+            ) : (
+              dailyLogs.map((log) => (
+                <div
+                  key={log.id}
+                  className="bg-white border border-slate-200 rounded-lg p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                >
+                  <div className="flex-1 min-w-0 space-y-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                        {log.date}
+                      </span>
+                      <span className="text-[11px] font-semibold text-slate-600">
+                        {log.loggedBy}
+                      </span>
+                      {log.manpowerCount && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                          👷 {log.manpowerCount} workers
+                        </span>
+                      )}
+                      <span
+                        className={`px-2 py-0.5 rounded text-[10px] font-bold border ${
+                          log.status === "Completed"
+                            ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                            : log.status === "In Progress"
+                            ? "bg-blue-50 text-blue-800 border-blue-300"
+                            : log.status === "Delayed"
+                            ? "bg-rose-50 text-rose-800 border-rose-300"
+                            : "bg-slate-100 text-slate-700 border-slate-200"
+                        }`}
+                      >
+                        {log.status}
+                      </span>
+                    </div>
+
+                    {(log.stageName || log.workName || log.taskName) && (
+                      <p className="text-[11px] text-slate-500">
+                        {log.stageName && <span className="font-semibold">{log.stageName}</span>}
+                        {log.workName && <span> → {log.workName}</span>}
+                        {log.taskName && <span> → {log.taskName}</span>}
+                      </p>
+                    )}
+
+                    <p className="text-xs text-slate-800 font-medium">{log.summary}</p>
+                    {log.remark && (
+                      <p className="text-[11px] text-slate-500 italic">Remark: {log.remark}</p>
+                    )}
+                  </div>
+
+                  {!isReadOnly && (
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveDailyLog(log.id)}
+                      className="p-1.5 rounded text-rose-500 hover:bg-rose-50 shrink-0 self-start sm:self-center"
+                      title="Remove log"
+                    >
+                      <FaTrash className="w-3 h-3" />
+                    </button>
+                  )}
+                </div>
+              ))
+            )}
           </div>
         </div>
-      )}
+
+        <hr className="border-slate-200" />
+
+        {/* ============================================================
+            --- WBS TRACKING (Stage / Work / Task level)
+            ============================================================ */}
+        <div className="space-y-3.5">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-black text-slate-900 tracking-tight flex items-center gap-2">
+                <FaLayerGroup className="text-indigo-600 w-4 h-4" />
+                <span>WBS Stages, Works & Tasks Execution Tracking</span>
+                <span className="px-2 py-0.5 rounded text-[10px] font-extrabold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  {totalStagesCount} Stages • {totalWorksCount} Works • {totalTasksCount} Tasks
+                </span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Update task status, contractor, deadline, and remark. Changes reflect in progress.
+              </p>
+            </div>
+          </div>
+
+          <div className="relative max-w-md">
+            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs" />
+            <input
+              type="text"
+              placeholder="Search..."
+              value={taskSearch}
+              onChange={(e) => setTaskSearch(e.target.value)}
+              className="w-full pl-9 pr-8 py-1.5 border border-slate-200 rounded-lg text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-slate-50 focus:bg-white"
+            />
+            {taskSearch && (
+              <button
+                type="button"
+                onClick={() => setTaskSearch("")}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+              >
+                <FaTimes />
+              </button>
+            )}
+          </div>
+
+          <div className="space-y-3 pt-1">
+            {filteredStages.length === 0 ? (
+              <div className="py-10 text-center text-slate-400 border border-dashed border-slate-200 rounded-xl">
+                <FaCheckCircle className="w-7 h-7 mx-auto mb-2 text-slate-300" />
+                <p className="text-xs font-bold text-slate-600">No stages found.</p>
+              </div>
+            ) : (
+              filteredStages.map((stage, sIdx) => {
+                const isExpanded = !!expandedStages[stage.stageId];
+                const sWorks = stage.works || [];
+                const sTaskCount = sWorks.reduce((sum, w) => sum + (w.tasks || []).length, 0);
+                const sCompletedTasks = sWorks.reduce(
+                  (sum, w) => sum + (w.tasks || []).filter((t) => t.status === "Completed").length,
+                  0
+                );
+                const sPercent =
+                  sTaskCount > 0 ? Math.round((sCompletedTasks / sTaskCount) * 100) : 0;
+
+                const cleanStageCode = isObjectId(stage.stageId) ? `S${sIdx + 1}` : stage.stageId;
+                const cleanStageName =
+                  isObjectId(stage.stageName) || (stage.stageName || "").startsWith("Stage 6a")
+                    ? `STAGE ${cleanStageCode}`
+                    : stage.stageName;
+
+                return (
+                  <div
+                    key={stage.stageId || sIdx}
+                    className="border border-slate-200 rounded-xl overflow-hidden bg-white shadow-2xs"
+                  >
+                    <div
+                      onClick={() => toggleStage(stage.stageId)}
+                      className="px-4 py-3 bg-slate-50 hover:bg-slate-100/80 cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 select-none border-b border-slate-100"
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                        <span className="px-2.5 py-0.5 rounded text-xs font-black bg-indigo-600 text-white shrink-0">
+                          {cleanStageCode}
+                        </span>
+                        <h4 className="text-xs sm:text-sm font-black text-slate-900 truncate">
+                          {cleanStageName}
+                        </h4>
+                      </div>
+
+                      <div className="flex items-center gap-2.5 shrink-0">
+                        <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-white text-slate-700 border border-slate-200 whitespace-nowrap">
+                          {sWorks.length} W • {sTaskCount} T
+                        </span>
+                        <span
+                          className={`px-2 py-0.5 rounded text-[11px] font-bold whitespace-nowrap ${
+                            sPercent === 100
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                              : sPercent > 0
+                              ? "bg-blue-50 text-blue-700 border border-blue-200"
+                              : "bg-slate-100 text-slate-600 border border-slate-200"
+                          }`}
+                        >
+                          {sCompletedTasks}/{sTaskCount} ({sPercent}%)
+                        </span>
+                        <div className="p-1 text-slate-400">
+                          {isExpanded ? (
+                            <FaChevronUp className="w-3 h-3" />
+                          ) : (
+                            <FaChevronDown className="w-3 h-3" />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {isExpanded && (
+                      <div className="p-3 sm:p-4 space-y-4 bg-slate-50/40">
+                        {sWorks.length === 0 ? (
+                          <p className="text-xs text-slate-400 italic py-2">No work packages.</p>
+                        ) : (
+                          sWorks.map((work, wIdx) => {
+                            const wTasks = work.tasks || [];
+                            const cleanWorkCode = isObjectId(work.workId)
+                              ? `${cleanStageCode}-W${wIdx + 1}`
+                              : work.workId;
+                            const cleanWorkName =
+                              isObjectId(work.workName) || (work.workName || "").startsWith("6a")
+                                ? `Work Package ${cleanWorkCode}`
+                                : work.workName;
+
+                            return (
+                              <div
+                                key={work.workId || wIdx}
+                                className="bg-white border border-slate-200 rounded-lg p-3 sm:p-3.5 shadow-2xs space-y-2.5"
+                              >
+                                <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-2 flex-wrap">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-purple-50 text-purple-700 border border-purple-200 shrink-0">
+                                      {cleanWorkCode}
+                                    </span>
+                                    <h5 className="text-xs font-black text-slate-800 truncate">
+                                      {cleanWorkName}
+                                    </h5>
+                                  </div>
+                                  <span className="text-[11px] font-bold text-slate-500">
+                                    {wTasks.length} Tasks
+                                  </span>
+                                </div>
+
+                                <div className="space-y-2.5 pt-1">
+                                  {wTasks.length === 0 ? (
+                                    <p className="text-xs text-slate-400 italic py-1">
+                                      No tasks.
+                                    </p>
+                                  ) : (
+                                    wTasks.map((task, tIdx) => {
+                                      const cleanTaskCode = isObjectId(task.taskId)
+                                        ? `${cleanWorkCode}-T${tIdx + 1}`
+                                        : task.taskId;
+                                      const cleanTaskName =
+                                        isObjectId(task.taskName) ||
+                                        (task.taskName || "").startsWith("6a")
+                                          ? `Execution Task ${cleanTaskCode}`
+                                          : task.taskName;
+
+                                      const taskStatus = task.status || "Not Started";
+
+                                      return (
+                                        <div
+                                          key={task.taskId || tIdx}
+                                          className="p-3 rounded-lg border border-slate-200 bg-white space-y-2.5 text-xs"
+                                        >
+                                          <div className="flex items-start gap-2 flex-1 min-w-0">
+                                            <span className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 shrink-0 mt-0.5">
+                                              {cleanTaskCode}
+                                            </span>
+                                            <div className="min-w-0">
+                                              <p className="font-bold text-slate-900 leading-snug">
+                                                {cleanTaskName}
+                                              </p>
+                                              {task.instruction && (
+                                                <p className="text-[11px] text-slate-500 mt-0.5">
+                                                  {task.instruction}
+                                                </p>
+                                              )}
+                                            </div>
+                                          </div>
+
+                                          <div className="pt-2 border-t border-slate-100 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-2.5 bg-slate-50/70 p-2 rounded-md">
+                                            <div className="text-[10px] font-bold uppercase text-slate-500 flex items-center gap-1.5 shrink-0">
+                                              <FaClipboardList className="text-indigo-600 text-xs" />
+                                              <span>Tracking:</span>
+                                            </div>
+
+                                            {isReadOnly ? (
+                                              <div className="flex items-center gap-2 flex-wrap">
+                                                <span
+                                                  className={`px-2.5 py-1 rounded-md border text-xs font-bold ${
+                                                    taskStatus === "Completed"
+                                                      ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                                                      : taskStatus === "In Progress"
+                                                      ? "bg-blue-50 text-blue-800 border-blue-300"
+                                                      : "bg-slate-100 text-slate-700 border-slate-200"
+                                                  }`}
+                                                >
+                                                  {taskStatus}
+                                                </span>
+                                                <span className="text-xs text-slate-600">
+                                                  {task.assignedContractor || "—"}
+                                                </span>
+                                                <span className="text-xs font-mono text-slate-600">
+                                                  {task.deadlineDate || "—"}
+                                                </span>
+                                                <span className="text-xs text-slate-500 truncate max-w-[200px]">
+                                                  {task.remark || "—"}
+                                                </span>
+                                              </div>
+                                            ) : (
+                                              <div className="flex items-center gap-2 flex-wrap">
+                                                <select
+                                                  value={taskStatus}
+                                                  onChange={(e) =>
+                                                    handleTaskFieldChange(
+                                                      stage.stageId,
+                                                      work.workId,
+                                                      task.taskId,
+                                                      "status",
+                                                      e.target.value
+                                                    )
+                                                  }
+                                                  className={`px-2.5 py-1 rounded-md border text-xs font-bold cursor-pointer focus:outline-none focus:ring-1 focus:ring-indigo-400 ${
+                                                    taskStatus === "Completed"
+                                                      ? "bg-emerald-50 text-emerald-800 border-emerald-300"
+                                                      : taskStatus === "In Progress"
+                                                      ? "bg-blue-50 text-blue-800 border-blue-300"
+                                                      : "bg-white text-slate-700 border-slate-200"
+                                                  }`}
+                                                >
+                                                  <option value="Not Started">Not Started</option>
+                                                  <option value="In Progress">In Progress</option>
+                                                  <option value="Completed">Completed</option>
+                                                  <option value="Delayed">Delayed</option>
+                                                  <option value="On Hold">On Hold</option>
+                                                </select>
+
+                                                <select
+                                                  value={
+                                                    task.assignedContractor ||
+                                                    task.workWillDoneBy ||
+                                                    ""
+                                                  }
+                                                  onChange={(e) =>
+                                                    handleTaskFieldChange(
+                                                      stage.stageId,
+                                                      work.workId,
+                                                      task.taskId,
+                                                      "assignedContractor",
+                                                      e.target.value
+                                                    )
+                                                  }
+                                                  className="px-2 py-1 rounded-md border border-slate-200 text-xs text-slate-800 bg-white focus:outline-none focus:ring-1 focus:ring-indigo-400 truncate min-w-[140px]"
+                                                >
+                                                  <option value="">Contractor</option>
+                                                  {contractorsList.map((c) => (
+                                                    <option key={c} value={c}>
+                                                      {c}
+                                                    </option>
+                                                  ))}
+                                                </select>
+
+                                                <input
+                                                  type="date"
+                                                  value={task.deadlineDate || ""}
+                                                  onChange={(e) =>
+                                                    handleTaskFieldChange(
+                                                      stage.stageId,
+                                                      work.workId,
+                                                      task.taskId,
+                                                      "deadlineDate",
+                                                      e.target.value
+                                                    )
+                                                  }
+                                                  className="px-2 py-1 rounded-md border border-slate-200 text-xs font-mono focus:outline-none focus:ring-1 focus:ring-indigo-400"
+                                                />
+
+                                                <input
+                                                  type="text"
+                                                  placeholder="Remark..."
+                                                  value={task.remark || ""}
+                                                  onChange={(e) =>
+                                                    handleTaskFieldChange(
+                                                      stage.stageId,
+                                                      work.workId,
+                                                      task.taskId,
+                                                      "remark",
+                                                      e.target.value
+                                                    )
+                                                  }
+                                                  className="px-2 py-1 rounded-md border border-slate-200 text-xs focus:outline-none focus:ring-1 focus:ring-indigo-400 min-w-[160px]"
+                                                />
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      );
+                                    })
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        <hr className="border-slate-200" />
+
+        {/* --- BOTTOM ACTIONS --- */}
+        <div className="flex items-center justify-between pt-2 flex-wrap gap-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-bold text-slate-600">Progress:</span>
+            <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-indigo-50 text-indigo-700 border border-indigo-200">
+              {completedTasksCount} / {totalTasksCount} ({progressPercent}%)
+            </span>
+          </div>
+
+          {isEditMode && (
+            <div className="flex items-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => navigate("/sales/active-projects")}
+                className="px-4 py-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg border border-slate-200 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={savingAll}
+                className="px-5 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-black text-xs rounded-lg shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {savingAll ? (
+                  <>
+                    <FaSpinner className="w-3.5 h-3.5 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <FaSave className="w-3.5 h-3.5" />
+                    <span>Save Project Execution</span>
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+        </div>
+      </form>
     </div>
   );
 };

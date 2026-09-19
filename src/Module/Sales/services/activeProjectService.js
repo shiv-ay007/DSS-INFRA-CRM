@@ -488,6 +488,7 @@ export const mapPmsStagesToExecutionStages = (pmsStages = [], wbsData = null, pr
         return {
           taskId: tCode,
           taskName: tName,
+          fieldData: t.fieldData || {},
           status: prev.status || "Not Started",
           assignedContractor: prev.assignedContractor || contrName,
           deadlineDate: prev.deadlineDate || deadDate,
@@ -499,11 +500,13 @@ export const mapPmsStagesToExecutionStages = (pmsStages = [], wbsData = null, pr
       return {
         workId: wCode,
         workName: wName,
+        fieldData: w.fieldData || {},
         status: (wTasks.length > 0 && wTasks.every(tk => tk.status === "Completed")) ? "Completed" : (wTasks.some(tk => tk.status === "In Progress") ? "In Progress" : "Not Started"),
         tasks: wTasks.length > 0 ? wTasks : [
           {
             taskId: `${wCode}-T1`,
             taskName: `${wName} Execution`,
+            fieldData: {},
             status: "Not Started",
             assignedContractor: "",
             deadlineDate: "",
@@ -517,6 +520,7 @@ export const mapPmsStagesToExecutionStages = (pmsStages = [], wbsData = null, pr
     return {
       stageId: sCode,
       stageName: sName,
+      fieldData: stg.fieldData || {},
       status: (sWorks.length > 0 && sWorks.every(wk => wk.status === "Completed")) ? "Completed" : (sWorks.some(wk => wk.status === "In Progress") ? "In Progress" : "Not Started"),
       works: sWorks
     };
@@ -570,6 +574,7 @@ export const repairCorruptedStages = (stages = [], wbsData = null) => {
 
         return {
           ...t,
+          fieldData: t.fieldData || {},
           taskId: tCode,
           taskName: tName
         };
@@ -577,6 +582,7 @@ export const repairCorruptedStages = (stages = [], wbsData = null) => {
 
       return {
         ...w,
+        fieldData: w.fieldData || {},
         workId: wCode,
         workName: wName,
         tasks
@@ -585,6 +591,7 @@ export const repairCorruptedStages = (stages = [], wbsData = null) => {
 
     return {
       ...stg,
+      fieldData: stg.fieldData || {},
       stageId: sCode,
       stageName: sName,
       works
@@ -730,6 +737,32 @@ export const activeProjectService = {
     list[targetIdx] = updatedProject;
     localStorage.setItem(ACTIVE_PROJECTS_STORAGE_KEY, JSON.stringify(list));
     return updatedProject;
+  },
+
+  // 4b. Save Full Active Project state (Single-page unified form submission)
+  saveFullProject: (projectId, fullData) => {
+    const list = activeProjectService.getAllActiveProjects();
+    const targetIdx = list.findIndex(
+      (p) => String(p.id) === String(projectId) || String(p.projectId) === String(projectId)
+    );
+    if (targetIdx === -1) return null;
+
+    const project = list[targetIdx];
+    const updatedProject = calculateProjectRollup({
+      ...project,
+      ...fullData,
+      updatedAt: new Date().toISOString()
+    });
+
+    list[targetIdx] = updatedProject;
+    localStorage.setItem(ACTIVE_PROJECTS_STORAGE_KEY, JSON.stringify(list));
+    return updatedProject;
+  },
+
+  // 4c. Alias to save active project
+  saveActiveProject: (fullData) => {
+    if (!fullData || !fullData.id) return null;
+    return activeProjectService.saveFullProject(fullData.id, fullData);
   },
 
   // 5. Convert Presale to Active Project (Auto-Clones 23 Stages)
@@ -913,7 +946,10 @@ export const activeProjectService = {
         const lId = t.leadId?._id || t.leadId;
         if (lId) pmsMap.set(String(lId), t);
         if (t.clientName) pmsMap.set(t.clientName.toLowerCase().trim(), t);
+        if (t.projectId?.clientName) pmsMap.set(t.projectId.clientName.toLowerCase().trim(), t);
+        if (t.leadId?.clientName) pmsMap.set(t.leadId.clientName.toLowerCase().trim(), t);
         if (t.projectName) pmsMap.set(t.projectName.toLowerCase().trim(), t);
+        if (t.projectId?.projectName) pmsMap.set(t.projectId.projectName.toLowerCase().trim(), t);
       });
 
       let changed = false;
@@ -951,14 +987,24 @@ export const activeProjectService = {
         const readableLeadCode = leadObj.leadId || bp.projectCode || "";
         const displayId = readableLeadCode ? readableLeadCode : (projId.length === 24 ? `PRJ-${projId.slice(-5).toUpperCase()}` : projId);
 
-        // Check if already in list
-        const existingIdx = list.findIndex(
-          (p) =>
-            String(p.id) === projId ||
-            String(p.projectId) === projId ||
-            String(p.presaleId) === projId ||
-            (p.clientName && clientName && p.clientName.toLowerCase().trim() === clientName.toLowerCase().trim() && p.projectName && projectName && p.projectName.toLowerCase().trim() === projectName.toLowerCase().trim())
-        );
+        // Check if already in list (Match strictly by projId first)
+        const existingIdx = list.findIndex((p) => {
+          if (projId && (String(p.id) === projId || String(p.projectId) === projId || String(p.presaleId) === projId)) {
+            return true;
+          }
+          if (
+            !projId &&
+            p.clientName &&
+            clientName &&
+            p.clientName.toLowerCase().trim() === clientName.toLowerCase().trim() &&
+            p.projectName &&
+            projectName &&
+            p.projectName.toLowerCase().trim() === projectName.toLowerCase().trim()
+          ) {
+            return true;
+          }
+          return false;
+        });
 
         if (existingIdx !== -1) {
           // Existing active project: keep user-modified stages, but update any blank metadata & populate fields
@@ -997,10 +1043,13 @@ export const activeProjectService = {
             updatedItem = true;
           }
 
-          // Stage & Task Repair / Synchronization with PMS Template
+          // Stage & Task Repair / Synchronization with PMS Template (including fieldData)
           if (matchedTmpl && Array.isArray(matchedTmpl.stages) && matchedTmpl.stages.length > 0) {
-            if (hasCorruptedStageIds(existing.stages) || (existing.stages || []).length !== matchedTmpl.stages.length) {
-              existing.stages = mapPmsStagesToExecutionStages(matchedTmpl.stages, wbsData, existing.stages);
+            existing.stages = mapPmsStagesToExecutionStages(matchedTmpl.stages, wbsData, existing.stages);
+            updatedItem = true;
+          } else if (!matchedTmpl && !existing.trackerData) {
+            if (Array.isArray(existing.stages) && existing.stages.length > 0) {
+              existing.stages = [];
               updatedItem = true;
             }
           } else if (hasCorruptedStageIds(existing.stages)) {
@@ -1018,7 +1067,8 @@ export const activeProjectService = {
           if (matchedTmpl && Array.isArray(matchedTmpl.stages) && matchedTmpl.stages.length > 0) {
             stagesToUse = mapPmsStagesToExecutionStages(matchedTmpl.stages, wbsData, []);
           } else {
-            stagesToUse = cloneChecklistFromMaster();
+            // Keep empty until PMS template is created
+            stagesToUse = [];
           }
 
           const phone = bp.phoneNumber || bp.contactNo || bp.whatsappNumber || leadObj.phoneNumber || "";
