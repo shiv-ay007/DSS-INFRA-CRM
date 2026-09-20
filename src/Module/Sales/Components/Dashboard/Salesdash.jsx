@@ -23,6 +23,7 @@ const Salesdash = () => {
   const { getCachedData, setCachedData } = useLeadContext();
   const [leads, setLeads] = useState([]);
   const [scheduledFollowups, setScheduledFollowups] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const fetchBackendData = async () => {
@@ -30,9 +31,11 @@ const Salesdash = () => {
       const cached = getCachedData(cacheKey);
       if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
         setLeads(cached.data);
+        setIsLoading(false);
       }
 
       try {
+        setIsLoading(true);
         const [leadsRes] = await Promise.allSettled([
           getAllLeadsApi({ limit: 1000 })
         ]);
@@ -74,6 +77,8 @@ const Salesdash = () => {
         }
       } catch (e) {
         console.error("Dashboard fetch error:", e);
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -229,7 +234,7 @@ const Salesdash = () => {
       </div>
 
       {/* 4. RECENT LEADS TABLE */}
-      <RecentLeadsTable recentLeads={dynamicRecentLeads} />
+      <RecentLeadsTable recentLeads={dynamicRecentLeads} isLoading={isLoading} />
     </div>
   );
 };

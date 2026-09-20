@@ -15,6 +15,7 @@ import {
 } from "react-icons/fa";
 import { HiSparkles } from "react-icons/hi2";
 import { contractorService } from "../../../services/contractorService";
+import Loader from "../../../../../Common/Components/Loader";
 
 // 5. CONTRACTOR DDL — Exact Sheet Reference
 // Contractor Type (Count: 19)
@@ -499,6 +500,10 @@ const AddContractorComponent = () => {
       setLoading(false);
     }
   };
+
+  if (fetching) {
+    return <Loader text="Loading contractor details..." className="min-h-[400px]" />;
+  }
 
   return (
     <div className="space-y-4 pb-12 px-1 sm:px-2 font-sans">

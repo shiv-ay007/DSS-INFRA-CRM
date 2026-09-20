@@ -35,7 +35,7 @@ const SuplireContractorComponent = () => {
   // Suppliers & Contractors state from Database
   const [suppliers, setSuppliers] = useState([]);
   const [contractors, setContractors] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   // Search & Table-Based Filter States
   const [showFilters, setShowFilters] = useState(false);
@@ -1296,48 +1296,23 @@ const SuplireContractorComponent = () => {
         </div>
       )}
 
-      {/* ================= 10-COLUMN DIRECTORY TABLE ================= */}
+      {/* ================= SUPPLIER / CONTRACTOR TABLE ================= */}
       <div className="w-full max-w-full min-w-0 bg-white border border-slate-200/90 shadow-xs overflow-hidden rounded-none">
-        {loading ? (
-          <div className="py-16 text-center text-slate-500 text-xs flex flex-col items-center justify-center gap-2">
-            <FaSpinner className="w-5 h-5 animate-spin text-slate-600" />
-            <span>Loading {selectedType.toLowerCase()}s from database...</span>
-          </div>
-        ) : filteredData.length === 0 ? (
-          <div className="py-16 text-center text-slate-400 text-xs">
-            <p className="font-semibold text-slate-600 text-sm">No {selectedType.toLowerCase()}s found</p>
-            <p className="mt-1">
-              {hasActiveFilters
-                ? "Try adjusting your search query or filter options."
-                : `Add your first entry using the "Add ${selectedType}" button above.`}
-            </p>
-            {hasActiveFilters && (
-              <button
-                type="button"
-                onClick={handleResetFilters}
-                className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 transition-all cursor-pointer"
-              >
-                <FaTimes className="w-3 h-3" />
-                <span>Reset All Filters</span>
-              </button>
-            )}
-          </div>
-        ) : (
-          <Table
-            data={paginatedData}
-            columnConfig={activeColumnConfig}
-            showSrNo={true}
-            currentPage={currentPage}
-            totalItems={filteredData.length}
-            itemsPerPage={itemsPerPage}
-            onPageChange={(page) => setCurrentPage(page)}
-            onItemsPerPageChange={(limit) => {
-              setItemsPerPage(limit);
-              setCurrentPage(1);
-            }}
-            itemsPerPageOptions={[10, 25, 50]}
-          />
-        )}
+        <Table
+          data={paginatedData}
+          columnConfig={activeColumnConfig}
+          showSrNo={true}
+          currentPage={currentPage}
+          totalItems={filteredData.length}
+          itemsPerPage={itemsPerPage}
+          isLoading={loading}
+          onPageChange={(page) => setCurrentPage(page)}
+          onItemsPerPageChange={(limit) => {
+            setItemsPerPage(limit);
+            setCurrentPage(1);
+          }}
+          itemsPerPageOptions={[10, 25, 50]}
+        />
       </div>
 
       {/* ================= QUICK VIEW DETAILS MODAL ================= */}

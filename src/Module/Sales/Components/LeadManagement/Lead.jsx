@@ -83,6 +83,7 @@ const Lead = () => {
   });
   const [isStatusSubmitting, setIsStatusSubmitting] = useState(false);
   const [isScheduling, setIsScheduling] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const { getCachedData, setCachedData, invalidateCache } = useLeadContext();
 
   const fetchBackendLeads = async (forceRefresh = false) => {
@@ -91,11 +92,13 @@ const Lead = () => {
       const cached = getCachedData(cacheKey);
       if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
         setLeads(cached.data);
+        setIsLoading(false);
         return;
       }
     }
 
     try {
+      setIsLoading(true);
       const resLeads = await getAllLeadsApi({
         intrestedFromTableLead: true,
         isPending: true,
@@ -286,6 +289,8 @@ const Lead = () => {
       }
     } catch (err) {
       console.error("Error fetching leads for Lead Management Sheet:", err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -1532,6 +1537,7 @@ const Lead = () => {
         currentPage={currentPage}
         totalItems={filteredLeads.length}
         itemsPerPage={rowsPerPage}
+        isLoading={isLoading}
         onPageChange={(page) => setCurrentPage(page)}
       />
 

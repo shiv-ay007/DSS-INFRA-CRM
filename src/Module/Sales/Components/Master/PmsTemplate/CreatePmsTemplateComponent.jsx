@@ -29,6 +29,7 @@ export const PMS_MASTER_WORKS_KEY = "pms_master_works_data";
 export const PMS_MASTER_TASKS_KEY = "pms_master_tasks_data";
 import ReactSelectMulti from "./ReactSelectMulti";
 import ExecutionResourceFieldData from "./ExecutionResourceFieldData";
+import Loader from "../../../../../Common/Components/Loader";
 
 // Storage Keys
 export const PMS_TASKS_STORAGE_KEY = "dss_pms_tasks_master_data";
@@ -1882,6 +1883,10 @@ export const CreatePmsTemplateComponent = () => {
       setLoading(false);
     }
   };
+
+  if (fetching) {
+    return <Loader text="Loading PMS task details..." className="min-h-[400px]" />;
+  }
 
   return (
     <div className="space-y-4 pb-16 px-1 sm:px-2 font-sans">

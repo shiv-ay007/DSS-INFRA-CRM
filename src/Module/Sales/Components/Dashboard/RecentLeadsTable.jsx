@@ -29,7 +29,7 @@ const getSourceBadge = (source) => {
   }
 };
 
-const RecentLeadsTable = ({ recentLeads = recentLeadsData }) => {
+const RecentLeadsTable = ({ recentLeads = recentLeadsData, isLoading = false }) => {
   const columnConfig = useMemo(
     () => ({
       id: {
@@ -131,7 +131,7 @@ const RecentLeadsTable = ({ recentLeads = recentLeadsData }) => {
         </Link>
       </div>
 
-      <Table data={recentLeads} columnConfig={columnConfig} showSrNo={true} />
+      <Table data={recentLeads} columnConfig={columnConfig} showSrNo={true} isLoading={isLoading} />
     </div>
   );
 };

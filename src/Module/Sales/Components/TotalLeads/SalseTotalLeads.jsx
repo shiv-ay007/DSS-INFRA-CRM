@@ -97,7 +97,7 @@ const SalseTotalLeads = () => {
 
   const [leads, setLeads] = useState([]);
   const [totalLeadsCount, setTotalLeadsCount] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Search & Filter States
   const [showFilters, setShowFilters] = useState(false);

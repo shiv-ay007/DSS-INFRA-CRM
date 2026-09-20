@@ -894,33 +894,21 @@ const PmsTemplateComponent = () => {
 
       {/* ================= TABLE LIST WITH SR NO & EXPANDABLE ROWS ================= */}
       <div className="w-full max-w-full min-w-0 bg-white border border-slate-200/90 shadow-xs overflow-hidden rounded-none">
-        {paginatedTemplates.length > 0 ? (
-          <Table
-            data={paginatedTemplates}
-            columnConfig={columnConfig}
-            showSrNo={true}
-            itemsPerPage={itemsPerPage}
-            setItemsPerPage={setItemsPerPage}
-            currentPage={currentPage}
-            setCurrentPage={setCurrentPage}
-            totalItems={filteredTemplates.length}
-            isLoading={loading}
-          />
-        ) : (
-          <div className="text-center py-16 px-4">
-            <div className="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3 text-slate-400">
-              <FaRegFolderOpen className="w-6 h-6" />
-            </div>
-            <h3 className="text-sm font-bold text-slate-700">No PMS Templates Found</h3>
-            <p className="text-xs text-slate-500 mt-1">Try adjusting your search or category filters.</p>
-            <button
-              onClick={() => navigate("/sales/master/pms-template/create")}
-              className="mt-3 px-3 py-1.5 bg-indigo-600 text-white rounded-lg text-xs font-semibold hover:bg-indigo-700 transition-colors cursor-pointer"
-            >
-              + Create Template
-            </button>
-          </div>
-        )}
+        <Table
+          data={paginatedTemplates}
+          columnConfig={columnConfig}
+          showSrNo={true}
+          currentPage={currentPage}
+          totalItems={filteredTemplates.length}
+          itemsPerPage={itemsPerPage}
+          isLoading={loading}
+          onPageChange={(page) => setCurrentPage(page)}
+          onItemsPerPageChange={(limit) => {
+            setItemsPerPage(limit);
+            setCurrentPage(1);
+          }}
+          itemsPerPageOptions={[10, 25, 50, 100]}
+        />
       </div>
     </div>
   );

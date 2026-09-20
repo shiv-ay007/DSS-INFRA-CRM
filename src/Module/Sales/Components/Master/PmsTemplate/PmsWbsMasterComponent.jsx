@@ -169,7 +169,7 @@ const PmsWbsMasterComponent = () => {
   const [totalRecords, setTotalRecords] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [paginatedData, setPaginatedData] = useState([]);
-  const [isTableLoading, setIsTableLoading] = useState(false);
+  const [isTableLoading, setIsTableLoading] = useState(true);
 
   // Debounce search term by 300ms
   useEffect(() => {

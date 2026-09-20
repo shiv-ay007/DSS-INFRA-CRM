@@ -23,6 +23,7 @@ import {
 import { HiSparkles, HiShieldCheck } from "react-icons/hi2";
 import { supplierService } from "../../../services/supplierService";
 import { contractorService } from "../../../services/contractorService";
+import Loader from "../../../../../Common/Components/Loader";
 
 const SupplierContractorDetailsComponent = () => {
   const { type, id } = useParams();
@@ -62,12 +63,10 @@ const SupplierContractorDetailsComponent = () => {
 
   if (loading) {
     return (
-      <div className="min-h-[400px] flex flex-col items-center justify-center gap-3 bg-white rounded-xl border border-slate-200 p-8 shadow-xs">
-        <FaSpinner className="w-8 h-8 text-emerald-600 animate-spin" />
-        <p className="text-slate-600 text-sm font-medium">
-          Loading {isSupplier ? "supplier" : "contractor"} complete profile...
-        </p>
-      </div>
+      <Loader
+        text={`Loading ${isSupplier ? "supplier" : "contractor"} complete profile...`}
+        className="min-h-[400px]"
+      />
     );
   }
 

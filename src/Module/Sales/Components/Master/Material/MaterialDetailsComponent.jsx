@@ -23,8 +23,8 @@ import {
   FaTag,
   FaInfoCircle
 } from "react-icons/fa";
-import { HiSparkles } from "react-icons/hi2";
 import materialService from "../../../services/materialService";
+import Loader from "../../../../../Common/Components/Loader";
 
 const MaterialDetailsComponent = () => {
   const { id } = useParams();
@@ -56,14 +56,7 @@ const MaterialDetailsComponent = () => {
   }, [id]);
 
   if (loading) {
-    return (
-      <div className="min-h-[400px] flex flex-col items-center justify-center gap-3 bg-white rounded-xl border border-slate-200 p-8 shadow-xs font-sans">
-        <FaSpinner className="w-8 h-8 text-emerald-600 animate-spin" />
-        <p className="text-slate-600 text-sm font-medium">
-          Loading material complete profile...
-        </p>
-      </div>
-    );
+    return <Loader text="Loading material complete profile..." className="min-h-[400px]" />;
   }
 
   if (!data) {

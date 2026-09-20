@@ -892,36 +892,21 @@ const MaterialComponent = () => {
 
       {/* ================= MATERIAL TABLE (MATCHING SUPPLIER/CONTRACTOR) ================= */}
       <div className="w-full max-w-full min-w-0 bg-white border border-slate-200/90 shadow-xs overflow-hidden">
-        {loading ? (
-          <div className="py-16 text-center text-slate-500 text-xs flex flex-col items-center justify-center gap-2">
-            <FaSpinner className="w-5 h-5 animate-spin text-emerald-600" />
-            <span>Loading materials from database...</span>
-          </div>
-        ) : filteredMaterials.length === 0 ? (
-          <div className="py-16 text-center text-slate-400 text-xs">
-            <p className="font-semibold text-slate-600 text-sm">
-              No materials found in database
-            </p>
-            <p className="mt-1">
-              Add your first material item using the "Add Material" button above.
-            </p>
-          </div>
-        ) : (
-          <Table
-            data={paginatedMaterials}
-            columnConfig={columnConfig}
-            showSrNo={true}
-            currentPage={currentPage}
-            totalItems={filteredMaterials.length}
-            itemsPerPage={itemsPerPage}
-            onPageChange={(page) => setCurrentPage(page)}
-            onItemsPerPageChange={(limit) => {
-              setItemsPerPage(limit);
-              setCurrentPage(1);
-            }}
-            itemsPerPageOptions={[10, 25, 50, 100]}
-          />
-        )}
+        <Table
+          data={paginatedMaterials}
+          columnConfig={columnConfig}
+          showSrNo={true}
+          currentPage={currentPage}
+          totalItems={filteredMaterials.length}
+          itemsPerPage={itemsPerPage}
+          isLoading={loading}
+          onPageChange={(page) => setCurrentPage(page)}
+          onItemsPerPageChange={(limit) => {
+            setItemsPerPage(limit);
+            setCurrentPage(1);
+          }}
+          itemsPerPageOptions={[10, 25, 50, 100]}
+        />
       </div>
     </div>
   );

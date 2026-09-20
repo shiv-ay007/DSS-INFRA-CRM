@@ -50,6 +50,7 @@ const Salse = () => {
     }
     return [];
   });
+  const [isLoading, setIsLoading] = useState(true);
 
   const { getCachedData, setCachedData } = useLeadContext();
 
@@ -60,11 +61,15 @@ const Salse = () => {
       if (cached && Array.isArray(cached.data)) {
         const validCached = cached.data.filter(isLeadTransferredToSales);
         setSalesData(validCached);
-        if (validCached.length > 0) return;
+        if (validCached.length > 0) {
+          setIsLoading(false);
+          return;
+        }
       }
     }
 
     try {
+      setIsLoading(true);
       const res = await getAllLeadsApi({ inSalesManagement: true, limit: 10 });
       if (res && res.success && res.data && res.data.leads) {
         const interestedLeads = res.data.leads
@@ -137,6 +142,8 @@ const Salse = () => {
       }
     } catch (err) {
       console.error("Error fetching sales management sheet leads:", err);
+    } finally {
+      setIsLoading(false);
     }
   }, [getCachedData, setCachedData, location.state]);
 
@@ -661,6 +668,7 @@ const Salse = () => {
         currentPage={currentPage}
         totalItems={filteredData.length}
         itemsPerPage={rowsPerPage}
+        isLoading={isLoading}
         onPageChange={(page) => setCurrentPage(page)}
       />
 

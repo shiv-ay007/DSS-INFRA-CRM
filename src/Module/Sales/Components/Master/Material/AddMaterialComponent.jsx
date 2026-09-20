@@ -21,6 +21,7 @@ import {
 import { HiSparkles } from "react-icons/hi2";
 import { supplierService } from "../../../services/supplierService";
 import { materialService } from "../../../services/materialService";
+import Loader from "../../../../../Common/Components/Loader";
 
 // Local storage key for Material Master backup
 export const MATERIAL_STORAGE_KEY = "dss_master_materials_data";
@@ -688,12 +689,7 @@ const AddMaterialComponent = () => {
   };
 
   if (fetching) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] text-slate-500">
-        <FaSpinner className="w-8 h-8 animate-spin text-emerald-600 mb-2" />
-        <p className="text-sm font-semibold">Loading material details...</p>
-      </div>
-    );
+    return <Loader text="Loading material details..." className="min-h-[400px]" />;
   }
 
   return (

@@ -30,8 +30,10 @@ const Lostlead = () => {
     }
     return [];
   });
+  const [isLoading, setIsLoading] = useState(true);
   const fetchBackendLossLeads = React.useCallback(async () => {
     try {
+      setIsLoading(true);
       let rawData = [];
 
       // Direct backend API call matching schema's intrestedStatus: "Not Intersted"
@@ -171,6 +173,8 @@ const Lostlead = () => {
       setLeads(uniqueProcessed);
     } catch (err) {
       console.error("Error fetching loss leads from API:", err);
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
@@ -876,6 +880,7 @@ const Lostlead = () => {
         currentPage={currentPage}
         totalItems={filteredLeads.length}
         itemsPerPage={rowsPerPage}
+        isLoading={isLoading}
         onPageChange={(page) => setCurrentPage(page)}
         onItemsPerPageChange={(limit) => {
           setRowsPerPage(limit);

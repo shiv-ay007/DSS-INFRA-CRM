@@ -1,4 +1,5 @@
 import React from "react";
+import Loader from "./Loader";
 
 const Table = ({
   data = [],
@@ -13,13 +14,6 @@ const Table = ({
   showSrNo = false,
   renderExpandedRow = null,
 }) => {
-  if (isLoading) {
-    return (
-      <div className="text-center text-slate-500 text-sm py-8 font-medium">
-        Loading table data...
-      </div>
-    );
-  }
 
   const columns = Object.keys(columnConfig);
   const totalPages = itemsPerPage > 0 ? Math.ceil(totalItems / itemsPerPage) : 1;
@@ -61,11 +55,20 @@ const Table = ({
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 text-xs bg-white">
-            {data.length === 0 ? (
+            {isLoading ? (
               <tr>
                 <td
                   colSpan={(showSrNo ? 1 : 0) + columns.length}
-                  className="px-3 py-6 text-center text-slate-500 text-sm font-medium"
+                  className="px-3 py-16 text-center"
+                >
+                  <Loader text="Loading table data..." />
+                </td>
+              </tr>
+            ) : data.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={(showSrNo ? 1 : 0) + columns.length}
+                  className="px-3 py-8 text-center text-slate-500 text-sm font-medium"
                 >
                   No Records Found
                 </td>
@@ -126,7 +129,7 @@ const Table = ({
     </div>
 
       {/* 2. FIXED PAGINATION FOOTER */}
-      {totalItems > 0 && (
+      {totalItems > 0 && !isLoading && (
         <div className="flex flex-col sm:flex-row justify-between items-center gap-3 p-3.5 border-t border-slate-100 bg-slate-50/50 text-xs sm:text-sm">
           <div className="flex flex-wrap items-center gap-3 text-slate-600 font-medium text-center sm:text-left">
             <span>

@@ -35,6 +35,7 @@ import { getAllLeadProjectsApi } from "../../../services/leadProject.api";
 import { materialService } from "../../../services/materialService";
 import { supplierService } from "../../../services/supplierService";
 import { PMS_TASKS_STORAGE_KEY } from "./CreatePmsTemplateComponent";
+import Loader from "../../../../../Common/Components/Loader";
 
 /**
  * Reusable execution resource field data display component
@@ -682,12 +683,7 @@ const PmsTemplateDetailsComponent = () => {
   };
 
   if (loading) {
-    return (
-      <div className="min-h-[400px] flex flex-col items-center justify-center gap-3 bg-white rounded-xl border border-slate-200 p-8 shadow-xs font-sans">
-        <FaSpinner className="w-8 h-8 text-indigo-600 animate-spin" />
-        <p className="text-slate-600 text-sm font-medium">Loading PMS Template Details...</p>
-      </div>
-    );
+    return <Loader text="Loading PMS Template Details..." className="min-h-[400px]" />;
   }
 
   if (!data) {
