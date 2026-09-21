@@ -25,10 +25,14 @@ import {
 } from "react-icons/fa";
 import materialService from "../../../services/materialService";
 import Loader from "../../../../../Common/Components/Loader";
+import { useAuth } from "../../../../../context/AuthContext";
 
 const MaterialDetailsComponent = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { role, isObserver, user } = useAuth();
+  const currentRole = role || user?.role || localStorage.getItem("role") || "";
+  const isUserObserver = isObserver || String(currentRole).toLowerCase() === "observer";
 
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -144,13 +148,15 @@ const MaterialDetailsComponent = () => {
             </div>
 
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => navigate(editRoute)}
-                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer text-xs"
-              >
-                <FaEdit className="w-3.5 h-3.5" />
-                <span>Edit Material</span>
-              </button>
+              {!isUserObserver && (
+                <button
+                  onClick={() => navigate(editRoute)}
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer text-xs"
+                >
+                  <FaEdit className="w-3.5 h-3.5" />
+                  <span>Edit Material</span>
+                </button>
+              )}
               <button
                 onClick={() => navigate("/sales/master/material")}
                 className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-lg transition-all text-xs cursor-pointer"

@@ -24,10 +24,14 @@ import { HiSparkles, HiShieldCheck } from "react-icons/hi2";
 import { supplierService } from "../../../services/supplierService";
 import { contractorService } from "../../../services/contractorService";
 import Loader from "../../../../../Common/Components/Loader";
+import { useAuth } from "../../../../../context/AuthContext";
 
 const SupplierContractorDetailsComponent = () => {
   const { type, id } = useParams();
   const navigate = useNavigate();
+  const { role, isObserver, user } = useAuth();
+  const currentRole = role || user?.role || localStorage.getItem("role") || "";
+  const isUserObserver = isObserver || String(currentRole).toLowerCase() === "observer";
 
   const isSupplier = type?.toLowerCase() === "supplier";
   const [data, setData] = useState(null);
@@ -155,13 +159,15 @@ const SupplierContractorDetailsComponent = () => {
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              onClick={() => navigate(editRoute)}
-              className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer text-xs"
-            >
-              <FaEdit className="w-3.5 h-3.5" />
-              <span>Edit Details</span>
-            </button>
+            {!isUserObserver && (
+              <button
+                onClick={() => navigate(editRoute)}
+                className="px-4 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer text-xs"
+              >
+                <FaEdit className="w-3.5 h-3.5" />
+                <span>Edit Details</span>
+              </button>
+            )}
             <button
               onClick={() => navigate("/sales/master/suplire-and-contractor")}
               className="px-3.5 py-2 bg-white/10 hover:bg-white/20 text-white font-semibold rounded-lg transition-all text-xs cursor-pointer"

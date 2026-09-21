@@ -25,6 +25,7 @@ import Table from "../../../../../Common/Components/Table";
 import pmsTemplateService from "../../../services/pmsTemplateService";
 import pmsWbsService from "../../../services/pmsWbsService";
 import { PMS_TASKS_STORAGE_KEY, PMS_TEMPLATES_STORAGE_KEY } from "./CreatePmsTemplateComponent";
+import { useAuth } from "../../../../../context/AuthContext";
 
 export const DEFAULT_INITIAL_TEMPLATES = [
   {
@@ -75,6 +76,9 @@ const categories = ["All", "Residential", "Commercial", "Infrastructure", "Inter
 
 const PmsTemplateComponent = () => {
   const navigate = useNavigate();
+  const { role, isObserver, user } = useAuth();
+  const currentRole = role || user?.role || localStorage.getItem("role") || "";
+  const isUserObserver = isObserver || String(currentRole).toLowerCase() === "observer";
 
   const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -507,15 +511,17 @@ const PmsTemplateComponent = () => {
               <FaEye className="w-3.5 h-3.5" />
             </button>
 
-            {/* Edit Icon Button */}
-            <button
-              onClick={() => navigate(`/sales/master/pms-template/edit/${rowId}`)}
-              title="Edit Template"
-              aria-label="Edit Template"
-              className="p-1.5 rounded-md text-amber-600 bg-amber-50 hover:bg-amber-100 hover:text-amber-700 border border-amber-200 transition-all cursor-pointer shadow-2xs hover:scale-105"
-            >
-              <FaEdit className="w-3.5 h-3.5" />
-            </button>
+            {/* Edit Icon Button (Hidden for Observer) */}
+            {!isUserObserver && (
+              <button
+                onClick={() => navigate(`/sales/master/pms-template/edit/${rowId}`)}
+                title="Edit Template"
+                aria-label="Edit Template"
+                className="p-1.5 rounded-md text-amber-600 bg-amber-50 hover:bg-amber-100 hover:text-amber-700 border border-amber-200 transition-all cursor-pointer shadow-2xs hover:scale-105"
+              >
+                <FaEdit className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         );
       }
@@ -683,13 +689,15 @@ const PmsTemplateComponent = () => {
                 )}
               </button>
 
-              <button
-                onClick={() => navigate("/sales/master/pms-template/create")}
-                className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold rounded-lg shadow-md shadow-cyan-500/30 transition-all duration-200 flex items-center gap-2 cursor-pointer transform hover:-translate-y-0.5 active:scale-95 text-xs w-fit"
-              >
-                <FaPlus className="w-3.5 h-3.5" />
-                <span>Create PMS Template</span>
-              </button>
+              {!isUserObserver && (
+                <button
+                  onClick={() => navigate("/sales/master/pms-template/create")}
+                  className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold rounded-lg shadow-md shadow-cyan-500/30 transition-all duration-200 flex items-center gap-2 cursor-pointer transform hover:-translate-y-0.5 active:scale-95 text-xs w-fit"
+                >
+                  <FaPlus className="w-3.5 h-3.5" />
+                  <span>Create PMS Template</span>
+                </button>
+              )}
             </div>
           </div>
         </div>

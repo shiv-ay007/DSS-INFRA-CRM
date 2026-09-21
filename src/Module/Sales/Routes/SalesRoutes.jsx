@@ -1,6 +1,7 @@
 import React from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import Layout from '../Layout/Layout'
+import ProtectedRouteController from '../Layout/ProtectedRouteController'
 import Login from '../Pages/Login'
 import Dashboard from '../Pages/Dashboard'
 import AddLead from '../Pages/AddLead'
@@ -33,46 +34,49 @@ const SalesRoutes = () => {
       {/* Module Level Login Route (/sales/login) */}
       <Route path="login" element={<Login />} />
 
-      {/* Main Dashboard Layout Routes */}
-      <Route element={<Layout />}>
-        <Route index element={<Navigate to="dashboard" replace />} />
-        <Route path="dashboard" element={<Dashboard />} />
-        <Route path="leads/add" element={<AddLead />} />
-        <Route path="leads/total" element={<TotalLeads />} />
-        <Route path="leads/lost" element={<Loss />} />
-        <Route path="leads/all" element={<LeadManagement />} />
-        <Route path="leads/details" element={<LeadDetails />} />
-        <Route path="leads/details/:id" element={<LeadDetails />} />
-        <Route path="leads/sales-form" element={<SalesLeadForm />} />
-        <Route path="leads/sales-form/:id" element={<SalesLeadForm />} />
-        <Route path="management-sheet" element={<SalseManagment />} />
-        <Route path="presales" element={<Presales />} />
-        <Route path="presales/:id" element={<Presales />} />
-        {/* Module 3: Active Project Execution (Site Tracking) */}
-        <Route path="active-projects" element={<ActiveProjectsPage />} />
-        <Route path="active-projects/create" element={<CreateActiveProjectPage />} />
-        <Route path="active-projects/details/:id" element={<ActiveProjectDetailsPage />} />
-        <Route path="active-projects/:id" element={<ActiveProjectExecutionPage />} />
-        {/* MasterForm Routes */}
-        <Route path="master/pms-template" element={<PmsTemplate />} />
-        <Route path="master/pms-template/wbs-master" element={<PmsWbsMasterPage />} />
-        <Route path="master/pms-wbs" element={<PmsWbsMasterPage />} />
-        <Route path="master/pms-template/create" element={<CreatePmsTemplatePage />} />
-        <Route path="master/pms-template/create-template" element={<CreatePmsTemplatePage />} />
-        <Route path="master/pms-template/edit/:id" element={<CreatePmsTemplatePage />} />
-        <Route path="master/pms-template/edit-template/:id" element={<CreatePmsTemplatePage />} />
-        <Route path="master/pms-template/details/:id" element={<PmsTemplateDetailsPage />} />
-        <Route path="master/material" element={<MaterialMaster />} />
-        <Route path="master/material/add-material" element={<AddMaterialPage />} />
-        <Route path="master/material/edit-material/:id" element={<AddMaterialPage />} />
-        <Route path="master/material/details/:id" element={<MaterialDetailsPage />} />
-        <Route path="master/suplire-and-contractor" element={<SuplireContractor />} />
-        <Route path="master/suplire-and-contractor/add-supplier" element={<AddSupplierPage />} />
-        <Route path="master/suplire-and-contractor/edit-supplier/:id" element={<AddSupplierPage />} />
-        <Route path="master/suplire-and-contractor/add-contractor" element={<AddContractorPage />} />
-        <Route path="master/suplire-and-contractor/edit-contractor/:id" element={<AddContractorPage />} />
-        <Route path="master/suplire-and-contractor/details/:type/:id" element={<SupplierContractorDetailsPage />} />
-        <Route path="master/supplier-contractor" element={<Navigate to="/sales/master/suplire-and-contractor" replace />} />
+      {/* Protected Routes Controller: Only authenticated users can access */}
+      <Route element={<ProtectedRouteController />}>
+        {/* Main Dashboard Layout Routes */}
+        <Route element={<Layout />}>
+          <Route index element={<Navigate to="dashboard" replace />} />
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="leads/add" element={<AddLead />} />
+          <Route path="leads/total" element={<TotalLeads />} />
+          <Route path="leads/lost" element={<Loss />} />
+          <Route path="leads/all" element={<LeadManagement />} />
+          <Route path="leads/details" element={<LeadDetails />} />
+          <Route path="leads/details/:id" element={<LeadDetails />} />
+          <Route path="leads/sales-form" element={<SalesLeadForm />} />
+          <Route path="leads/sales-form/:id" element={<SalesLeadForm />} />
+          <Route path="management-sheet" element={<SalseManagment />} />
+          <Route path="presales" element={<Presales />} />
+          <Route path="presales/:id" element={<Presales />} />
+          {/* Module 3: Active Project Execution (Site Tracking) */}
+          <Route path="active-projects" element={<ActiveProjectsPage />} />
+          <Route path="active-projects/create" element={<CreateActiveProjectPage />} />
+          <Route path="active-projects/details/:id" element={<ActiveProjectDetailsPage />} />
+          <Route path="active-projects/:id" element={<ActiveProjectExecutionPage />} />
+          {/* MasterForm Routes */}
+          <Route path="master/pms-template" element={<PmsTemplate />} />
+          <Route path="master/pms-template/wbs-master" element={<PmsWbsMasterPage />} />
+          <Route path="master/pms-wbs" element={<PmsWbsMasterPage />} />
+          <Route path="master/pms-template/create" element={<CreatePmsTemplatePage />} />
+          <Route path="master/pms-template/create-template" element={<CreatePmsTemplatePage />} />
+          <Route path="master/pms-template/edit/:id" element={<CreatePmsTemplatePage />} />
+          <Route path="master/pms-template/edit-template/:id" element={<CreatePmsTemplatePage />} />
+          <Route path="master/pms-template/details/:id" element={<PmsTemplateDetailsPage />} />
+          <Route path="master/material" element={<MaterialMaster />} />
+          <Route path="master/material/add-material" element={<AddMaterialPage />} />
+          <Route path="master/material/edit-material/:id" element={<AddMaterialPage />} />
+          <Route path="master/material/details/:id" element={<MaterialDetailsPage />} />
+          <Route path="master/suplire-and-contractor" element={<SuplireContractor />} />
+          <Route path="master/suplire-and-contractor/add-supplier" element={<AddSupplierPage />} />
+          <Route path="master/suplire-and-contractor/edit-supplier/:id" element={<AddSupplierPage />} />
+          <Route path="master/suplire-and-contractor/add-contractor" element={<AddContractorPage />} />
+          <Route path="master/suplire-and-contractor/edit-contractor/:id" element={<AddContractorPage />} />
+          <Route path="master/suplire-and-contractor/details/:type/:id" element={<SupplierContractorDetailsPage />} />
+          <Route path="master/supplier-contractor" element={<Navigate to="/sales/master/suplire-and-contractor" replace />} />
+        </Route>
       </Route>
     </Routes>
   )

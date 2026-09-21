@@ -22,12 +22,16 @@ import { HiSparkles, HiShieldCheck } from "react-icons/hi2";
 import Table from "../../../../../Common/Components/Table";
 import { supplierService } from "../../../services/supplierService";
 import { contractorService } from "../../../services/contractorService";
+import { useAuth } from "../../../../../context/AuthContext";
 
 
 const supplierContractorTypes = ["Supplier", "Contractor"];
 
 const SuplireContractorComponent = () => {
   const navigate = useNavigate();
+  const { role, isObserver, user } = useAuth();
+  const currentRole = role || user?.role || localStorage.getItem("role") || "";
+  const isUserObserver = isObserver || String(currentRole).toLowerCase() === "observer";
 
   // Active Type Tab: "Supplier" or "Contractor"
   const [selectedType, setSelectedType] = useState("Supplier");
@@ -388,14 +392,16 @@ const SuplireContractorComponent = () => {
               <FaEye className="w-3.5 h-3.5 text-emerald-600" />
               <span>View</span>
             </button>
-            <button
-              onClick={() => navigate(`/sales/master/suplire-and-contractor/edit-supplier/${row._id}`)}
-              title="Edit Supplier Details"
-              className="px-2 py-1 rounded-md flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-300 transition-all cursor-pointer shadow-xs"
-            >
-              <FaEdit className="w-3.5 h-3.5 text-amber-600" />
-              <span>Edit</span>
-            </button>
+            {!isUserObserver && (
+              <button
+                onClick={() => navigate(`/sales/master/suplire-and-contractor/edit-supplier/${row._id}`)}
+                title="Edit Supplier Details"
+                className="px-2 py-1 rounded-md flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-300 transition-all cursor-pointer shadow-xs"
+              >
+                <FaEdit className="w-3.5 h-3.5 text-amber-600" />
+                <span>Edit</span>
+              </button>
+            )}
           </div>
         )
       },
@@ -608,7 +614,7 @@ const SuplireContractorComponent = () => {
         }
       }
     }),
-    []
+    [isUserObserver, navigate]
   );
 
   // 10 Table Heads for Contractor
@@ -628,14 +634,16 @@ const SuplireContractorComponent = () => {
               <FaEye className="w-3.5 h-3.5 text-blue-600" />
               <span>View</span>
             </button>
-            <button
-              onClick={() => navigate(`/sales/master/suplire-and-contractor/edit-contractor/${row._id}`)}
-              title="Edit Contractor Details"
-              className="px-2 py-1 rounded-md flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-300 transition-all cursor-pointer shadow-xs"
-            >
-              <FaEdit className="w-3.5 h-3.5 text-amber-600" />
-              <span>Edit</span>
-            </button>
+            {!isUserObserver && (
+              <button
+                onClick={() => navigate(`/sales/master/suplire-and-contractor/edit-contractor/${row._id}`)}
+                title="Edit Contractor Details"
+                className="px-2 py-1 rounded-md flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-300 transition-all cursor-pointer shadow-xs"
+              >
+                <FaEdit className="w-3.5 h-3.5 text-amber-600" />
+                <span>Edit</span>
+              </button>
+            )}
           </div>
         )
       },
@@ -826,7 +834,7 @@ const SuplireContractorComponent = () => {
         }
       }
     }),
-    []
+    [isUserObserver, navigate]
   );
 
   const activeColumnConfig =
@@ -897,20 +905,24 @@ const SuplireContractorComponent = () => {
                 )}
               </button>
 
-              <button
-                onClick={() => navigate("/sales/master/suplire-and-contractor/add-supplier")}
-                className="px-3 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer text-xs"
-              >
-                <FaPlus className="w-3 h-3" />
-                <span>Add Supplier</span>
-              </button>
-              <button
-                onClick={() => navigate("/sales/master/suplire-and-contractor/add-contractor")}
-                className="px-3 py-1.5 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer text-xs"
-              >
-                <FaPlus className="w-3 h-3" />
-                <span>Add Contractor</span>
-              </button>
+              {!isUserObserver && (
+                <>
+                  <button
+                    onClick={() => navigate("/sales/master/suplire-and-contractor/add-supplier")}
+                    className="px-3 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer text-xs"
+                  >
+                    <FaPlus className="w-3 h-3" />
+                    <span>Add Supplier</span>
+                  </button>
+                  <button
+                    onClick={() => navigate("/sales/master/suplire-and-contractor/add-contractor")}
+                    className="px-3 py-1.5 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer text-xs"
+                  >
+                    <FaPlus className="w-3 h-3" />
+                    <span>Add Contractor</span>
+                  </button>
+                </>
+              )}
             </div>
           </div>
         </div>

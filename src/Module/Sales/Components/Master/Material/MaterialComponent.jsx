@@ -35,9 +35,13 @@ import {
 import { MdInventory2 } from "react-icons/md";
 import { HiSparkles } from "react-icons/hi2";
 import Table from "../../../../../Common/Components/Table";
+import { useAuth } from "../../../../../context/AuthContext";
 
 const MaterialComponent = () => {
   const navigate = useNavigate();
+  const { role, isObserver, user } = useAuth();
+  const currentRole = role || user?.role || localStorage.getItem("role") || "";
+  const isUserObserver = isObserver || String(currentRole).toLowerCase() === "observer";
 
   // State initialized without ANY dummy data - only live backend API data
   const [materials, setMaterials] = useState([]);
@@ -308,14 +312,16 @@ const MaterialComponent = () => {
                 <FaEye className="w-3.5 h-3.5 text-emerald-600" />
                 <span>View</span>
               </button>
-              <button
-                onClick={() => navigate(`/sales/master/material/edit-material/${rowId}`)}
-                title="Edit Material Details"
-                className="px-2 py-1 rounded-md flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-300 transition-all cursor-pointer shadow-xs"
-              >
-                <FaEdit className="w-3.5 h-3.5 text-amber-600" />
-                <span>Edit</span>
-              </button>
+              {!isUserObserver && (
+                <button
+                  onClick={() => navigate(`/sales/master/material/edit-material/${rowId}`)}
+                  title="Edit Material Details"
+                  className="px-2 py-1 rounded-md flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-300 transition-all cursor-pointer shadow-xs"
+                >
+                  <FaEdit className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Edit</span>
+                </button>
+              )}
             </div>
           );
         }
@@ -540,7 +546,7 @@ const MaterialComponent = () => {
         }
       }
     }),
-    [navigate]
+    [navigate, isUserObserver]
   );
 
   // Compact KPI Card Component (Matching Supplier Master)
@@ -612,13 +618,15 @@ const MaterialComponent = () => {
                 )}
               </button>
 
-              <button
-                onClick={() => navigate("/sales/master/material/add-material")}
-                className="px-3 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer text-xs"
-              >
-                <FaPlus className="w-3 h-3" />
-                <span>Add Material</span>
-              </button>
+              {!isUserObserver && (
+                <button
+                  onClick={() => navigate("/sales/master/material/add-material")}
+                  className="px-3 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-white font-bold rounded-lg shadow-sm transition-all flex items-center gap-1.5 cursor-pointer text-xs"
+                >
+                  <FaPlus className="w-3 h-3" />
+                  <span>Add Material</span>
+                </button>
+              )}
             </div>
           </div>
         </div>

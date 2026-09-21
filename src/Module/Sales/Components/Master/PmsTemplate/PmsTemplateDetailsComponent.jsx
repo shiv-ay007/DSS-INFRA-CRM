@@ -36,6 +36,7 @@ import { materialService } from "../../../services/materialService";
 import { supplierService } from "../../../services/supplierService";
 import { PMS_TASKS_STORAGE_KEY } from "./CreatePmsTemplateComponent";
 import Loader from "../../../../../Common/Components/Loader";
+import { useAuth } from "../../../../../context/AuthContext";
 
 /**
  * Reusable execution resource field data display component
@@ -312,6 +313,9 @@ const ExecutionFieldDataView = ({
 const PmsTemplateDetailsComponent = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { role, isObserver, user } = useAuth();
+  const currentRole = role || user?.role || localStorage.getItem("role") || "";
+  const isUserObserver = isObserver || String(currentRole).toLowerCase() === "observer";
 
   const [data, setData] = useState(null);
   const [resolvedStages, setResolvedStages] = useState([]);
@@ -774,16 +778,18 @@ const PmsTemplateDetailsComponent = () => {
             </div>
           </div>
 
-          {/* Right Action: Edit Template */}
-          <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
-            <button
-              onClick={() => navigate(editRoute)}
-              className="px-4 py-2 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
-            >
-              <FaEdit className="w-3.5 h-3.5" />
-              <span>Edit Template</span>
-            </button>
-          </div>
+          {/* Right Action: Edit Template (Hidden for Observer) */}
+          {!isUserObserver && (
+            <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
+              <button
+                onClick={() => navigate(editRoute)}
+                className="px-4 py-2 rounded-lg text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+              >
+                <FaEdit className="w-3.5 h-3.5" />
+                <span>Edit Template</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

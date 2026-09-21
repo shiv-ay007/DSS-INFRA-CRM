@@ -30,9 +30,13 @@ export const PMS_MASTER_TASKS_KEY = "pms_master_tasks_data";
 
 import pmsWbsService from "../../../services/pmsWbsService";
 import Table from "../../../../../Common/Components/Table";
+import { useAuth } from "../../../../../context/AuthContext";
 
 const PmsWbsMasterComponent = () => {
   const navigate = useNavigate();
+  const { role, isObserver, user } = useAuth();
+  const currentRole = role || user?.role || localStorage.getItem("role") || "";
+  const isUserObserver = isObserver || String(currentRole).toLowerCase() === "observer";
 
   // 1. Data States (Loaded from localStorage or fetched from backend API)
   const [statuses, setStatuses] = useState(() => {
@@ -274,6 +278,10 @@ const PmsWbsMasterComponent = () => {
 
   // Open Modal for Creating New Entry
   const handleOpenAddModal = (type = viewMode === "statuses" ? "status" : viewMode === "tasks" ? "task" : viewMode === "works" ? "work" : "stage") => {
+    if (isUserObserver) {
+      toast.info("Observer Mode: Action is disabled.");
+      return;
+    }
     setEditingItem(null);
     setEntryType(type);
 
@@ -415,6 +423,10 @@ const PmsWbsMasterComponent = () => {
 
   // Edit Trigger: Open modal populated with item
   const handleStartEdit = (type, item) => {
+    if (isUserObserver) {
+      toast.info("Observer Mode: Action is disabled.");
+      return;
+    }
     setEditingItem({ type, item });
     setEntryType(type);
     if (type === "status") {
@@ -469,6 +481,10 @@ const PmsWbsMasterComponent = () => {
 
   // Delete Handlers
   const handleDeleteStatus = async (statusItem) => {
+    if (isUserObserver) {
+      toast.info("Observer Mode: Action is disabled.");
+      return;
+    }
     if (window.confirm(`Delete Status "${statusItem.status_name}"?`)) {
       try {
         if (statusItem._id) {
@@ -484,6 +500,10 @@ const PmsWbsMasterComponent = () => {
   };
 
   const handleDeleteStage = (stage) => {
+    if (isUserObserver) {
+      toast.info("Observer Mode: Action is disabled.");
+      return;
+    }
     if (window.confirm(`Delete Stage "${stage.stage_code}: ${stage.stage_name}"?`)) {
       setStages(prev => prev.filter(s => s._id !== stage._id));
       toast.info(`Deleted Stage ${stage.stage_code}`);
@@ -491,6 +511,10 @@ const PmsWbsMasterComponent = () => {
   };
 
   const handleDeleteWork = (work) => {
+    if (isUserObserver) {
+      toast.info("Observer Mode: Action is disabled.");
+      return;
+    }
     if (window.confirm(`Delete Work "${work.work_code}: ${work.work_name}"?`)) {
       setWorks(prev => prev.filter(w => w._id !== work._id));
       toast.info(`Deleted Work ${work.work_code}`);
@@ -498,6 +522,10 @@ const PmsWbsMasterComponent = () => {
   };
 
   const handleDeleteTask = (task) => {
+    if (isUserObserver) {
+      toast.info("Observer Mode: Action is disabled.");
+      return;
+    }
     if (window.confirm(`Delete Task "${task.task_code}: ${task.task_name}"?`)) {
       setTasks(prev => prev.filter(t => t._id !== task._id));
       toast.info(`Deleted Task ${task.task_code}`);
@@ -588,22 +616,26 @@ const PmsWbsMasterComponent = () => {
       align: "center",
       headerClass: "w-28 min-w-[100px]",
       render: (_, st) => (
-        <div className="flex items-center justify-center gap-1.5">
-          <button
-            onClick={() => handleStartEdit("status", st)}
-            title="Edit Status"
-            className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded cursor-pointer transition-colors"
-          >
-            <FaEdit className="w-3.5 h-3.5" />
-          </button>
-          <button
-            onClick={() => handleDeleteStatus(st)}
-            title="Delete Status"
-            className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded cursor-pointer transition-colors"
-          >
-            <FaTimes className="w-3.5 h-3.5" />
-          </button>
-        </div>
+        !isUserObserver ? (
+          <div className="flex items-center justify-center gap-1.5">
+            <button
+              onClick={() => handleStartEdit("status", st)}
+              title="Edit Status"
+              className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded cursor-pointer transition-colors"
+            >
+              <FaEdit className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => handleDeleteStatus(st)}
+              title="Delete Status"
+              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded cursor-pointer transition-colors"
+            >
+              <FaTimes className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <span className="text-slate-400 text-xs">—</span>
+        )
       )
     },
     status_name: {
@@ -647,7 +679,7 @@ const PmsWbsMasterComponent = () => {
         </div>
       )
     }
-  }), []);
+  }), [isUserObserver]);
 
   const stagesColumnConfig = useMemo(() => ({
     actions: {
@@ -655,15 +687,19 @@ const PmsWbsMasterComponent = () => {
       align: "center",
       headerClass: "w-36 min-w-[140px]",
       render: (_, stage) => (
-        <div className="flex items-center justify-center gap-1.5">
-          <button
-            onClick={() => handleStartEdit("stage", stage)}
-            title="Edit Stage"
-            className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded cursor-pointer transition-colors"
-          >
-            <FaEdit className="w-3.5 h-3.5" />
-          </button>
-        </div>
+        !isUserObserver ? (
+          <div className="flex items-center justify-center gap-1.5">
+            <button
+              onClick={() => handleStartEdit("stage", stage)}
+              title="Edit Stage"
+              className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded cursor-pointer transition-colors"
+            >
+              <FaEdit className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <span className="text-slate-400 text-xs">—</span>
+        )
       )
     },
     stage_code: {
@@ -687,7 +723,7 @@ const PmsWbsMasterComponent = () => {
         </div>
       )
     }
-  }), []);
+  }), [isUserObserver]);
 
   const worksColumnConfig = useMemo(() => ({
     actions: {
@@ -695,15 +731,19 @@ const PmsWbsMasterComponent = () => {
       align: "center",
       headerClass: "w-24 min-w-[80px]",
       render: (_, work) => (
-        <div className="flex items-center justify-center gap-1.5">
-          <button
-            onClick={() => handleStartEdit("work", work)}
-            title="Edit Work"
-            className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded cursor-pointer transition-colors"
-          >
-            <FaEdit className="w-3.5 h-3.5" />
-          </button>
-        </div>
+        !isUserObserver ? (
+          <div className="flex items-center justify-center gap-1.5">
+            <button
+              onClick={() => handleStartEdit("work", work)}
+              title="Edit Work"
+              className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded cursor-pointer transition-colors"
+            >
+              <FaEdit className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <span className="text-slate-400 text-xs">—</span>
+        )
       )
     },
     work_code: {
@@ -722,7 +762,7 @@ const PmsWbsMasterComponent = () => {
         <span className="font-bold text-slate-900">{val}</span>
       )
     }
-  }), []);
+  }), [isUserObserver]);
 
   const tasksColumnConfig = useMemo(() => ({
     actions: {
@@ -730,15 +770,19 @@ const PmsWbsMasterComponent = () => {
       align: "center",
       headerClass: "w-24 min-w-[80px]",
       render: (_, task) => (
-        <div className="flex items-center justify-center gap-1.5">
-          <button
-            onClick={() => handleStartEdit("task", task)}
-            title="Edit Task"
-            className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded cursor-pointer transition-colors"
-          >
-            <FaEdit className="w-3.5 h-3.5" />
-          </button>
-        </div>
+        !isUserObserver ? (
+          <div className="flex items-center justify-center gap-1.5">
+            <button
+              onClick={() => handleStartEdit("task", task)}
+              title="Edit Task"
+              className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded cursor-pointer transition-colors"
+            >
+              <FaEdit className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <span className="text-slate-400 text-xs">—</span>
+        )
       )
     },
     task_code: {
@@ -757,7 +801,7 @@ const PmsWbsMasterComponent = () => {
         <span className="font-bold text-slate-900">{val}</span>
       )
     }
-  }), []);
+  }), [isUserObserver]);
 
   const activeTableConfig = useMemo(() => {
     if (viewMode === "statuses") return statusesColumnConfig;
@@ -926,45 +970,47 @@ const PmsWbsMasterComponent = () => {
             </button>
           </div>
 
-          {/* Right Action: Add button corresponding to active view */}
-          <div className="flex items-center gap-2 self-end sm:self-auto">
-            {viewMode === "statuses" && (
-              <button
-                onClick={() => handleOpenAddModal("status")}
-                className="px-3.5 py-1.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-none text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
-              >
-                <FaPlus className="w-3 h-3" />
-                <span>Add Status</span>
-              </button>
-            )}
-            {viewMode === "stages" && (
-              <button
-                onClick={() => handleOpenAddModal("stage")}
-                className="px-3.5 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-none text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
-              >
-                <FaPlus className="w-3 h-3" />
-                <span>Add Stage</span>
-              </button>
-            )}
-            {viewMode === "works" && (
-              <button
-                onClick={() => handleOpenAddModal("work")}
-                className="px-3.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-none text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
-              >
-                <FaPlus className="w-3 h-3" />
-                <span>Add Work</span>
-              </button>
-            )}
-            {viewMode === "tasks" && (
-              <button
-                onClick={() => handleOpenAddModal("task")}
-                className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-none text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
-              >
-                <FaPlus className="w-3 h-3" />
-                <span>Add Task</span>
-              </button>
-            )}
-          </div>
+          {/* Right Action: Add button corresponding to active view (Hidden for Observer) */}
+          {!isUserObserver && (
+            <div className="flex items-center gap-2 self-end sm:self-auto">
+              {viewMode === "statuses" && (
+                <button
+                  onClick={() => handleOpenAddModal("status")}
+                  className="px-3.5 py-1.5 bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-white rounded-none text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                >
+                  <FaPlus className="w-3 h-3" />
+                  <span>Add Status</span>
+                </button>
+              )}
+              {viewMode === "stages" && (
+                <button
+                  onClick={() => handleOpenAddModal("stage")}
+                  className="px-3.5 py-1.5 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-none text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                >
+                  <FaPlus className="w-3 h-3" />
+                  <span>Add Stage</span>
+                </button>
+              )}
+              {viewMode === "works" && (
+                <button
+                  onClick={() => handleOpenAddModal("work")}
+                  className="px-3.5 py-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white rounded-none text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                >
+                  <FaPlus className="w-3 h-3" />
+                  <span>Add Work</span>
+                </button>
+              )}
+              {viewMode === "tasks" && (
+                <button
+                  onClick={() => handleOpenAddModal("task")}
+                  className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-none text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                >
+                  <FaPlus className="w-3 h-3" />
+                  <span>Add Task</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Filter and Search Bar */}

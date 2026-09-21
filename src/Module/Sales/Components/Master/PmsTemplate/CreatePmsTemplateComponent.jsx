@@ -28,6 +28,7 @@ export const PMS_MASTER_STAGES_KEY = "pms_master_stages_data";
 export const PMS_MASTER_WORKS_KEY = "pms_master_works_data";
 export const PMS_MASTER_TASKS_KEY = "pms_master_tasks_data";
 import ReactSelectMulti from "./ReactSelectMulti";
+import { useAuth } from "../../../../../context/AuthContext";
 import ExecutionResourceFieldData from "./ExecutionResourceFieldData";
 import Loader from "../../../../../Common/Components/Loader";
 
@@ -198,6 +199,9 @@ export const CreatePmsTemplateComponent = () => {
   const { id } = useParams();
   const [searchParams] = useSearchParams();
   const isEdit = Boolean(id);
+  const { role, isObserver, user } = useAuth();
+  const currentRole = role || user?.role || localStorage.getItem("role") || "";
+  const isUserObserver = isObserver || String(currentRole).toLowerCase() === "observer";
 
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(false);
@@ -1622,6 +1626,11 @@ export const CreatePmsTemplateComponent = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (isUserObserver) {
+      toast.info("Observer Mode: Action is disabled.");
+      return;
+    }
+
     if (!validateForm()) {
       return;
     }
@@ -2911,7 +2920,12 @@ export const CreatePmsTemplateComponent = () => {
       <div className="flex items-center justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
         <button
           type="button"
+          disabled={isUserObserver}
           onClick={() => {
+            if (isUserObserver) {
+              toast.info("Observer Mode: Action is disabled.");
+              return;
+            }
             if (window.confirm("Reset this form?")) {
               setFormData({
                 id: "TSK-" + Math.floor(100 + Math.random() * 900),
@@ -2939,7 +2953,12 @@ export const CreatePmsTemplateComponent = () => {
               });
             }
           }}
-          className="px-4 py-2.5 border border-slate-200 rounded-lg text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors cursor-pointer flex items-center gap-1.5"
+          className={`px-4 py-2.5 border rounded-lg text-sm font-semibold transition-colors flex items-center gap-1.5 ${
+            isUserObserver
+              ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed"
+              : "border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer"
+          }`}
+          title={isUserObserver ? "Disabled for Observer" : "Reset"}
         >
           <FaRedo className="w-3 h-3" />
           <span>Reset</span>
@@ -2953,8 +2972,13 @@ export const CreatePmsTemplateComponent = () => {
           </button>
           <button
             type="submit"
-            disabled={loading || fetching}
-            className="px-6 py-2.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold rounded-lg text-sm shadow-md shadow-indigo-600/20 transition-all cursor-pointer flex items-center gap-2 disabled:opacity-50"
+            disabled={loading || fetching || isUserObserver}
+            className={`px-6 py-2.5 rounded-lg text-sm font-bold shadow-md transition-all flex items-center gap-2 ${
+              isUserObserver
+                ? "bg-slate-200 text-slate-400 cursor-not-allowed shadow-none"
+                : "bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:from-blue-500 hover:to-indigo-500 text-white shadow-indigo-600/20 cursor-pointer disabled:opacity-50"
+            }`}
+            title={isUserObserver ? "Disabled for Observer (View Only)" : isEdit ? "Update PMS Task" : "Save PMS Task"}
           >
             {loading ? (
               <>
