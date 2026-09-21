@@ -30,18 +30,22 @@ const SalesHeader = ({
   const userRoleDisplay = role || user?.role || "";
 
   // Handle Logout with Toast & Context Cleanup
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setIsProfileOpen(false);
 
-    logout();
+    try {
+      await logout();
+    } catch (e) {
+      console.error("Logout error:", e);
+    }
     
     toast.info("Logged out successfully! See you soon 👋", {
       position: "top-right",
-      autoClose: 2500,
+      autoClose: 2000,
     });
 
     // Navigate to sales login page
-    navigate("/sales/login");
+    navigate("/sales/login", { replace: true });
     
     // Call the onLogout callback if provided
     if (onLogout) onLogout();

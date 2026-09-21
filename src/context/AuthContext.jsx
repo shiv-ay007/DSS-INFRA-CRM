@@ -21,9 +21,20 @@ export const AuthProvider = ({ children }) => {
         const res = await getCurrentUserApi();
         if (isMounted && res && res.success && res.data) {
           setUser(res.data);
+        } else if (isMounted) {
+          setUser(null);
+          localStorage.removeItem("dss_user");
+          localStorage.removeItem("accessToken");
+          localStorage.removeItem("refreshToken");
         }
       } catch (err) {
         console.warn("Cookie session check failed:", err);
+        if (isMounted) {
+          setUser(null);
+          localStorage.removeItem("dss_user");
+          localStorage.removeItem("accessToken");
+          localStorage.removeItem("refreshToken");
+        }
       } finally {
         if (isMounted) {
           setLoading(false);
@@ -44,8 +55,17 @@ export const AuthProvider = ({ children }) => {
   };
 
   // Login handler
-  const login = (userData) => {
+  const login = (userData, accessToken, refreshToken) => {
     setUser(userData);
+    if (userData) {
+      localStorage.setItem("dss_user", JSON.stringify(userData));
+    }
+    if (accessToken) {
+      localStorage.setItem("accessToken", accessToken);
+    }
+    if (refreshToken) {
+      localStorage.setItem("refreshToken", refreshToken);
+    }
   };
 
   // Logout handler: calls backend logout to clear cookies & clears state
@@ -54,11 +74,13 @@ export const AuthProvider = ({ children }) => {
       await logoutApi();
     } catch (e) {
       console.warn("Backend logout error:", e);
+    } finally {
+      setUser(null);
+      localStorage.removeItem("dss_user");
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("refreshToken");
+      sessionStorage.clear();
     }
-    setUser(null);
-    localStorage.removeItem("dss_user");
-    localStorage.removeItem("accessToken");
-    localStorage.removeItem("refreshToken");
   };
 
   return (

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { FaUser, FaLock, FaArrowLeft, FaSignInAlt, FaEye, FaEyeSlash } from "react-icons/fa";
 import { toast } from "react-toastify";
@@ -7,7 +7,13 @@ import { useAuth } from "../../../context/AuthContext";
 
 const Login = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, user } = useAuth();
+
+  useEffect(() => {
+    if (user) {
+      navigate("/sales/dashboard", { replace: true });
+    }
+  }, [user, navigate]);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
