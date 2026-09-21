@@ -10,7 +10,7 @@ export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   (isLocal
     ? "http://localhost:8000/api/v1"
-    : "https://dss-infra-crm.onrender.com/api/v1");
+    : "https://api.dssinfra.in/api/v1");
 
 /**
  * Returns dynamic authorization and content-type headers.

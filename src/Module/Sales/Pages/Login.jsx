@@ -14,6 +14,7 @@ const Login = () => {
       navigate("/sales/dashboard", { replace: true });
     }
   }, [user, navigate]);
+
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -35,7 +36,6 @@ const Login = () => {
     try {
       const res = await loginApi(formData);
       if (res && res.success && res.data) {
-        // Save to AuthContext & localStorage (Zero extra API calls needed)
         login(res.data.user, res.data.accessToken, res.data.refreshToken);
 
         toast.success(res.message || `Login Successful! Welcome ${res.data.user?.name || ""}`, {
@@ -75,7 +75,7 @@ const Login = () => {
         </Link>
       </div>
 
-      <div 
+      <div
         style={{ backgroundColor: '#282727' }}
         className="w-full max-w-md border border-neutral-700/80 rounded-2xl shadow-2xl p-8 space-y-6"
       >
@@ -123,14 +123,24 @@ const Login = () => {
                 <FaLock className="w-4 h-4" />
               </span>
               <input
-                type="password"
+                type={showPassword ? "text" : "password"}
                 name="password"
                 required
                 placeholder="••••••••"
                 value={formData.password}
                 onChange={handleChange}
-                className="w-full pl-10 pr-4 py-2.5 bg-[#1f1e1e] border border-neutral-700 rounded-xl text-white placeholder-neutral-500 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 text-sm transition-all font-medium"
+                className="w-full pl-10 pr-11 py-2.5 bg-[#1f1e1e] border border-neutral-700 rounded-xl text-white placeholder-neutral-500 focus:outline-none focus:border-orange-500 focus:ring-1 focus:ring-orange-500 text-sm transition-all font-medium"
               />
+              {/* Show / Hide Password Toggle */}
+              <button
+                type="button"
+                onClick={() => setShowPassword((prev) => !prev)}
+                className="absolute inset-y-0 right-0 flex items-center pr-3.5 text-neutral-400 hover:text-orange-400 transition-colors cursor-pointer focus:outline-none"
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                tabIndex={-1}
+              >
+                {showPassword ? <FaEyeSlash className="w-4 h-4" /> : <FaEye className="w-4 h-4" />}
+              </button>
             </div>
           </div>
 
