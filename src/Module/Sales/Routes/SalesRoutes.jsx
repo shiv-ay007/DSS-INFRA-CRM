@@ -41,6 +41,7 @@ const SalesRoutes = () => {
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="leads/add" element={<AddLead />} />
+          <Route path="leads/edit/:id" element={<AddLead />} />
           <Route path="leads/total" element={<TotalLeads />} />
           <Route path="leads/lost" element={<Loss />} />
           <Route path="leads/all" element={<LeadManagement />} />

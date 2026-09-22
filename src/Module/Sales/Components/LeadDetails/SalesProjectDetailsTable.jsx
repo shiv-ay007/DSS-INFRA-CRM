@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useNavigate } from "react-router-dom";
 import {
   FaBuilding,
@@ -14,7 +15,8 @@ import {
   FaPhoneAlt,
   FaEnvelope,
   FaRupeeSign,
-  FaLayerGroup
+  FaLayerGroup,
+  FaWhatsapp
 } from "react-icons/fa";
 import { useAuth } from "../../../../context/AuthContext";
 
@@ -28,6 +30,18 @@ const SalesProjectDetailsTable = ({ lead, projects = [], onAddProjectClick }) =>
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
 
   const targetId = lead?._id || lead?.id || lead?.leadId;
+
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        setIsViewModalOpen(false);
+      }
+    };
+    if (isViewModalOpen) {
+      window.addEventListener("keydown", handleKeyDown);
+    }
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isViewModalOpen]);
 
   const handleOpenViewModal = (project) => {
     setSelectedProject(project);
@@ -313,121 +327,202 @@ const SalesProjectDetailsTable = ({ lead, projects = [], onAddProjectClick }) =>
       </div>
 
       {/* ──────────────────────────────────────────────────────────────────
-          MODAL: VIEW FULL PROJECT DETAILS
+          MODAL: VIEW FULL PROJECT DETAILS (PORTAL)
       ────────────────────────────────────────────────────────────────── */}
-      {isViewModalOpen && selectedProject && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-slate-200 rounded-2xl max-w-2xl w-full p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150 max-h-[90vh] overflow-y-auto">
+      {isViewModalOpen && selectedProject && createPortal(
+        <div
+          className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200"
+          onClick={() => setIsViewModalOpen(false)}
+        >
+          <div
+            className="bg-white border border-slate-200 rounded-3xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto animate-in zoom-in-95 duration-150"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* MODAL HEADER */}
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center font-bold">
+            <div className="flex items-center justify-between pb-3.5 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-100 flex items-center justify-center font-bold text-base shadow-2xs">
                   <FaBuilding />
                 </div>
                 <div>
-                  <h3 className="text-base font-extrabold text-slate-900">
-                    Project Details: {selectedProject.clientName}
-                  </h3>
-                  <span className="text-xs font-mono font-bold text-indigo-600">
-                    ID: {selectedProject.leadId || "--"}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base sm:text-lg font-black text-slate-900 tracking-tight">
+                      {selectedProject.projectName || selectedProject.clientName || "Project Details"}
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                      ID: {typeof selectedProject.leadId === "object"
+                        ? (selectedProject.leadId?.leadId || selectedProject.leadId?._id || targetId || "--")
+                        : (selectedProject.leadId || targetId || "--")}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 font-medium mt-0.5">
+                    Client: <span className="font-bold text-slate-800">{selectedProject.clientName || "--"}</span>
+                    {selectedProject.companyName && (
+                      <span> • Company: <span className="font-semibold text-slate-700">{selectedProject.companyName}</span></span>
+                    )}
+                  </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setIsViewModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center cursor-pointer transition-colors"
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-700 flex items-center justify-center cursor-pointer transition-colors shadow-2xs"
+                title="Close modal"
               >
                 <FaTimes className="text-xs" />
               </button>
             </div>
 
+            {/* CONTACT QUICK BAR */}
+            <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100 flex flex-wrap items-center gap-3 text-xs">
+              {selectedProject.phoneNumber && (
+                <div className="flex items-center gap-1.5 text-slate-700 font-medium">
+                  <FaPhoneAlt className="text-[11px] text-blue-600" />
+                  <a href={`tel:${selectedProject.phoneNumber}`} className="font-mono font-bold text-blue-600 hover:underline">
+                    {selectedProject.phoneNumber}
+                  </a>
+                </div>
+              )}
+              {selectedProject.alternateNumber && (
+                <div className="flex items-center gap-1.5 text-slate-600 font-medium">
+                  <span className="text-[10px] text-slate-400 font-bold uppercase">Alt:</span>
+                  <a href={`tel:${selectedProject.alternateNumber}`} className="font-mono font-semibold text-slate-700 hover:underline">
+                    {selectedProject.alternateNumber}
+                  </a>
+                </div>
+              )}
+              {selectedProject.whatsappNumber && (
+                <div className="flex items-center gap-1.5 text-slate-700 font-medium">
+                  <FaWhatsapp className="text-xs text-emerald-600" />
+                  <span className="font-mono font-semibold text-slate-700">{selectedProject.whatsappNumber}</span>
+                </div>
+              )}
+              {selectedProject.emailAddress && (
+                <div className="flex items-center gap-1.5 text-slate-700 font-medium">
+                  <FaEnvelope className="text-[11px] text-purple-600" />
+                  <a href={`mailto:${selectedProject.emailAddress}`} className="text-purple-700 hover:underline">
+                    {selectedProject.emailAddress}
+                  </a>
+                </div>
+              )}
+            </div>
+
             {/* DETAILS GRID */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 text-xs">
-              <div className="p-3 rounded-xl bg-indigo-50/60 border border-indigo-100">
-                <span className="text-indigo-700 font-bold block mb-0.5">Work Type</span>
-                <span className="font-bold text-indigo-950 text-sm">
-                  {Array.isArray(selectedProject.workType) ? selectedProject.workType.join(", ") : (selectedProject.workType || "--")}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="p-3 rounded-2xl bg-indigo-50/70 border border-indigo-100/80">
+                <span className="text-indigo-700 font-bold block mb-1">Work Type & Category</span>
+                <span className="font-extrabold text-indigo-950 text-xs sm:text-sm block">
+                  {Array.isArray(selectedProject.workType)
+                    ? selectedProject.workType.join(", ")
+                    : (selectedProject.workType || "--")}
+                </span>
+                <span className="text-[11px] font-semibold text-indigo-600 mt-0.5 block">
+                  Category: {selectedProject.workCategory || selectedProject.businessType || "Design"}
                 </span>
               </div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                <span className="text-slate-400 font-bold block mb-0.5">Company Name</span>
-                <span className="font-bold text-slate-900 text-sm">{selectedProject.companyName || "--"}</span>
-              </div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                <span className="text-slate-400 font-bold block mb-0.5">Business Type</span>
-                <span className="font-bold text-slate-900 text-sm">{selectedProject.businessType || "--"}</span>
-              </div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                <span className="text-slate-400 font-bold block mb-0.5">Client Designation</span>
-                <span className="font-bold text-slate-900 text-sm">{selectedProject.clientDesignation || "--"}</span>
-              </div>
-              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200">
-                <span className="text-emerald-800 font-bold block mb-0.5">Expected Business Value</span>
-                <span className="font-extrabold text-emerald-700 text-base font-mono">
-                  ₹{Number(selectedProject.expectedBusiness || 0).toLocaleString("en-IN")}
+
+              <div className="p-3 rounded-2xl bg-emerald-50/70 border border-emerald-200">
+                <span className="text-emerald-800 font-bold block mb-1">Expected Business Value</span>
+                <span className="font-extrabold text-emerald-700 text-base sm:text-lg font-mono">
+                  ₹{Number(selectedProject.expectedBusiness || selectedProject.amount || 0).toLocaleString("en-IN")}
+                </span>
+                <span className="text-[11px] font-semibold text-emerald-600 block mt-0.5">
+                  Job Type: {selectedProject.jobType || "NEW"}
                 </span>
               </div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                <span className="text-slate-400 font-bold block mb-0.5">Priority & Job Type</span>
-                <span className="font-bold text-slate-900 text-sm uppercase">
-                  {selectedProject.priority || "High"} • {selectedProject.jobType || "NEW"}
+
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                <span className="text-slate-400 font-bold block mb-1">Company & Designation</span>
+                <span className="font-bold text-slate-900 text-xs sm:text-sm block">
+                  {selectedProject.companyName || "--"}
+                </span>
+                <span className="text-[11px] text-slate-500 font-medium mt-0.5 block">
+                  {selectedProject.clientDesignation || "--"}
                 </span>
               </div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                <span className="text-slate-400 font-bold block mb-0.5">Assigned Executive</span>
-                <span className="font-bold text-slate-900 text-sm">{selectedProject.assignedTo || "Admin"}</span>
+
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                <span className="text-slate-400 font-bold block mb-1">Priority & Rating</span>
+                <div className="flex items-center gap-2 mt-0.5">
+                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
+                    String(selectedProject.priority).toLowerCase() === "high" || String(selectedProject.priority).toLowerCase() === "hot"
+                      ? "bg-rose-50 text-rose-700 border-rose-200"
+                      : String(selectedProject.priority).toLowerCase() === "medium" || String(selectedProject.priority).toLowerCase() === "warm"
+                      ? "bg-amber-50 text-amber-700 border-amber-200"
+                      : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                  }`}>
+                    {String(selectedProject.priority).toUpperCase()}
+                  </span>
+                  <span className="font-extrabold text-amber-600 text-xs flex items-center gap-1 font-mono">
+                    <FaStar className="text-[11px]" /> {selectedProject.clientRating || 4.5} / 5
+                  </span>
+                </div>
               </div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                <span className="text-slate-400 font-bold block mb-0.5">Next Concern Person</span>
-                <span className="font-bold text-slate-900 text-sm">
+
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                <span className="text-slate-400 font-bold block mb-1">Assigned Executive</span>
+                <span className="font-bold text-slate-900 text-xs sm:text-sm block">
+                  {selectedProject.assignedTo || "Admin"}
+                </span>
+              </div>
+
+              <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                <span className="text-slate-400 font-bold block mb-1">Next Concern Person</span>
+                <span className="font-bold text-slate-900 text-xs sm:text-sm block">
                   {selectedProject.nextPersonName
                     ? `${selectedProject.nextPersonName} ${selectedProject.designation ? `(${selectedProject.designation})` : ""}`
                     : "--"}
                 </span>
               </div>
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-                <span className="text-slate-400 font-bold block mb-0.5">Client Rating</span>
-                <span className="font-extrabold text-amber-600 text-sm flex items-center gap-1">
-                  <FaStar /> {selectedProject.clientRating || 4.5} / 5
-                </span>
-              </div>
             </div>
 
             {/* LOCATION */}
-            {(selectedProject.address || selectedProject.city) && (
-              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
-                <span className="font-bold text-slate-700 block mb-0.5">Location / Address:</span>
-                <span className="text-slate-600 font-medium">
+            {(selectedProject.address || selectedProject.city || selectedProject.state || selectedProject.pincode) && (
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 text-xs">
+                <div className="flex items-center gap-1.5 font-bold text-slate-700 mb-1">
+                  <FaMapMarkerAlt className="text-rose-500" />
+                  <span>Site Address & Location</span>
+                </div>
+                <p className="text-slate-700 font-medium">
                   {[selectedProject.address, selectedProject.city, selectedProject.state, selectedProject.pincode]
                     .filter(Boolean)
                     .join(", ")}
-                </span>
+                </p>
               </div>
             )}
 
             {/* REQUIREMENT */}
             {selectedProject.requirement && (
-              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
-                <span className="font-bold text-slate-700 block mb-1">Requirement Details:</span>
-                <p className="text-slate-800 font-medium whitespace-pre-line">{selectedProject.requirement}</p>
+              <div className="p-3.5 rounded-2xl bg-slate-50 border border-slate-100 text-xs">
+                <div className="flex items-center gap-1.5 font-bold text-slate-700 mb-1">
+                  <FaClipboardList className="text-indigo-500" />
+                  <span>Requirement Details</span>
+                </div>
+                <p className="text-slate-800 font-medium whitespace-pre-line leading-relaxed">
+                  {selectedProject.requirement}
+                </p>
               </div>
             )}
 
             {/* REMARKS */}
             {selectedProject.transferRemark && (
-              <div className="p-3.5 rounded-xl bg-amber-50/70 border border-amber-200 text-xs">
-                <span className="font-bold text-amber-900 block mb-1">Sales Management Remarks / Notes:</span>
-                <p className="text-slate-800 font-medium whitespace-pre-line">{selectedProject.transferRemark}</p>
+              <div className="p-3.5 rounded-2xl bg-amber-50/70 border border-amber-200/90 text-xs">
+                <div className="flex items-center gap-1.5 font-bold text-amber-900 mb-1">
+                  <FaCommentDots className="text-amber-600" />
+                  <span>Sales Management Remarks / Transfer Notes</span>
+                </div>
+                <p className="text-slate-800 font-medium whitespace-pre-line leading-relaxed">
+                  {selectedProject.transferRemark}
+                </p>
               </div>
             )}
 
             {/* MODAL FOOTER */}
-            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+            <div className="flex items-center justify-end gap-2.5 pt-3.5 border-t border-slate-100">
               <button
                 type="button"
                 onClick={() => setIsViewModalOpen(false)}
-                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold cursor-pointer"
+                className="px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 text-xs font-bold cursor-pointer transition-colors shadow-2xs"
               >
                 Close
               </button>
@@ -438,7 +533,7 @@ const SalesProjectDetailsTable = ({ lead, projects = [], onAddProjectClick }) =>
                     setIsViewModalOpen(false);
                     handleEditProject(selectedProject);
                   }}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs cursor-pointer"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-bold shadow-xs cursor-pointer transition-all"
                 >
                   <FaEdit className="text-xs" />
                   <span>Edit This Project</span>
@@ -446,7 +541,8 @@ const SalesProjectDetailsTable = ({ lead, projects = [], onAddProjectClick }) =>
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

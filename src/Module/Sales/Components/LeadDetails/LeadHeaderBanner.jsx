@@ -34,6 +34,17 @@ const LeadHeaderBanner = ({
     });
   };
 
+  const handleEditLead = () => {
+    if (isUserObserver) {
+      toast.info("Observer Mode: Editing is disabled.");
+      return;
+    }
+    const targetId = lead?.leadId || lead?._id || lead?.id;
+    navigate(`/sales/leads/edit/${targetId}`, {
+      state: { lead, from: "leadDetails" }
+    });
+  };
+
   return (
     <div className="w-full">
       <PageHeader
@@ -64,7 +75,7 @@ const LeadHeaderBanner = ({
             {allowEdit && (
               <button
                 type="button"
-                onClick={onOpenEditModal}
+                onClick={handleEditLead}
                 className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs sm:text-sm font-extrabold shadow-xs hover:shadow-md transition-all cursor-pointer"
               >
                 <FaEdit className="w-3.5 h-3.5" />

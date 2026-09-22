@@ -49,18 +49,20 @@ const CustomMultiValue = (props) => {
       <span className="truncate min-w-0 flex-1" title={data.label}>
         {data.label}
       </span>
-      <button
-        type="button"
-        {...removeProps}
-        className="w-4 h-4 rounded-full flex items-center justify-center shrink-0 bg-black/5 hover:bg-red-500 hover:text-white text-slate-500 transition-colors cursor-pointer"
-        title={`Remove ${data.label}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          removeProps?.onClick?.(e);
-        }}
-      >
-        <FaTimes className="w-2 h-2" />
-      </button>
+      {!data.isFixed && (
+        <button
+          type="button"
+          {...removeProps}
+          className="w-4 h-4 rounded-full flex items-center justify-center shrink-0 bg-black/5 hover:bg-red-500 hover:text-white text-slate-500 transition-colors cursor-pointer"
+          title={`Remove ${data.label}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            removeProps?.onClick?.(e);
+          }}
+        >
+          <FaTimes className="w-2 h-2" />
+        </button>
+      )}
     </div>
   );
 };
@@ -147,11 +149,16 @@ export const ReactSelectMulti = ({
   className = "",
   hasError = false
 }) => {
-  // Normalize options to [{ value, label }]
+  // Normalize options to [{ value, label, isDisabled, isFixed }]
   const normalizedOptions = useMemo(() => {
     return options.map((opt) => {
       if (typeof opt === "object" && opt !== null) {
-        return { value: opt.value ?? opt.id, label: opt.label ?? opt.name ?? String(opt.value) };
+        return {
+          value: opt.value ?? opt.id,
+          label: opt.label ?? opt.name ?? String(opt.value),
+          isDisabled: !!opt.isDisabled,
+          isFixed: !!opt.isFixed
+        };
       }
       return { value: String(opt), label: String(opt) };
     });
@@ -164,8 +171,10 @@ export const ReactSelectMulti = ({
   }, [normalizedOptions, value]);
 
   const handleChange = (selected) => {
-    const newValues = (selected || []).map((s) => s.value);
-    onChange?.(newValues);
+    const fixedValues = normalizedOptions.filter((opt) => opt.isFixed).map((opt) => opt.value);
+    const selectedValues = (selected || []).map((s) => s.value);
+    const merged = Array.from(new Set([...fixedValues, ...selectedValues]));
+    onChange?.(merged);
   };
 
   const handleSelectAll = () => {
@@ -173,7 +182,8 @@ export const ReactSelectMulti = ({
   };
 
   const handleClearAll = () => {
-    onChange?.([]);
+    const fixedValues = normalizedOptions.filter((opt) => opt.isFixed).map((opt) => opt.value);
+    onChange?.(fixedValues);
   };
 
   const allSelected = normalizedOptions.length > 0 && selectedOptions.length === normalizedOptions.length;
@@ -185,7 +195,8 @@ export const ReactSelectMulti = ({
         closeMenuOnSelect={false}
         hideSelectedOptions={false}
         isSearchable
-        isClearable={true}
+        isClearable={!normalizedOptions.some((opt) => opt.isFixed)}
+        isOptionDisabled={(opt) => !!opt.isDisabled}
         isDisabled={isDisabled}
         options={normalizedOptions}
         value={selectedOptions}

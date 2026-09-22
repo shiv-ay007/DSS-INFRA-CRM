@@ -45,6 +45,7 @@ const ActiveProjectExecutionComponent = () => {
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [savingAll, setSavingAll] = useState(false);
+  const [matchedTemplate, setMatchedTemplate] = useState(null);
 
   // Status options loaded from matched PMS template / master
   const [pmsStatusOptions, setPmsStatusOptions] = useState(DEFAULT_PROJECT_STATUSES);
@@ -194,16 +195,28 @@ const ActiveProjectExecutionComponent = () => {
         if (process.env.NODE_ENV !== "production") console.warn(syncErr);
       }
 
+      setMatchedTemplate(directTmpl || null);
       setProject(data);
       const stgs = data.stages || [];
       setStagesData(stgs);
 
-      // Restore form tracking states
-      const savedCompletedStages = Array.isArray(data.completedStageIds)
-        ? data.completedStageIds
-        : stgs.filter((s) => s.status === "Completed").map((s) => s.stageId);
+      // Check if backend pms_templates has executionTracking records
+      const trackingList = Array.isArray(directTmpl?.executionTracking)
+        ? directTmpl.executionTracking
+        : [];
+      const latestTracking =
+        trackingList.length > 0 ? trackingList[trackingList.length - 1] : null;
+
+      // Restore form tracking states (prefer backend executionTracking from pms_templates)
+      const savedCompletedStages =
+        Array.isArray(latestTracking?.completedStageIds)
+          ? latestTracking.completedStageIds
+          : Array.isArray(data.completedStageIds)
+          ? data.completedStageIds
+          : stgs.filter((s) => s.status === "Completed").map((s) => s.stageId);
 
       const savedRunningStage =
+        latestTracking?.runningStageId ||
         data.runningStageId ||
         stgs.find((s) => s.status === "In Progress")?.stageId ||
         stgs.find((s) => !savedCompletedStages.includes(s.stageId))?.stageId ||
@@ -213,11 +226,15 @@ const ActiveProjectExecutionComponent = () => {
       const currentStageObj = stgs.find((s) => s.stageId === savedRunningStage);
       const currentStageWorks = currentStageObj?.works || [];
 
-      const savedCompletedWorks = Array.isArray(data.completedWorkIds)
-        ? data.completedWorkIds
-        : currentStageWorks.filter((w) => w.status === "Completed").map((w) => w.workId);
+      const savedCompletedWorks =
+        Array.isArray(latestTracking?.completedWorkIds)
+          ? latestTracking.completedWorkIds
+          : Array.isArray(data.completedWorkIds)
+          ? data.completedWorkIds
+          : currentStageWorks.filter((w) => w.status === "Completed").map((w) => w.workId);
 
       const savedRunningWork =
+        latestTracking?.runningWorkId ||
         data.runningWorkId ||
         currentStageWorks.find((w) => w.status === "In Progress")?.workId ||
         currentStageWorks.find((w) => !savedCompletedWorks.includes(w.workId))?.workId ||
@@ -227,11 +244,15 @@ const ActiveProjectExecutionComponent = () => {
       const currentWorkObj = currentStageWorks.find((w) => w.workId === savedRunningWork);
       const currentWorkTasks = currentWorkObj?.tasks || [];
 
-      const savedCompletedTasks = Array.isArray(data.completedTaskIds)
-        ? data.completedTaskIds
-        : currentWorkTasks.filter((t) => t.status === "Completed").map((t) => t.taskId);
+      const savedCompletedTasks =
+        Array.isArray(latestTracking?.completedTaskIds)
+          ? latestTracking.completedTaskIds
+          : Array.isArray(data.completedTaskIds)
+          ? data.completedTaskIds
+          : currentWorkTasks.filter((t) => t.status === "Completed").map((t) => t.taskId);
 
       const savedRunningTask =
+        latestTracking?.runningTaskId ||
         data.runningTaskId ||
         currentWorkTasks.find((t) => t.status === "In Progress")?.taskId ||
         currentWorkTasks.find((t) => !savedCompletedTasks.includes(t.taskId))?.taskId ||
@@ -239,14 +260,22 @@ const ActiveProjectExecutionComponent = () => {
         "";
 
       setTrackingForm({
-        projectStatus: data.projectStatus || extractedStatuses[0] || "On Track",
+        projectStatus:
+          latestTracking?.projectStatus ||
+          data.projectStatus ||
+          extractedStatuses[0] ||
+          "On Track",
         completedStageIds: savedCompletedStages,
         runningStageId: savedRunningStage,
         completedWorkIds: savedCompletedWorks,
         runningWorkId: savedRunningWork,
         completedTaskIds: savedCompletedTasks,
         runningTaskId: savedRunningTask,
-        finalTrackingRemark: data.finalTrackingRemark || data.overallRemark || ""
+        finalTrackingRemark:
+          latestTracking?.finalTrackingRemark ||
+          data.finalTrackingRemark ||
+          data.overallRemark ||
+          ""
       });
     } catch (e) {
       if (process.env.NODE_ENV !== "production") console.error(e);
@@ -261,30 +290,67 @@ const ActiveProjectExecutionComponent = () => {
   }, [id]);
 
   // ============================================================
-  // CASCADING DERIVED OPTIONS
+  // CASCADING DERIVED OPTIONS & LOCKING COMPLETED ITEMS
   // ============================================================
+  // Stages that are already completed in previous tracking / database
+  const lockedStageIds = useMemo(() => {
+    const locked = new Set();
+    (stagesData || []).forEach((s) => {
+      if (s.status === "Completed") locked.add(s.stageId);
+    });
+    const trackingList = Array.isArray(matchedTemplate?.executionTracking)
+      ? matchedTemplate.executionTracking
+      : [];
+    trackingList.forEach((t) => {
+      (t.completedStageIds || []).forEach((sId) => locked.add(sId));
+    });
+    return Array.from(locked);
+  }, [stagesData, matchedTemplate]);
+
   const stageOptions = useMemo(() => {
+    const lockedSet = new Set(lockedStageIds);
     return stagesData.map((s, idx) => {
       const cleanCode = isObjectId(s.stageId) ? `S${idx + 1}` : s.stageId;
       const cleanName =
         isObjectId(s.stageName) || (s.stageName || "").startsWith("Stage 6a")
           ? `STAGE ${cleanCode}`
           : s.stageName;
+      const isLocked = lockedSet.has(s.stageId);
       return {
         value: s.stageId,
-        label: `${cleanCode} - ${cleanName}`
+        label: isLocked ? `${cleanCode} - ${cleanName} (Completed)` : `${cleanCode} - ${cleanName}`,
+        isDisabled: isLocked,
+        isFixed: isLocked
       };
     });
-  }, [stagesData]);
+  }, [stagesData, lockedStageIds]);
 
   // Selected Running Stage Object
   const selectedRunningStageObj = useMemo(() => {
     return stagesData.find((s) => s.stageId === trackingForm.runningStageId) || null;
   }, [stagesData, trackingForm.runningStageId]);
 
+  // Works that are already completed in previous tracking
+  const lockedWorkIds = useMemo(() => {
+    const locked = new Set();
+    if (selectedRunningStageObj) {
+      (selectedRunningStageObj.works || []).forEach((w) => {
+        if (w.status === "Completed") locked.add(w.workId);
+      });
+    }
+    const trackingList = Array.isArray(matchedTemplate?.executionTracking)
+      ? matchedTemplate.executionTracking
+      : [];
+    trackingList.forEach((t) => {
+      (t.completedWorkIds || []).forEach((wId) => locked.add(wId));
+    });
+    return Array.from(locked);
+  }, [selectedRunningStageObj, matchedTemplate]);
+
   // Works under Running Stage
   const workOptions = useMemo(() => {
     if (!selectedRunningStageObj) return [];
+    const lockedSet = new Set(lockedWorkIds);
     return (selectedRunningStageObj.works || []).map((w, idx) => {
       const cleanCode = isObjectId(w.workId)
         ? `${selectedRunningStageObj.stageId || "S"}-W${idx + 1}`
@@ -293,12 +359,15 @@ const ActiveProjectExecutionComponent = () => {
         isObjectId(w.workName) || (w.workName || "").startsWith("6a")
           ? `Work Package ${cleanCode}`
           : w.workName;
+      const isLocked = lockedSet.has(w.workId);
       return {
         value: w.workId,
-        label: `${cleanCode} - ${cleanName}`
+        label: isLocked ? `${cleanCode} - ${cleanName} (Completed)` : `${cleanCode} - ${cleanName}`,
+        isDisabled: isLocked,
+        isFixed: isLocked
       };
     });
-  }, [selectedRunningStageObj]);
+  }, [selectedRunningStageObj, lockedWorkIds]);
 
   // Selected Running Work Object
   const selectedRunningWorkObj = useMemo(() => {
@@ -309,9 +378,27 @@ const ActiveProjectExecutionComponent = () => {
     );
   }, [selectedRunningStageObj, trackingForm.runningWorkId]);
 
+  // Tasks that are already completed in previous tracking
+  const lockedTaskIds = useMemo(() => {
+    const locked = new Set();
+    if (selectedRunningWorkObj) {
+      (selectedRunningWorkObj.tasks || []).forEach((t) => {
+        if (t.status === "Completed") locked.add(t.taskId);
+      });
+    }
+    const trackingList = Array.isArray(matchedTemplate?.executionTracking)
+      ? matchedTemplate.executionTracking
+      : [];
+    trackingList.forEach((t) => {
+      (t.completedTaskIds || []).forEach((tId) => locked.add(tId));
+    });
+    return Array.from(locked);
+  }, [selectedRunningWorkObj, matchedTemplate]);
+
   // Tasks under Running Work
   const taskOptions = useMemo(() => {
     if (!selectedRunningWorkObj) return [];
+    const lockedSet = new Set(lockedTaskIds);
     return (selectedRunningWorkObj.tasks || []).map((t, idx) => {
       const cleanCode = isObjectId(t.taskId)
         ? `${selectedRunningWorkObj.workId || "W"}-T${idx + 1}`
@@ -320,12 +407,15 @@ const ActiveProjectExecutionComponent = () => {
         isObjectId(t.taskName) || (t.taskName || "").startsWith("6a")
           ? `Task ${cleanCode}`
           : t.taskName;
+      const isLocked = lockedSet.has(t.taskId);
       return {
         value: t.taskId,
-        label: `${cleanCode} - ${cleanName}`
+        label: isLocked ? `${cleanCode} - ${cleanName} (Completed)` : `${cleanCode} - ${cleanName}`,
+        isDisabled: isLocked,
+        isFixed: isLocked
       };
     });
-  }, [selectedRunningWorkObj]);
+  }, [selectedRunningWorkObj, lockedTaskIds]);
 
   // ============================================================
   // DERIVED PROGRESS STATS
@@ -430,6 +520,38 @@ const ActiveProjectExecutionComponent = () => {
         };
       });
 
+      // 1. Prepare Backend Tracking Payload (for pms_templates collection)
+      const trackingPayload = {
+        projectStatus: trackingForm.projectStatus,
+        completedStageIds: trackingForm.completedStageIds,
+        runningStageId: trackingForm.runningStageId,
+        completedWorkIds: trackingForm.completedWorkIds,
+        runningWorkId: trackingForm.runningWorkId,
+        completedTaskIds: trackingForm.completedTaskIds,
+        runningTaskId: trackingForm.runningTaskId,
+        finalTrackingRemark: trackingForm.finalTrackingRemark,
+        progressPercent,
+        completedTasksCount,
+        totalTasksCount
+      };
+
+      // 2. Persist to MongoDB pms_templates collection
+      const targetTemplateOrProjectId = matchedTemplate?._id || project?.projectId || id;
+      try {
+        const res = await pmsTemplateService.saveExecutionTracking(
+          targetTemplateOrProjectId,
+          trackingPayload
+        );
+        if (res?.data?.data) {
+          setMatchedTemplate(res.data.data);
+        }
+      } catch (apiErr) {
+        if (process.env.NODE_ENV !== "production") {
+          console.warn("Backend pms_templates save note:", apiErr);
+        }
+      }
+
+      // 3. Keep local cache updated for immediate UI sync
       const updated = activeProjectService.saveFullProject(id, {
         projectStatus: trackingForm.projectStatus,
         overallRemark: trackingForm.finalTrackingRemark,
@@ -680,9 +802,10 @@ const ActiveProjectExecutionComponent = () => {
                 placeholder="Select completed stage(s)..."
                 options={stageOptions}
                 value={trackingForm.completedStageIds}
-                onChange={(vals) =>
-                  setTrackingForm((prev) => ({ ...prev, completedStageIds: vals }))
-                }
+                onChange={(vals) => {
+                  const merged = Array.from(new Set([...lockedStageIds, ...vals]));
+                  setTrackingForm((prev) => ({ ...prev, completedStageIds: merged }));
+                }}
                 themeColor="emerald"
               />
             </div>
@@ -710,7 +833,7 @@ const ActiveProjectExecutionComponent = () => {
               >
                 <option value="">-- Select Running Stage --</option>
                 {stageOptions.map((s) => (
-                  <option key={s.value} value={s.value}>
+                  <option key={s.value} value={s.value} disabled={s.isDisabled}>
                     {s.label}
                   </option>
                 ))}
@@ -734,9 +857,10 @@ const ActiveProjectExecutionComponent = () => {
                 }
                 options={workOptions}
                 value={trackingForm.completedWorkIds}
-                onChange={(vals) =>
-                  setTrackingForm((prev) => ({ ...prev, completedWorkIds: vals }))
-                }
+                onChange={(vals) => {
+                  const merged = Array.from(new Set([...lockedWorkIds, ...vals]));
+                  setTrackingForm((prev) => ({ ...prev, completedWorkIds: merged }));
+                }}
                 themeColor="emerald"
               />
             </div>
@@ -766,7 +890,7 @@ const ActiveProjectExecutionComponent = () => {
                     : "-- Select Running Work --"}
                 </option>
                 {workOptions.map((w) => (
-                  <option key={w.value} value={w.value}>
+                  <option key={w.value} value={w.value} disabled={w.isDisabled}>
                     {w.label}
                   </option>
                 ))}
@@ -790,9 +914,10 @@ const ActiveProjectExecutionComponent = () => {
                 }
                 options={taskOptions}
                 value={trackingForm.completedTaskIds}
-                onChange={(vals) =>
-                  setTrackingForm((prev) => ({ ...prev, completedTaskIds: vals }))
-                }
+                onChange={(vals) => {
+                  const merged = Array.from(new Set([...lockedTaskIds, ...vals]));
+                  setTrackingForm((prev) => ({ ...prev, completedTaskIds: merged }));
+                }}
                 themeColor="emerald"
               />
             </div>
@@ -816,7 +941,7 @@ const ActiveProjectExecutionComponent = () => {
                     : "-- Select Running Task --"}
                 </option>
                 {taskOptions.map((t) => (
-                  <option key={t.value} value={t.value}>
+                  <option key={t.value} value={t.value} disabled={t.isDisabled}>
                     {t.label}
                   </option>
                 ))}

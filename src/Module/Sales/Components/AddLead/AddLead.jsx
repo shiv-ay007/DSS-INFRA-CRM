@@ -1,10 +1,10 @@
 import React, { useState, useRef, useMemo, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
-import { createLeadApi, getAllLeadsApi } from "../../services/totalLeads.api";
-import { notifyLeadChange } from "../../../../context/LeadContext";
+import { createLeadApi, getAllLeadsApi, getLeadByIdApi, updateLeadApi } from "../../services/totalLeads.api";
+import { notifyLeadChange, updateLeadInStorage } from "../../../../context/LeadContext";
 import { useAuth } from "../../../../context/AuthContext";
 import {
   leadSourcesList,
@@ -20,6 +20,13 @@ import { FaPlus, FaMicrophone, FaImage, FaVideo, FaFileAudio, FaTimes } from "re
 
 const Addlead = () => {
   const navigate = useNavigate();
+  const { id } = useParams();
+  const location = useLocation();
+  const isEditMode = Boolean(id || location.pathname.includes("/edit"));
+  const passedLead = location.state?.lead || null;
+
+  const [existingLead, setExistingLead] = useState(passedLead);
+  const [loadingExisting, setLoadingExisting] = useState(isEditMode && !passedLead);
   const { role, isObserver } = useAuth();
   const currentRole = role || "Worker";
   const isUserObserver = isObserver || String(currentRole).toLowerCase() === "observer";
@@ -121,6 +128,104 @@ const Addlead = () => {
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [audioChunks, setAudioChunks] = useState([]);
   
+  // Populate form fields when editing an existing lead
+  const populateLeadFields = (lead) => {
+    if (!lead) return;
+    let parsedWorkType = [];
+    if (Array.isArray(lead.workType)) {
+      parsedWorkType = [...lead.workType];
+    } else if (typeof lead.workType === "string" && lead.workType.trim()) {
+      parsedWorkType = lead.workType.split(",").map((s) => s.trim()).filter(Boolean);
+    }
+
+    const existingAtts = Array.isArray(lead.remarkAttachments) && lead.remarkAttachments.length > 0
+      ? lead.remarkAttachments
+      : Array.isArray(lead.remarksFiles) && lead.remarksFiles.length > 0
+      ? lead.remarksFiles.map((f, idx) => ({
+          id: f.id || idx,
+          name: f.name || f.filename || `Attachment-${idx + 1}`,
+          type: f.type || (f.url?.match(/\.(mp4|webm)$/i) ? "video" : f.url?.match(/\.(mp3|wav|ogg)$/i) ? "audio" : "image"),
+          url: f.url || f.fileUrl || (typeof f === "string" ? f : "")
+        }))
+      : [];
+
+    let leadDate = "";
+    if (lead.date) {
+      leadDate = lead.date.includes("T") ? lead.date.split("T")[0] : lead.date;
+    } else if (lead.createdAt) {
+      leadDate = new Date(lead.createdAt).toISOString().split("T")[0];
+    } else {
+      leadDate = getTodayDate();
+    }
+
+    let statusVal = "Warm";
+    const rawSt = (lead.leadStatus || lead.status || "").toUpperCase();
+    if (rawSt.includes("HOT")) statusVal = "Hot";
+    else if (rawSt.includes("COLD")) statusVal = "Cold";
+    else if (rawSt.includes("WARM")) statusVal = "Warm";
+
+    setFormData({
+      date: leadDate,
+      leadMode: lead.leadMode || lead.leadSource || "",
+      leadType: lead.leadType || "FRESH",
+      workCategory: lead.workCategory || "",
+      workType: parsedWorkType,
+      leadStatus: statusVal,
+      clientName: lead.clientName || lead.concernPersonName || "",
+      phoneNumber: lead.phoneNumber || lead.contact || "",
+      alternateNumber: lead.alternateNumber || lead.alternateNo || "",
+      emailAddress: lead.emailAddress || lead.email || "",
+      address: lead.address || lead.siteAddress || "",
+      city: lead.city || "",
+      pincode: lead.pincode || "",
+      state: lead.state || "",
+      expectedBusiness: lead.expectedBusiness || lead.expectedRevenue || "",
+      projectDetail: lead.projectDetail || lead.projectDetails || "",
+      remark: lead.remark || lead.remarks || lead.requirement || "",
+      remarkAttachments: existingAtts,
+      leadSource: lead.leadSource || lead.leadMode || "",
+      channel: lead.channelType || lead.channel || "Sales",
+      jobType: lead.jobType || "NEW",
+      clientType: lead.clientType || "Individual",
+      clientDesignation: lead.clientDesignation || "",
+      leadLabel: lead.leadLabel || lead.priority || "",
+      whatsappNumber: lead.whatsappNumber || lead.phoneNumber || lead.contact || "",
+      googleLocation: lead.googleLocation || "",
+      salesPerson: lead.salesPerson || lead.assignTo || lead.assignedTo || "",
+      requirement: lead.requirement || ""
+    });
+  };
+
+  useEffect(() => {
+    if (!isEditMode) return;
+    if (passedLead) {
+      setExistingLead(passedLead);
+      populateLeadFields(passedLead);
+      return;
+    }
+    if (id) {
+      const fetchLead = async () => {
+        setLoadingExisting(true);
+        try {
+          const res = await getLeadByIdApi(id);
+          if (res && res.success && res.data) {
+            setExistingLead(res.data);
+            populateLeadFields(res.data);
+          } else {
+            toast.error("Lead not found with ID: " + id);
+            navigate("/sales/leads/total");
+          }
+        } catch (err) {
+          console.error("Error fetching lead for edit:", err);
+          toast.error("Failed to load lead details");
+        } finally {
+          setLoadingExisting(false);
+        }
+      };
+      fetchLead();
+    }
+  }, [id, isEditMode]);
+
   // Repeat Client Search State
   const [clientSearchTerm, setClientSearchTerm] = useState("");
   const [isClientDropdownOpen, setIsClientDropdownOpen] = useState(false);
@@ -714,6 +819,78 @@ const Addlead = () => {
         .map((att) => att.file || att.blob || (att instanceof File || att instanceof Blob ? att : null))
         .filter(Boolean);
 
+      // If Edit Mode: Update existing lead
+      if (isEditMode) {
+        const targetId = existingLead?._id || existingLead?.id || existingLead?.leadId || id;
+        const updatePayload = {
+          clientName: formData.clientName.trim(),
+          concernPersonName: formData.clientName.trim(),
+          phoneNumber: formData.phoneNumber.trim(),
+          contact: formData.phoneNumber.trim(),
+          alternateNumber: formData.alternateNumber?.trim() || "",
+          alternateNo: formData.alternateNumber?.trim() || "",
+          emailAddress: formData.emailAddress?.trim().toLowerCase() || "",
+          email: formData.emailAddress?.trim().toLowerCase() || "",
+          leadMode: formData.leadMode,
+          leadSource: formData.leadMode,
+          leadType: formData.leadType,
+          workCategory: formData.workCategory,
+          workType: finalWorkType,
+          leadStatus: formData.leadStatus || "Warm",
+          status: formData.leadStatus || "Warm",
+          leadLabel: (formData.leadStatus || "Warm").toUpperCase(),
+          address: formData.address.trim(),
+          siteAddress: formData.address.trim(),
+          city: formData.city.trim(),
+          state: formData.state.trim(),
+          pincode: formData.pincode.trim(),
+          expectedBusiness: Number(formData.expectedBusiness) || 0,
+          expectedRevenue: Number(formData.expectedBusiness) || 0,
+          projectDetail: formData.projectDetail.trim(),
+          projectDetails: formData.projectDetail.trim(),
+          remark: formData.remark.trim(),
+          remarks: formData.remark.trim(),
+          date: formData.date || today.toISOString().split("T")[0],
+          clientDesignation: formData.clientDesignation || "",
+          clientType: formData.clientType || "Individual",
+          jobType: formData.jobType || "NEW",
+          channelType: formData.channel || "Sales",
+          whatsappNumber: formData.whatsappNumber || formData.phoneNumber,
+          googleLocation: formData.googleLocation || "",
+          remarkAttachments: processedAttachments,
+          attachments: processedAttachments
+        };
+
+        if (formData.salesPerson && /^[0-9a-fA-F]{24}$/.test(formData.salesPerson)) {
+          updatePayload.leadBy = formData.salesPerson;
+        }
+
+        const apiRes = await updateLeadApi(targetId, updatePayload, rawUploadFiles);
+
+        if (!apiRes || apiRes.success === false) {
+          toast.error(apiRes?.message || "Failed to update lead in database.");
+          setIsSubmitting(false);
+          return;
+        }
+
+        const updatedLeadData = apiRes.data || { ...existingLead, ...updatePayload };
+
+        try {
+          updateLeadInStorage(updatedLeadData);
+          notifyLeadChange(updatedLeadData);
+        } catch (e) {}
+
+        toast.success("Lead Updated Successfully! 🎯", {
+          position: "top-right",
+          autoClose: 3000,
+        });
+
+        navigate(`/sales/leads/details/${existingLead?.leadId || targetId}`, {
+          state: { lead: updatedLeadData, from: "totalLeads" }
+        });
+        return;
+      }
+
       // Save lead to backend MongoDB Atlas Database with Cloudinary file upload
       const apiRes = await createLeadApi(newLead, rawUploadFiles);
       if (apiRes && apiRes.success && apiRes.data) {
@@ -736,7 +913,7 @@ const Addlead = () => {
       navigate("/sales/leads/total");
     } catch (err) {
       console.error("Failed to save lead via backend API", err);
-      toast.error("Failed to create lead. Please try again.");
+      toast.error(isEditMode ? "Failed to update lead. Please try again." : "Failed to create lead. Please try again.");
     } finally {
       setIsSubmitting(false);
     }
@@ -744,6 +921,12 @@ const Addlead = () => {
 
   // Reset Form
   const handleReset = () => {
+    if (isEditMode && existingLead) {
+      populateLeadFields(existingLead);
+      setErrors({});
+      setShowUploadOptions(false);
+      return;
+    }
     setFormData(initialFormState);
     setCustomWorkType("");
     setErrors({});
@@ -770,14 +953,34 @@ const Addlead = () => {
     }
   };
 
+  if (loadingExisting) {
+    return (
+      <div className="max-w-7xl mx-auto py-24 text-center text-slate-400 font-sans">
+        <div className="w-8 h-8 border-3 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+        <p className="text-sm font-semibold text-slate-600">Loading lead details for editing...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-7xl mx-auto space-y-4 font-sans pb-12">
       
       {/* TOP HEADER BANNER CARD */}
       <div className="sticky top-0 z-30 bg-[#F8FAFC] pt-1 pb-2">
         <PageHeader
-          title="!! Capture New Lead !!"
+          title={isEditMode ? `Edit Lead Details: ${formData.clientName || existingLead?.leadId || id || ""}` : "!! Capture New Lead !!"}
+          badge={isEditMode ? (existingLead?.leadId || id || "EDIT") : null}
+          badgeColor="bg-blue-100 text-blue-800 border-blue-300 font-mono font-extrabold"
+          description={isEditMode ? "Update complete client credentials, requirements, and assignments in full-page view." : "Register potential client inquiries and project specifications"}
           showBackButton={true}
+          onBackClick={() => {
+            if (isEditMode) {
+              const targetId = existingLead?.leadId || existingLead?._id || id;
+              navigate(targetId ? `/sales/leads/details/${targetId}` : "/sales/leads/total");
+            } else {
+              navigate(-1);
+            }
+          }}
         />
       </div>
 
@@ -1229,6 +1432,19 @@ const Addlead = () => {
 
         {/* ACTION BUTTONS */}
         <div className="pt-3 border-t border-slate-100 flex flex-col-reverse sm:flex-row items-center justify-end gap-2.5">
+          {isEditMode && (
+            <button
+              type="button"
+              onClick={() => {
+                const targetId = existingLead?.leadId || existingLead?._id || id;
+                navigate(targetId ? `/sales/leads/details/${targetId}` : "/sales/leads/total");
+              }}
+              className="w-full sm:w-auto px-4 py-2 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-700 text-xs sm:text-sm font-semibold transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+          )}
+
           <button
             type="button"
             disabled={isUserObserver}
@@ -1240,7 +1456,7 @@ const Addlead = () => {
             }`}
             title={isUserObserver ? "Disabled for Observer" : "Reset Form"}
           >
-            Reset Form
+            {isEditMode ? "Reset Changes" : "Reset Form"}
           </button>
 
           <button
@@ -1251,7 +1467,7 @@ const Addlead = () => {
                 ? "bg-slate-200 text-slate-400 cursor-not-allowed opacity-60"
                 : "bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white cursor-pointer"
             }`}
-            title={isUserObserver ? "Disabled for Observer" : "Submit & Create Lead"}
+            title={isUserObserver ? "Disabled for Observer" : isEditMode ? "Save Changes" : "Submit & Create Lead"}
           >
             {isSubmitting ? (
               <>
@@ -1259,10 +1475,10 @@ const Addlead = () => {
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
                 </svg>
-                <span>Submitting Lead...</span>
+                <span>{isEditMode ? "Saving Changes..." : "Submitting Lead..."}</span>
               </>
             ) : (
-              <span>Submit & Create Lead</span>
+              <span>{isEditMode ? "Save Lead Changes" : "Submit & Create Lead"}</span>
             )}
           </button>
         </div>

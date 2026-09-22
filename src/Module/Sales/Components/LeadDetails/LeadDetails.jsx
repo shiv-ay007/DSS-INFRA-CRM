@@ -5,7 +5,6 @@ import ClientInfoCard from "./ClientInfoCard";
 import LeadOverviewCard from "./LeadOverviewCard";
 import RequirementAddressCard from "./RequirementAddressCard";
 import FollowupTimelineCard from "./FollowupTimelineCard";
-import EditLeadModal from "./EditLeadModal";
 import SalesProjectDetailsTable from "./SalesProjectDetailsTable";
 import { getLeadByIdApi } from "../../services/totalLeads.api";
 import { getAllLeadProjectsApi } from "../../services/leadProject.api";
@@ -54,7 +53,7 @@ const LeadDetails = () => {
 
   const fetchLeadData = useCallback(async () => {
     // 1. Check location state
-    if (location.state?.lead && (!id || String(location.state.lead.id || location.state.lead._id) === String(id))) {
+    if (location.state?.lead && (!id || String(location.state.lead.id || location.state.lead._id || location.state.lead.leadId) === String(id))) {
       setLead(location.state.lead);
       return;
     }
@@ -214,7 +213,12 @@ const LeadDetails = () => {
             allowEdit={allowEdit}
             allowAddProject={allowAddProject}
             onOpenFollowupModal={() => setShowFollowupModal(true)}
-            onOpenEditModal={() => setIsEditModalOpen(true)}
+            onOpenEditModal={() => {
+              const targetId = lead?.leadId || lead?._id || lead?.id || id;
+              navigate(`/sales/leads/edit/${targetId}`, {
+                state: { lead, from: "leadDetails" }
+              });
+            }}
           />
         </div>
 
@@ -244,16 +248,6 @@ const LeadDetails = () => {
                 state: { lead, returnToLeadDetails: true, from: "salesManagement" }
               });
             }}
-          />
-        )}
-
-        {/* EDIT LEAD MODAL (Only when allowed from Total Leads) */}
-        {allowEdit && (
-          <EditLeadModal
-            lead={lead}
-            isOpen={isEditModalOpen}
-            onClose={() => setIsEditModalOpen(false)}
-            onSaveSuccess={(updated) => setLead(updated)}
           />
         )}
       </div>

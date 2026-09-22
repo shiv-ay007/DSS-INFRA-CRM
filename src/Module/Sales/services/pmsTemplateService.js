@@ -1,4 +1,4 @@
-﻿import api from "./axiosInstance";
+import api from "./axiosInstance";
 
 export const pmsTemplateService = {
   // 1. Create a new PMS Template
@@ -24,6 +24,11 @@ export const pmsTemplateService = {
   // 5. Delete PMS Template (soft delete)
   deleteTemplate: async (id) => {
     return await api.delete(`/pms-templates/${id}`);
+  },
+
+  // 6. Save Active Project Execution Tracking (Append to executionTracking array)
+  saveExecutionTracking: async (templateOrProjectId, payload) => {
+    return await api.post(`/pms-templates/${templateOrProjectId}/execution-tracking`, payload);
   }
 };
 
