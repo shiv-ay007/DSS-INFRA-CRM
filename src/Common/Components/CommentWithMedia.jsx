@@ -13,6 +13,7 @@ import {
   FileText,
   Camera,
   RefreshCw,
+  Square,
 } from "lucide-react";
 import WhatsAppAudioPlayer from "./WhatsAppAudioPlayer";
 
@@ -45,9 +46,15 @@ const CommentWithMedia = ({
   const [cameraFacingMode, setCameraFacingMode] = useState("user");
   const [cameraError, setCameraError] = useState("");
   const [cameraLoading, setCameraLoading] = useState(false);
+  const [captureMode, setCaptureMode] = useState("photo"); // "photo" | "video"
+  const [isRecordingVideo, setIsRecordingVideo] = useState(false);
+  const [videoRecordTime, setVideoRecordTime] = useState(0);
 
   const videoRef = useRef(null);
   const cameraStreamRef = useRef(null);
+  const videoRecorderRef = useRef(null);
+  const videoChunksRef = useRef([]);
+  const videoTimerRef = useRef(null);
 
   /* ⏱️ Recording Timer */
   useEffect(() => {
@@ -168,7 +175,7 @@ const CommentWithMedia = ({
   };
 
   /* 📷 Camera Controller Functions */
-  const startCamera = async (facing = cameraFacingMode) => {
+  const startCamera = async (facing = cameraFacingMode, mode = captureMode) => {
     setIsCameraOpen(true);
     setCameraError("");
     setCameraLoading(true);
@@ -180,20 +187,29 @@ const CommentWithMedia = ({
 
     try {
       let stream = null;
+      const needAudio = mode === "video";
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: facing,
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
+            width: { ideal: 1920 },
+            height: { ideal: 1080 },
           },
-          audio: false,
+          audio: needAudio,
         });
       } catch (e) {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: false,
-        });
+        try {
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: needAudio,
+          });
+        } catch (e2) {
+          // If mic permission was denied, fallback to video only
+          stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false,
+          });
+        }
       }
 
       cameraStreamRef.current = stream;
@@ -211,7 +227,22 @@ const CommentWithMedia = ({
     }
   };
 
+  const handleModeChange = (newMode) => {
+    if (isRecordingVideo || newMode === captureMode) return;
+    setCaptureMode(newMode);
+    startCamera(cameraFacingMode, newMode);
+  };
+
   const stopCamera = () => {
+    if (videoTimerRef.current) {
+      clearInterval(videoTimerRef.current);
+      videoTimerRef.current = null;
+    }
+    if (videoRecorderRef.current && videoRecorderRef.current.state !== "inactive") {
+      try {
+        videoRecorderRef.current.stop();
+      } catch (e) {}
+    }
     if (cameraStreamRef.current) {
       cameraStreamRef.current.getTracks().forEach((track) => track.stop());
       cameraStreamRef.current = null;
@@ -220,21 +251,24 @@ const CommentWithMedia = ({
       videoRef.current.srcObject = null;
     }
     setIsCameraOpen(false);
+    setIsRecordingVideo(false);
+    setVideoRecordTime(0);
     setCameraError("");
     setCameraLoading(false);
   };
 
   const switchCamera = () => {
+    if (isRecordingVideo) return;
     const nextFacing = cameraFacingMode === "user" ? "environment" : "user";
     setCameraFacingMode(nextFacing);
-    startCamera(nextFacing);
+    startCamera(nextFacing, captureMode);
   };
 
   const capturePhoto = () => {
     if (!videoRef.current) return;
     const video = videoRef.current;
-    const width = video.videoWidth || 1280;
-    const height = video.videoHeight || 720;
+    const width = video.videoWidth || 1920;
+    const height = video.videoHeight || 1080;
 
     const canvas = document.createElement("canvas");
     canvas.width = width;
@@ -251,7 +285,7 @@ const CommentWithMedia = ({
     canvas.toBlob(
       (blob) => {
         if (!blob) return;
-        const fileName = `Camera-${Date.now()}.jpg`;
+        const fileName = `Camera-Photo-${Date.now()}.jpg`;
         const file = new File([blob], fileName, { type: "image/jpeg" });
 
         const newFile = {
@@ -270,6 +304,79 @@ const CommentWithMedia = ({
     );
   };
 
+  const startVideoRecording = () => {
+    if (!cameraStreamRef.current) return;
+    try {
+      let options = { mimeType: "video/webm;codecs=vp9,opus" };
+      if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+        options = { mimeType: "video/webm;codecs=vp8,opus" };
+        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+          options = { mimeType: "video/webm" };
+          if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+            options = { mimeType: "video/mp4" };
+            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+              options = undefined;
+            }
+          }
+        }
+      }
+
+      const recorder = new MediaRecorder(cameraStreamRef.current, options);
+      videoRecorderRef.current = recorder;
+      videoChunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data && e.data.size > 0) {
+          videoChunksRef.current.push(e.data);
+        }
+      };
+
+      recorder.onstop = () => {
+        const mime = recorder.mimeType || "video/webm";
+        const blob = new Blob(videoChunksRef.current, { type: mime });
+        const ext = mime.includes("mp4") ? "mp4" : "webm";
+        const fileName = `Camera-Video-${Date.now()}.${ext}`;
+        const file = new File([blob], fileName, { type: mime });
+
+        const newFile = {
+          file,
+          preview: URL.createObjectURL(blob),
+          type: "video",
+          name: fileName,
+          size: blob.size,
+        };
+
+        onFilesChange?.([...files, newFile]);
+        stopCamera();
+      };
+
+      recorder.start(1000);
+      setIsRecordingVideo(true);
+      setVideoRecordTime(0);
+
+      if (videoTimerRef.current) clearInterval(videoTimerRef.current);
+      videoTimerRef.current = setInterval(() => {
+        setVideoRecordTime((prev) => prev + 1);
+      }, 1000);
+    } catch (err) {
+      console.error("Failed to start video recording:", err);
+      setCameraError("Failed to record video: " + (err.message || "Camera/Mic error"));
+    }
+  };
+
+  const stopVideoRecording = () => {
+    if (videoTimerRef.current) {
+      clearInterval(videoTimerRef.current);
+      videoTimerRef.current = null;
+    }
+    if (videoRecorderRef.current && videoRecorderRef.current.state !== "inactive") {
+      try {
+        videoRecorderRef.current.stop();
+      } catch (e) {}
+    }
+    setIsRecordingVideo(false);
+  };
+
   useEffect(() => {
     return () => {
       if (mediaRecorderRef.current?.stream) {
@@ -277,6 +384,9 @@ const CommentWithMedia = ({
       }
       if (cameraStreamRef.current) {
         cameraStreamRef.current.getTracks().forEach((t) => t.stop());
+      }
+      if (videoTimerRef.current) {
+        clearInterval(videoTimerRef.current);
       }
       clearInterval(timerRef.current);
     };
@@ -614,10 +724,23 @@ const CommentWithMedia = ({
 
             {/* Top Bar Floating */}
             <div className="relative z-20 flex items-center justify-between p-4 sm:p-6 bg-gradient-to-b from-black/80 via-black/40 to-transparent">
-              <div className="flex items-center gap-2 bg-black/50 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/10 text-xs font-semibold tracking-wide">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>PHOTO</span>
-              </div>
+              {isRecordingVideo ? (
+                <div className="flex items-center gap-2 bg-red-600/90 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-red-400 text-xs font-bold tracking-wider text-white shadow-lg animate-pulse">
+                  <span className="w-2.5 h-2.5 rounded-full bg-white" />
+                  <span>REC {formatTime(videoRecordTime)}</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 bg-black/50 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/10 text-xs font-semibold tracking-wide">
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      captureMode === "video" ? "bg-red-500" : "bg-emerald-500"
+                    } animate-pulse`}
+                  />
+                  <span>
+                    {captureMode === "video" ? "VIDEO MODE" : "PHOTO MODE"}
+                  </span>
+                </div>
+              )}
 
               <button
                 type="button"
@@ -630,41 +753,93 @@ const CommentWithMedia = ({
             </div>
 
             {/* Bottom Bar Floating (Phone Shutter & Controls) */}
-            <div className="relative z-20 pb-8 sm:pb-12 pt-14 px-6 sm:px-12 bg-gradient-to-t from-black/95 via-black/60 to-transparent">
+            <div className="relative z-20 pb-8 sm:pb-12 pt-6 px-6 sm:px-12 bg-gradient-to-t from-black/95 via-black/60 to-transparent">
+              {/* PHOTO / VIDEO Mode Slider */}
+              <div className="flex items-center justify-center gap-6 mb-6">
+                <button
+                  type="button"
+                  disabled={isRecordingVideo}
+                  onClick={() => handleModeChange("photo")}
+                  className={`text-xs font-bold tracking-widest uppercase transition-all px-3.5 py-1 rounded-full cursor-pointer ${
+                    captureMode === "photo"
+                      ? "text-amber-400 bg-white/15 shadow-sm scale-110"
+                      : "text-white/60 hover:text-white"
+                  } disabled:opacity-40`}
+                >
+                  PHOTO
+                </button>
+                <button
+                  type="button"
+                  disabled={isRecordingVideo}
+                  onClick={() => handleModeChange("video")}
+                  className={`text-xs font-bold tracking-widest uppercase transition-all px-3.5 py-1 rounded-full cursor-pointer ${
+                    captureMode === "video"
+                      ? "text-amber-400 bg-white/15 shadow-sm scale-110"
+                      : "text-white/60 hover:text-white"
+                  } disabled:opacity-40`}
+                >
+                  VIDEO
+                </button>
+              </div>
+
               <div className="max-w-md mx-auto flex items-center justify-around">
                 {/* Flip Camera */}
                 <button
                   type="button"
                   onClick={switchCamera}
-                  disabled={cameraLoading || Boolean(cameraError)}
+                  disabled={cameraLoading || Boolean(cameraError) || isRecordingVideo}
                   title="Switch Camera (Front / Rear)"
-                  className="w-13 h-13 rounded-full bg-white/15 hover:bg-white/25 active:scale-90 backdrop-blur-md border border-white/20 flex flex-col items-center justify-center text-white disabled:opacity-40 transition-all cursor-pointer shadow-lg"
+                  className="w-13 h-13 rounded-full bg-white/15 hover:bg-white/25 active:scale-90 backdrop-blur-md border border-white/20 flex flex-col items-center justify-center text-white disabled:opacity-30 disabled:cursor-not-allowed transition-all cursor-pointer shadow-lg"
                 >
                   <RefreshCw className="w-5 h-5" />
                   <span className="text-[9px] font-bold mt-0.5 tracking-wider">FLIP</span>
                 </button>
 
-                {/* Big Phone Camera Shutter Button */}
-                <button
-                  type="button"
-                  onClick={capturePhoto}
-                  disabled={cameraLoading || Boolean(cameraError)}
-                  title="Capture Photo"
-                  className="w-20 h-20 rounded-full border-4 border-white p-1 flex items-center justify-center transition-all active:scale-90 disabled:opacity-40 shadow-2xl cursor-pointer hover:scale-105"
-                >
-                  <div className="w-full h-full rounded-full bg-white hover:bg-slate-100 flex items-center justify-center shadow-inner transition-colors">
-                    <div className="w-13 h-13 rounded-full bg-emerald-500 flex items-center justify-center text-white shadow-md">
-                      <Camera className="w-6 h-6" />
+                {/* Shutter Button (Photo vs Video) */}
+                {captureMode === "photo" ? (
+                  /* Big Phone Camera Shutter Button for PHOTO */
+                  <button
+                    type="button"
+                    onClick={capturePhoto}
+                    disabled={cameraLoading || Boolean(cameraError)}
+                    title="Capture Photo"
+                    className="w-20 h-20 rounded-full border-4 border-white p-1 flex items-center justify-center transition-all active:scale-90 disabled:opacity-40 shadow-2xl cursor-pointer hover:scale-105"
+                  >
+                    <div className="w-full h-full rounded-full bg-white hover:bg-slate-100 flex items-center justify-center shadow-inner transition-colors">
+                      <div className="w-13 h-13 rounded-full bg-emerald-500 flex items-center justify-center text-white shadow-md">
+                        <Camera className="w-6 h-6" />
+                      </div>
                     </div>
-                  </div>
-                </button>
+                  </button>
+                ) : (
+                  /* Video Record Button (Red Circle / Stop Square) */
+                  <button
+                    type="button"
+                    onClick={isRecordingVideo ? stopVideoRecording : startVideoRecording}
+                    disabled={cameraLoading || Boolean(cameraError)}
+                    title={isRecordingVideo ? "Stop Recording" : "Start Video Recording"}
+                    className={`w-20 h-20 rounded-full border-4 ${
+                      isRecordingVideo ? "border-red-500 animate-pulse" : "border-white"
+                    } p-1.5 flex items-center justify-center transition-all active:scale-90 disabled:opacity-40 shadow-2xl cursor-pointer hover:scale-105`}
+                  >
+                    {isRecordingVideo ? (
+                      <div className="w-8 h-8 rounded-md bg-red-600 flex items-center justify-center shadow-lg transition-transform hover:scale-95">
+                        <Square className="w-4 h-4 text-white fill-white" />
+                      </div>
+                    ) : (
+                      <div className="w-full h-full rounded-full bg-red-600 hover:bg-red-500 flex items-center justify-center shadow-inner transition-colors">
+                        <div className="w-4 h-4 rounded-full bg-white/40" />
+                      </div>
+                    )}
+                  </button>
+                )}
 
-                {/* Cancel Button */}
+                {/* Cancel / Exit Button */}
                 <button
                   type="button"
                   onClick={stopCamera}
                   className="w-13 h-13 rounded-full bg-white/15 hover:bg-white/25 active:scale-90 backdrop-blur-md border border-white/20 flex flex-col items-center justify-center text-white transition-all cursor-pointer shadow-lg"
-                  title="Cancel"
+                  title="Exit Camera"
                 >
                   <X className="w-5 h-5" />
                   <span className="text-[9px] font-bold mt-0.5 tracking-wider">EXIT</span>
