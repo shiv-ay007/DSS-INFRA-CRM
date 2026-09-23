@@ -29,6 +29,9 @@ export const pmsWbsService = {
   updateStage: async (id, payload) => {
     return await api.put(`/pms-wbs/stages/${id}`, payload);
   },
+  deleteStage: async (id) => {
+    return await api.delete(`/pms-wbs/stages/${id}`);
+  },
 
   // 4. Work Endpoints
   createWork: async (payload) => {
@@ -37,6 +40,9 @@ export const pmsWbsService = {
   updateWork: async (id, payload) => {
     return await api.put(`/pms-wbs/works/${id}`, payload);
   },
+  deleteWork: async (id) => {
+    return await api.delete(`/pms-wbs/works/${id}`);
+  },
 
   // 5. Task Endpoints
   createTask: async (payload) => {
@@ -44,6 +50,9 @@ export const pmsWbsService = {
   },
   updateTask: async (id, payload) => {
     return await api.put(`/pms-wbs/tasks/${id}`, payload);
+  },
+  deleteTask: async (id) => {
+    return await api.delete(`/pms-wbs/tasks/${id}`);
   },
 
   // 6. Project Status Endpoints

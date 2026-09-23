@@ -213,6 +213,39 @@ export const deleteLeadApi = async (id) => {
   }
 };
 
+// ========================================================
+// 8. GET DELETED LEADS (Trash)
+// ========================================================
+export const getDeletedLeadsApi = async (params = {}) => {
+  try {
+    const response = await api.get("/leads/deleted", { params });
+    return response;
+  } catch (error) {
+    console.error("getDeletedLeadsApi Error:", error);
+    return {
+      success: false,
+      data: { leads: [], pagination: { total: 0 } },
+      message: error?.response?.data?.message || error.message
+    };
+  }
+};
+
+// ========================================================
+// 9. RESTORE LEAD
+// ========================================================
+export const restoreLeadApi = async (id) => {
+  try {
+    const response = await api.patch(`/leads/${id}/restore`);
+    return response;
+  } catch (error) {
+    console.error("restoreLeadApi Error:", error);
+    return {
+      success: false,
+      message: error?.response?.data?.message || error.message
+    };
+  }
+};
+
 export default {
   createLeadApi,
   getAllLeadsApi,
@@ -220,5 +253,7 @@ export default {
   updateLeadApi,
   updateLeadStatusApi,
   markInterestedFromTableApi,
-  deleteLeadApi
+  deleteLeadApi,
+  getDeletedLeadsApi,
+  restoreLeadApi
 };

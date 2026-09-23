@@ -12,6 +12,7 @@ import SalseManagment from '../Pages/SalseManagment'
 import LeadDetails from '../Pages/LeadDetails'
 import SalesLeadForm from '../Pages/SalesLeadForm'
 import Presales from '../Pages/Presales'
+import DeletedLeads from '../Pages/DeletedLeads'
 import PmsTemplate from '../Pages/Master/PmsTemplate'
 import CreatePmsTemplatePage from '../Pages/Master/CreatePmsTemplatePage'
 import PmsTemplateDetailsPage from '../Pages/Master/PmsTemplateDetailsPage'
@@ -45,6 +46,7 @@ const SalesRoutes = () => {
           <Route path="leads/total" element={<TotalLeads />} />
           <Route path="leads/lost" element={<Loss />} />
           <Route path="leads/all" element={<LeadManagement />} />
+          <Route path="leads/deleted" element={<DeletedLeads />} />
           <Route path="leads/details" element={<LeadDetails />} />
           <Route path="leads/details/:id" element={<LeadDetails />} />
           <Route path="leads/sales-form" element={<SalesLeadForm />} />

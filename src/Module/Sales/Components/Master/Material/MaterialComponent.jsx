@@ -14,6 +14,7 @@ import {
   FaSearch,
   FaFilter,
   FaEdit,
+  FaTrashAlt,
   FaEye,
   FaCheckCircle,
   FaTimesCircle,
@@ -292,14 +293,39 @@ const MaterialComponent = () => {
     }
   };
 
+  // Handle Permanent Delete Material
+  const handleDeleteMaterial = async (row) => {
+    if (isUserObserver) {
+      toast.info("Observer Mode: Action is disabled.");
+      return;
+    }
+    const name = row.name || row.materialName || "this material";
+    const id = row._id || row.id;
+    if (window.confirm(`Delete Material "${name}"?\nThis will permanently delete this material from the database.`)) {
+      try {
+        const res = await materialService.deleteMaterial(id);
+        if (res && res.success) {
+          toast.success(`Material "${name}" permanently deleted successfully`);
+          setMaterials((prev) => prev.filter((item) => (item._id || item.id) !== id));
+          setTotalItems((prev) => Math.max(0, prev - 1));
+        } else {
+          toast.error(res?.message || "Failed to delete material");
+        }
+      } catch (err) {
+        console.error("Delete material error:", err);
+        toast.error("Failed to delete material");
+      }
+    }
+  };
+
   // Table Column Configuration matching Supplier / Contractor Master
   const columnConfig = useMemo(
     () => ({
-      // 1. Action Column (Immediately next to SR. NO. - ONLY View & Edit)
+      // 1. Action Column (Immediately next to SR. NO. - View, Edit & Delete)
       actions: {
         label: "Action",
         align: "center",
-        headerClass: "w-32 min-w-[125px]",
+        headerClass: "w-32 min-w-[120px]",
         render: (_, row) => {
           const rowId = row._id || row.id;
           return (
@@ -307,20 +333,27 @@ const MaterialComponent = () => {
               <button
                 onClick={() => navigate(`/sales/master/material/details/${rowId}`)}
                 title="View Complete Details"
-                className="px-2 py-1 rounded-md flex items-center gap-1 text-xs font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 transition-all cursor-pointer shadow-xs"
+                className="p-1.5 rounded-lg flex items-center justify-center text-emerald-600 bg-emerald-50 hover:bg-emerald-100 hover:text-emerald-700 border border-emerald-200 transition-all cursor-pointer shadow-xs"
               >
-                <FaEye className="w-3.5 h-3.5 text-emerald-600" />
-                <span>View</span>
+                <FaEye className="w-3.5 h-3.5" />
               </button>
               {!isUserObserver && (
-                <button
-                  onClick={() => navigate(`/sales/master/material/edit-material/${rowId}`)}
-                  title="Edit Material Details"
-                  className="px-2 py-1 rounded-md flex items-center gap-1 text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-300 transition-all cursor-pointer shadow-xs"
-                >
-                  <FaEdit className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Edit</span>
-                </button>
+                <>
+                  <button
+                    onClick={() => navigate(`/sales/master/material/edit-material/${rowId}`)}
+                    title="Edit Material Details"
+                    className="p-1.5 rounded-lg flex items-center justify-center text-amber-600 bg-amber-50 hover:bg-amber-100 hover:text-amber-700 border border-amber-200 transition-all cursor-pointer shadow-xs"
+                  >
+                    <FaEdit className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteMaterial(row)}
+                    title="Delete Material Permanently"
+                    className="p-1.5 rounded-lg flex items-center justify-center text-rose-600 bg-rose-50 hover:bg-rose-100 hover:text-rose-700 border border-rose-200 transition-all cursor-pointer shadow-xs"
+                  >
+                    <FaTrashAlt className="w-3.5 h-3.5" />
+                  </button>
+                </>
               )}
             </div>
           );

@@ -126,10 +126,7 @@ const SalesProjectDetailsTable = ({ lead, projects = [], onAddProjectClick }) =>
                 PRIORITY
               </th>
               <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">
-                ASSIGNED TO
-              </th>
-              <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">
-                NEXT PERSON
+                PROJECT COORDINATOR
               </th>
               <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">
                 LOCATION
@@ -148,7 +145,7 @@ const SalesProjectDetailsTable = ({ lead, projects = [], onAddProjectClick }) =>
           <tbody className="divide-y divide-slate-100 bg-white">
             {projects.length === 0 ? (
               <tr>
-                <td colSpan={15} className="py-10 text-center text-slate-500 font-medium">
+                <td colSpan={14} className="py-10 text-center text-slate-500 font-medium">
                   <div className="flex flex-col items-center justify-center gap-2">
                     <FaBuilding className="text-3xl text-slate-300" />
                     <p className="text-sm font-bold text-slate-700">No Project Records Found</p>
@@ -273,16 +270,11 @@ const SalesProjectDetailsTable = ({ lead, projects = [], onAddProjectClick }) =>
                       </span>
                     </td>
 
-                    {/* 10. ASSIGNED TO */}
-                    <td className="py-2.5 px-3 text-center font-medium text-slate-800 border-r border-slate-100 whitespace-nowrap">
-                      {proj.assignedTo || "Admin"}
-                    </td>
-
-                    {/* 11. NEXT PERSON */}
+                    {/* 10. PROJECT COORDINATOR */}
                     <td className="py-2.5 px-3 text-center text-slate-700 border-r border-slate-100 whitespace-nowrap">
-                      {proj.nextPersonName ? (
+                      {(proj.projectCoordinatorName || proj.nextPersonName) ? (
                         <div>
-                          <div className="font-bold text-slate-800">{proj.nextPersonName}</div>
+                          <div className="font-bold text-slate-800">{proj.projectCoordinatorName || proj.nextPersonName}</div>
                           {proj.designation && (
                             <div className="text-[10px] text-slate-400">({proj.designation})</div>
                           )}

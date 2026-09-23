@@ -9,6 +9,7 @@ import {
 } from "react-icons/fa";
 import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
+import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
 import { workCategoryList, indianStatesList } from "../../data/addLeadData";
 import { getLeadByIdApi, updateLeadApi } from "../../services/totalLeads.api";
 import { createLeadProjectApi } from "../../services/leadProject.api";
@@ -19,15 +20,6 @@ import {
   markLeadAsTransferredToSales
 } from "../../../../context/LeadContext";
 import { useAuth } from "../../../../context/AuthContext";
-
-const teamMembers = [
-  "Admin",
-  "Rahul Sharma",
-  "Pooja Verma",
-  "Vikram Malhotra",
-  "Ankit Patel",
-  "Sanjay Gupta"
-];
 
 const SalesLeadForm = () => {
   const navigate = useNavigate();
@@ -63,9 +55,11 @@ const SalesLeadForm = () => {
     pincode: "",
     address: "",
     requirement: "",
+    requirementAttachments: [],
     transferRemark: "",
+    transferRemarkAttachments: [],
     clientRating: 4.5,
-    assignedTo: "Admin",
+    projectCoordinatorName: "",
     nextPersonName: "",
     designation: ""
   });
@@ -73,6 +67,22 @@ const SalesLeadForm = () => {
   // Populate form data whenever lead is resolved
   const populateFormData = (leadData, initialRemark = "") => {
     if (!leadData) return;
+    const existingRemarkAtts = Array.isArray(leadData.remarkAttachments) && leadData.remarkAttachments.length > 0
+      ? leadData.remarkAttachments
+      : Array.isArray(leadData.remarksFiles) && leadData.remarksFiles.length > 0
+      ? leadData.remarksFiles.map((f, idx) => ({
+          id: f.id || idx,
+          name: f.name || f.filename || `Attachment-${idx + 1}`,
+          type: f.type || (f.url?.match(/\.(mp4|webm)$/i) ? "video" : f.url?.match(/\.(mp3|wav|ogg|m4a|webm|aac)$/i) ? "audio" : "image"),
+          url: f.url || f.fileUrl || (typeof f === "string" ? f : ""),
+          preview: f.url || f.fileUrl || (typeof f === "string" ? f : "")
+        }))
+      : [];
+
+    const existingReqAtts = Array.isArray(leadData.requirementAttachments) && leadData.requirementAttachments.length > 0
+      ? leadData.requirementAttachments
+      : [];
+
     setFormData({
       clientName: leadData.concernPersonName || leadData.clientName || "",
       phoneNumber: leadData.phoneNumber || leadData.contact || leadData.phone || "",
@@ -98,10 +108,12 @@ const SalesLeadForm = () => {
       pincode: leadData.pincode || "",
       address: leadData.address || leadData.siteAddress || "",
       requirement: leadData.requirement || "",
+      requirementAttachments: existingReqAtts,
       transferRemark: initialRemark || leadData.remark || leadData.transferRemark || "",
+      transferRemarkAttachments: existingRemarkAtts,
       clientRating: Number(leadData.clientRating || 4.5),
-      assignedTo: leadData.assignTo || leadData.salesPerson || leadData.assignedTo || "Admin",
-      nextPersonName: leadData.nextPersonName || leadData.nextConcernPerson || "",
+      projectCoordinatorName: leadData.projectCoordinatorName || leadData.nextPersonName || leadData.nextConcernPerson || "",
+      nextPersonName: leadData.projectCoordinatorName || leadData.nextPersonName || leadData.nextConcernPerson || "",
       designation: leadData.designation || leadData.nextPersonDesignation || ""
     });
   };
@@ -109,7 +121,7 @@ const SalesLeadForm = () => {
   // Handle generic input change and clear field errors
   const handleInputChange = (field, value) => {
     // Prevent typing numbers in name and location text fields
-    if (field === "clientName" || field === "nextPersonName" || field === "city" || field === "state") {
+    if (field === "clientName" || field === "projectCoordinatorName" || field === "nextPersonName" || field === "city" || field === "state") {
       value = value.replace(/[0-9]/g, "");
     }
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -182,8 +194,9 @@ const SalesLeadForm = () => {
       newErrors.clientName = "Numbers are not allowed in client name";
     }
 
-    if (formData.nextPersonName && /[0-9]/.test(formData.nextPersonName)) {
-      newErrors.nextPersonName = "Numbers are not allowed in next person name";
+    const coordVal = formData.projectCoordinatorName || formData.nextPersonName || "";
+    if (coordVal && /[0-9]/.test(coordVal)) {
+      newErrors.projectCoordinatorName = "Numbers are not allowed in project coordinator name";
     }
 
     if (formData.city && /[0-9]/.test(formData.city)) {
@@ -273,8 +286,8 @@ const SalesLeadForm = () => {
         requirement: proj.requirement || "",
         transferRemark: proj.transferRemark || "",
         clientRating: Number(proj.clientRating || 4.5),
-        assignedTo: proj.assignedTo || "Admin",
-        nextPersonName: proj.nextPersonName || "",
+        projectCoordinatorName: proj.projectCoordinatorName || proj.nextPersonName || "",
+        nextPersonName: proj.projectCoordinatorName || proj.nextPersonName || "",
         designation: proj.designation || ""
       });
       if (location.state?.lead) {
@@ -365,11 +378,16 @@ const SalesLeadForm = () => {
       pincode: formData.pincode,
       address: formData.address,
       requirement: formData.requirement,
+      requirementAttachments: formData.requirementAttachments || [],
       remark: formData.transferRemark || lead?.remark || "",
+      remarks: formData.transferRemark || lead?.remarks || "",
+      transferRemark: formData.transferRemark || "",
+      remarkAttachments: formData.transferRemarkAttachments || [],
+      attachments: formData.transferRemarkAttachments || [],
+      remarksFiles: formData.transferRemarkAttachments || [],
       clientRating: Number(formData.clientRating) || 4.5,
-      assignTo: formData.assignedTo,
-      salesPerson: formData.assignedTo,
-      nextPersonName: formData.nextPersonName,
+      projectCoordinatorName: formData.projectCoordinatorName || formData.nextPersonName || "",
+      nextPersonName: formData.projectCoordinatorName || formData.nextPersonName || "",
       designation: formData.designation,
       nextPersonDesignation: formData.designation,
       createdAt: lead?.createdDate || lead?.createdAt || formattedDate,
@@ -382,16 +400,42 @@ const SalesLeadForm = () => {
       updatedAt: new Date().toISOString()
     };
 
-      // Save project data ONLY to leadsproject collection with Lead ObjectId reference
+    // Upload any newly recorded audio or attached media files
+    const rawUploadFiles = [
+      ...(formData.transferRemarkAttachments || []),
+      ...(formData.requirementAttachments || [])
+    ]
+      .map((att) => att.file || att.blob || (att instanceof File || att instanceof Blob ? att : null))
+      .filter(Boolean);
+
+    if (rawUploadFiles.length > 0 && targetId) {
       try {
-        const leadMongoId = lead?._id || (targetId && String(targetId).length === 24 ? targetId : finalLeadData._id || finalLeadData.leadId);
-        await createLeadProjectApi({
-          ...formData,
-          leadId: leadMongoId,
-          projectId: editingProjectId || undefined
-        });
-      } catch (saveErr) {
-        console.error("Error saving to leadsproject collection:", saveErr);
+        await updateLeadApi(targetId, finalLeadData, rawUploadFiles);
+      } catch (upErr) {
+        console.error("Error uploading files to lead:", upErr);
+      }
+    }
+
+      // Save project data ONLY to leadsproject collection with Lead ObjectId reference
+      const leadMongoId = lead?._id || (targetId && String(targetId).length === 24 ? targetId : finalLeadData._id || finalLeadData.leadId || id);
+      const projectPayload = {
+        ...formData,
+        leadId: leadMongoId,
+        projectId: editingProjectId || undefined,
+        workType: finalWorkType,
+        expectedBusiness: Number(formData.expectedBusiness) || 0,
+        clientRating: Number(formData.clientRating) || 4.5
+      };
+
+      // Strip non-schema attachment fields before sending JSON to backend
+      delete projectPayload.requirementAttachments;
+      delete projectPayload.transferRemarkAttachments;
+
+      const saveRes = await createLeadProjectApi(projectPayload);
+      if (saveRes && saveRes.success === false) {
+        toast.error(saveRes.message || "Failed to save project records.");
+        setSubmitting(false);
+        return;
       }
 
     // Invalidate caches & notify
@@ -687,44 +731,36 @@ const SalesLeadForm = () => {
           </div>
         </div>
 
-        {/* ROW 5: Assigned To | Next Person Name | Designation */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-3 sm:gap-x-4 gap-y-3 pt-0.5">
-          <div>
+        {/* ROW 5: Assigned To Project Coordinator Name | Project Coordinator Designation */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 sm:gap-x-4 gap-y-3 pt-0.5">
+          <div id="field-projectCoordinatorName">
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-              Assigned To (Sales Person)
-            </label>
-            <select
-              value={formData.assignedTo}
-              onChange={(e) => handleInputChange("assignedTo", e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all cursor-pointer"
-            >
-              {teamMembers.map((member) => (
-                <option key={member} value={member}>
-                  {member}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div id="field-nextPersonName">
-            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-              Next Person Name
+              Assigned To Project Coordinator Name
             </label>
             <input
               type="text"
-              value={formData.nextPersonName}
-              onChange={(e) => handleInputChange("nextPersonName", e.target.value)}
-              placeholder="Enter Next Person Name"
+              value={formData.projectCoordinatorName || formData.nextPersonName || ""}
+              onChange={(e) => {
+                handleInputChange("projectCoordinatorName", e.target.value);
+                handleInputChange("nextPersonName", e.target.value);
+              }}
+              placeholder="Enter Project Coordinator Name"
               className={`w-full px-3 py-2 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400 ${
-                errors.nextPersonName ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
+                errors.projectCoordinatorName || errors.nextPersonName
+                  ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500"
+                  : "border-black/20 focus:border-black/50"
               }`}
             />
-            {errors.nextPersonName && <p className="text-xs text-red-500 font-medium mt-1">{errors.nextPersonName}</p>}
+            {(errors.projectCoordinatorName || errors.nextPersonName) && (
+              <p className="text-xs text-red-500 font-medium mt-1">
+                {errors.projectCoordinatorName || errors.nextPersonName}
+              </p>
+            )}
           </div>
 
           <div>
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-              Next Person Designation
+              Project Coordinator Designation
             </label>
             <input
               type="text"
@@ -821,31 +857,27 @@ const SalesLeadForm = () => {
           />
         </div>
 
-        {/* ROW 8: Requirement Details & Sales Remarks */}
+        {/* ROW 8: Requirement Details & Sales Remarks with Media / Audio */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 sm:gap-x-4 gap-y-3 pt-0.5">
           <div>
-            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-              Client Requirement Details
-            </label>
-            <textarea
-              rows={3}
+            <CommentWithMedia
+              title="Client Requirement Details"
+              placeholder="Detail out client's specific demands, specifications, or record audio note..."
               value={formData.requirement}
-              onChange={(e) => setFormData({ ...formData, requirement: e.target.value })}
-              placeholder="Detail out client's specific demands, specifications, site area, timelines..."
-              className="w-full px-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400 resize-y"
+              onChange={(val) => setFormData((prev) => ({ ...prev, requirement: val }))}
+              files={formData.requirementAttachments || []}
+              onFilesChange={(newFiles) => setFormData((prev) => ({ ...prev, requirementAttachments: newFiles }))}
             />
           </div>
 
           <div>
-            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-              Sales Management Notes / Remarks
-            </label>
-            <textarea
-              rows={3}
+            <CommentWithMedia
+              title="Sales Management Notes / Remarks"
+              placeholder="Add key highlights or instructions for the sales team, or record audio note..."
               value={formData.transferRemark}
-              onChange={(e) => setFormData({ ...formData, transferRemark: e.target.value })}
-              placeholder="Add key highlights or instructions for the sales team..."
-              className="w-full px-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400 resize-y"
+              onChange={(val) => setFormData((prev) => ({ ...prev, transferRemark: val }))}
+              files={formData.transferRemarkAttachments || []}
+              onFilesChange={(newFiles) => setFormData((prev) => ({ ...prev, transferRemarkAttachments: newFiles }))}
             />
           </div>
         </div>

@@ -5,10 +5,10 @@ import PageHeader from "../../../../Common/Components/PageHeader";
 import Table from "../../../../Common/Components/Table";
 import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
 import { availableWorkTypes, workCategoryList, indianStatesList } from "../../data/addLeadData";
-import { FaUser, FaRegCheckCircle, FaUsers, FaUserCheck, FaImage, FaVideo, FaMicrophone, FaFileAlt, FaPaperclip, FaTimes, FaDownload, FaPlay, FaPause } from "react-icons/fa";
+import { FaUser, FaRegCheckCircle, FaUsers, FaUserCheck, FaImage, FaVideo, FaMicrophone, FaFileAlt, FaPaperclip, FaTimes, FaDownload, FaPlay, FaPause, FaTrashAlt } from "react-icons/fa";
 import { HiOutlineUsers } from "react-icons/hi";
 
-import { getAllLeadsApi, updateLeadApi, markInterestedFromTableApi } from "../../services/totalLeads.api";
+import { getAllLeadsApi, updateLeadApi, markInterestedFromTableApi, deleteLeadApi } from "../../services/totalLeads.api";
 import { markLeadAsLossApi, createLossLeadApi } from "../../services/lostLeads.api";
 import {
   useLeadContext,
@@ -431,6 +431,7 @@ const SalseTotalLeads = () => {
   const [followupModal, setFollowupModal] = useState(null);
   const [followupDate, setFollowupDate] = useState("");
   const [followupNotes, setFollowupNotes] = useState("");
+  const [followupAttachments, setFollowupAttachments] = useState([]);
   const [bulkStatusModal, setBulkStatusModal] = useState(false);
   const [bulkNewStatus, setBulkNewStatus] = useState("Warm");
 
@@ -442,6 +443,10 @@ const SalseTotalLeads = () => {
   const [statusRemark, setStatusRemark] = useState("");
   const [statusRemarkAttachments, setStatusRemarkAttachments] = useState([]);
   const [isStatusSubmitting, setIsStatusSubmitting] = useState(false);
+
+  // Delete Confirmation Dialog State
+  const [deleteModalLead, setDeleteModalLead] = useState(null);
+  const [isDeletingLead, setIsDeletingLead] = useState(false);
 
   // Handler to move lead to Lead Management or Lost Leads based on Client Status
   const handleClientStatusSubmit = async () => {
@@ -710,6 +715,25 @@ const SalseTotalLeads = () => {
               title={isUserObserver ? "Disabled for Observer (View Only)" : "Client Status (Interested / Not Interested)"}
             >
               <FaRegCheckCircle className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Soft Delete Lead Button */}
+            <button
+              type="button"
+              disabled={isUserObserver}
+              onClick={
+                isUserObserver
+                  ? () => toast.info("Observer Mode: Deleting leads is disabled.")
+                  : () => setDeleteModalLead(row)
+              }
+              className={`w-7 h-7 rounded-lg border flex items-center justify-center transition-all shadow-2xs ${
+                isUserObserver
+                  ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed opacity-50"
+                  : "border-rose-200 bg-rose-50/70 text-rose-600 hover:bg-rose-100 hover:border-rose-300 cursor-pointer active:scale-95"
+              }`}
+              title={isUserObserver ? "Disabled for Observer" : "Delete Lead"}
+            >
+              <FaTrashAlt className="w-3 h-3" />
             </button>
           </div>
         );
@@ -1076,6 +1100,12 @@ const SalseTotalLeads = () => {
   // Filter & Search Logic
   const filteredLeads = useMemo(() => {
     return leads.filter((item) => {
+      const isDeleted =
+        item.isDeleted === 1 ||
+        item.isDeleted === true ||
+        item.isDeleted === "1";
+      if (isDeleted) return false;
+
       const isLost =
         item.isLoss === true ||
         item.intrestedStatus === "Not Intersted" ||
@@ -1202,11 +1232,31 @@ const SalseTotalLeads = () => {
     );
   };
 
-  const handleBulkDelete = () => {
-    if (window.confirm(`Delete selected ${selectedIds.length} leads permanently?`)) {
-      const updated = leads.filter((item) => !selectedIds.includes(item.id));
-      saveLeadsToStorage(updated);
-      setSelectedIds([]);
+  const handleBulkDelete = async () => {
+    if (isUserObserver) {
+      toast.info("Observer Mode: Deleting leads is disabled.");
+      return;
+    }
+    if (window.confirm(`Delete selected ${selectedIds.length} leads?`)) {
+      try {
+        await Promise.all(selectedIds.map((id) => deleteLeadApi(id)));
+        setLeads((prevLeads) =>
+          prevLeads.filter((item) => {
+            const i1 = String(item?.id || "");
+            const i2 = String(item?._id || "");
+            const i3 = String(item?.leadId || "");
+            return !selectedIds.some((sId) => [i1, i2, i3].includes(String(sId)));
+          })
+        );
+        setTotalLeadsCount((prev) => Math.max(0, prev - selectedIds.length));
+        invalidateCache("totalLeads");
+        setSelectedIds([]);
+        toast.success(`${selectedIds.length} leads deleted successfully! 🗑️`);
+        fetchBackendLeads();
+      } catch (err) {
+        console.error("Bulk delete error:", err);
+        toast.error("Failed to delete selected leads.");
+      }
     }
   };
 
@@ -1249,10 +1299,59 @@ const SalseTotalLeads = () => {
   };
 
   // Row Action Handlers
-  const handleDeleteRow = (id) => {
-    if (window.confirm("Delete this lead record permanently?")) {
-      const updated = leads.filter((item) => item.id !== id);
-      saveLeadsToStorage(updated);
+  const handleDeleteRow = (id, lead) => {
+    if (isUserObserver) {
+      toast.info("Observer Mode: Deleting leads is disabled.");
+      return;
+    }
+    const targetLead = lead || leads.find((l) => String(l.id || l._id || l.leadId) === String(id));
+    setDeleteModalLead(targetLead || { id });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteModalLead) return;
+    if (isDeletingLead) return;
+    if (isUserObserver) {
+      toast.info("Observer Mode: Deleting leads is disabled.");
+      return;
+    }
+
+    setIsDeletingLead(true);
+    const lead = deleteModalLead;
+    const leadName = lead?.clientName || lead?.concernPersonName || lead?.id || "Lead";
+    const targetId = lead?._id || lead?.id || lead?.leadId;
+
+    try {
+      const res = await deleteLeadApi(targetId);
+      if (res && res.success !== false) {
+        const deletedIds = [
+          String(lead?._id || ""),
+          String(lead?.id || ""),
+          String(lead?.leadId || ""),
+          String(targetId)
+        ].filter(Boolean);
+
+        setLeads((prevLeads) =>
+          prevLeads.filter((item) => {
+            const i1 = String(item?.id || "");
+            const i2 = String(item?._id || "");
+            const i3 = String(item?.leadId || "");
+            return !deletedIds.includes(i1) && !deletedIds.includes(i2) && !deletedIds.includes(i3);
+          })
+        );
+        setTotalLeadsCount((prev) => Math.max(0, prev - 1));
+        invalidateCache("totalLeads");
+        toast.success(`Lead "${leadName}" deleted successfully! 🗑️`);
+        setDeleteModalLead(null);
+        fetchBackendLeads();
+      } else {
+        toast.error(res?.message || "Failed to delete lead");
+      }
+    } catch (err) {
+      console.error("Error deleting lead:", err);
+      toast.error("Failed to delete lead. Please try again.");
+    } finally {
+      setIsDeletingLead(false);
     }
   };
 
@@ -1269,13 +1368,20 @@ const SalseTotalLeads = () => {
     if (!followupDate) return;
     const updated = leads.map((item) =>
       item.id === followupModal.id
-        ? { ...item, nextFollowup: `${followupDate}`, remarks: followupNotes || item.remarks }
+        ? {
+            ...item,
+            nextFollowup: `${followupDate}`,
+            remarks: followupNotes || item.remarks,
+            remarkAttachments: followupAttachments.length > 0 ? followupAttachments : (item.remarkAttachments || []),
+            attachments: followupAttachments.length > 0 ? followupAttachments : (item.attachments || [])
+          }
         : item
     );
     saveLeadsToStorage(updated);
     setFollowupModal(null);
     setFollowupDate("");
     setFollowupNotes("");
+    setFollowupAttachments([]);
   };
 
   // Badges & Dot Styling
@@ -1860,7 +1966,7 @@ const SalseTotalLeads = () => {
       {/* ================= 6. SCHEDULE FOLLOW-UP MODAL ================= */}
       {followupModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
-          <div className="bg-white rounded-3xl p-6 max-w-sm w-full shadow-2xl border border-slate-100 space-y-4">
+          <div className="bg-white rounded-3xl p-6 max-w-lg w-full shadow-2xl border border-slate-100 space-y-4">
             <h3 className="text-sm font-black text-slate-900">
               Schedule Next Follow-up
             </h3>
@@ -1880,13 +1986,13 @@ const SalseTotalLeads = () => {
               </div>
 
               <div>
-                <label className="block font-bold text-slate-700 mb-1">Notes / Call Agenda</label>
-                <textarea
-                  rows={2}
-                  placeholder="Quotation discussion, site survey, demo..."
+                <CommentWithMedia
+                  title="Notes / Call Agenda"
+                  placeholder="Quotation discussion, site survey, or record audio note..."
                   value={followupNotes}
-                  onChange={(e) => setFollowupNotes(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs"
+                  onChange={(val) => setFollowupNotes(val)}
+                  files={followupAttachments}
+                  onFilesChange={(newFiles) => setFollowupAttachments(newFiles)}
                 />
               </div>
             </div>
@@ -1894,7 +2000,10 @@ const SalseTotalLeads = () => {
             <div className="flex gap-2 pt-2">
               <button
                 type="button"
-                onClick={() => setFollowupModal(null)}
+                onClick={() => {
+                  setFollowupModal(null);
+                  setFollowupAttachments([]);
+                }}
                 className="flex-1 py-2 rounded-xl border border-slate-200 text-xs font-bold hover:bg-slate-50 cursor-pointer"
               >
                 Cancel
@@ -2083,6 +2192,63 @@ const SalseTotalLeads = () => {
                 className="px-5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold transition-colors cursor-pointer"
               >
                 Close Player
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= 6. DELETE CONFIRMATION DIALOG ================= */}
+      {deleteModalLead && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-sm w-full p-6 shadow-2xl border border-slate-100 space-y-4 animate-in zoom-in-95 duration-200">
+            {/* Title & Icon */}
+            <div className="flex items-start gap-3.5">
+              <div className="w-10 h-10 rounded-full bg-rose-100 text-rose-600 flex items-center justify-center shrink-0 shadow-xs">
+                <FaTrashAlt className="w-4 h-4" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base font-extrabold text-slate-900">
+                  Delete Lead?
+                </h3>
+                <p className="mt-1 text-xs text-slate-600 leading-relaxed font-medium">
+                  Are you sure you want to delete this lead?
+                </p>
+                {deleteModalLead.clientName && (
+                  <p className="mt-2 inline-flex items-center px-2 py-0.5 rounded-md bg-slate-100 text-slate-800 text-xs font-bold border border-slate-200 truncate max-w-full">
+                    {deleteModalLead.clientName}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            {/* Buttons: Cancel & Delete */}
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
+              <button
+                type="button"
+                disabled={isDeletingLead}
+                onClick={() => setDeleteModalLead(null)}
+                className="px-4 py-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 text-xs font-bold transition-all cursor-pointer shadow-2xs"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isDeletingLead}
+                onClick={handleConfirmDelete}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all cursor-pointer shadow-md flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {isDeletingLead ? (
+                  <>
+                    <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <FaTrashAlt className="w-3 h-3" />
+                    <span>Delete</span>
+                  </>
+                )}
               </button>
             </div>
           </div>

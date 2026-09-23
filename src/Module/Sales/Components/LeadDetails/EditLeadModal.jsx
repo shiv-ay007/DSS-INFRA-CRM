@@ -23,6 +23,7 @@ import {
 } from "../../data/addLeadData";
 import { updateLeadApi } from "../../services/totalLeads.api";
 import { updateLeadInStorage } from "../../../../context/LeadContext";
+import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
 
 const EditLeadModal = ({ lead, isOpen, onClose, onSaveSuccess }) => {
   if (!isOpen || !lead) return null;
@@ -47,6 +48,7 @@ const EditLeadModal = ({ lead, isOpen, onClose, onSaveSuccess }) => {
     workCategory: "",
     workType: [],
     requirement: "",
+    requirementAttachments: [],
     address: "",
     city: "",
     state: "",
@@ -71,6 +73,20 @@ const EditLeadModal = ({ lead, isOpen, onClose, onSaveSuccess }) => {
         parsedWorkType = lead.workType.split(",").map((s) => s.trim()).filter(Boolean);
       }
 
+      const existingReqAtts = Array.isArray(lead.requirementAttachments) && lead.requirementAttachments.length > 0
+        ? lead.requirementAttachments
+        : Array.isArray(lead.remarkAttachments) && lead.remarkAttachments.length > 0
+        ? lead.remarkAttachments
+        : Array.isArray(lead.remarksFiles) && lead.remarksFiles.length > 0
+        ? lead.remarksFiles.map((f, idx) => ({
+            id: f.id || idx,
+            name: f.name || f.filename || `Attachment-${idx + 1}`,
+            type: f.type || (f.url?.match(/\.(mp4|webm)$/i) ? "video" : f.url?.match(/\.(mp3|wav|ogg|m4a|webm|aac)$/i) ? "audio" : "image"),
+            url: f.url || f.fileUrl || (typeof f === "string" ? f : ""),
+            preview: f.url || f.fileUrl || (typeof f === "string" ? f : "")
+          }))
+        : [];
+
       setFormData({
         clientName: lead.clientName || lead.concernPersonName || "",
         clientDesignation: lead.clientDesignation || "",
@@ -91,6 +107,7 @@ const EditLeadModal = ({ lead, isOpen, onClose, onSaveSuccess }) => {
         workCategory: lead.workCategory || "",
         workType: parsedWorkType,
         requirement: lead.requirement || lead.projectDetail || lead.projectDetails || "",
+        requirementAttachments: existingReqAtts,
         address: lead.address || "",
         city: lead.city || "",
         state: lead.state || "",
@@ -163,6 +180,10 @@ const EditLeadModal = ({ lead, isOpen, onClose, onSaveSuccess }) => {
       workType: formData.workType,
       requirement: formData.requirement.trim(),
       projectDetail: formData.requirement.trim(),
+      requirementAttachments: formData.requirementAttachments || [],
+      remarkAttachments: formData.requirementAttachments || [],
+      attachments: formData.requirementAttachments || [],
+      remarksFiles: formData.requirementAttachments || [],
       address: formData.address.trim(),
       city: formData.city.trim(),
       state: formData.state.trim(),
@@ -171,9 +192,13 @@ const EditLeadModal = ({ lead, isOpen, onClose, onSaveSuccess }) => {
       lastModified: new Date().toISOString()
     };
 
+    const rawUploadFiles = (formData.requirementAttachments || [])
+      .map((att) => att.file || att.blob || (att instanceof File || att instanceof Blob ? att : null))
+      .filter(Boolean);
+
     const targetId = lead._id || lead.id || lead.leadId;
     if (targetId) {
-      updateLeadApi(targetId, updatedLead).catch((err) => console.error("Error updating lead API:", err));
+      updateLeadApi(targetId, updatedLead, rawUploadFiles.length > 0 ? rawUploadFiles : null).catch((err) => console.error("Error updating lead API:", err));
     }
 
     updateLeadInStorage(updatedLead);
@@ -501,14 +526,13 @@ const EditLeadModal = ({ lead, isOpen, onClose, onSaveSuccess }) => {
 
             {/* Requirement Description */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Requirement Details & Notes</label>
-              <textarea
-                rows={3}
-                name="requirement"
+              <CommentWithMedia
+                title="Requirement Details & Notes"
+                placeholder="Enter client's detailed requirement specifications, or record audio note..."
                 value={formData.requirement}
-                onChange={handleChange}
-                placeholder="Enter client's detailed requirement specifications..."
-                className="w-full px-3.5 py-2 rounded-xl border border-slate-300 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 font-medium leading-relaxed"
+                onChange={(val) => setFormData((prev) => ({ ...prev, requirement: val }))}
+                files={formData.requirementAttachments || []}
+                onFilesChange={(newFiles) => setFormData((prev) => ({ ...prev, requirementAttachments: newFiles }))}
               />
             </div>
           </div>

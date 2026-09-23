@@ -161,24 +161,14 @@ const SalesProjectDetailsCard = ({ lead, projectData, onAddProjectClick }) => {
           </span>
         </div>
 
-        {/* Assigned Sales Executive */}
+        {/* Project Coordinator & Designation */}
         <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
           <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
-            Assigned Executive
+            Project Coordinator
           </span>
           <span className="text-xs sm:text-sm font-bold text-slate-800">
-            {projectData.assignedTo || "Admin"}
-          </span>
-        </div>
-
-        {/* Next Contact Person & Role */}
-        <div className="p-3 rounded-xl bg-slate-50 border border-slate-100">
-          <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block mb-0.5">
-            Next Concern Person
-          </span>
-          <span className="text-xs sm:text-sm font-bold text-slate-800">
-            {projectData.nextPersonName
-              ? `${projectData.nextPersonName} ${projectData.designation ? `(${projectData.designation})` : ""}`
+            {(projectData.projectCoordinatorName || projectData.nextPersonName)
+              ? `${projectData.projectCoordinatorName || projectData.nextPersonName} ${projectData.designation ? `(${projectData.designation})` : ""}`
               : "--"}
           </span>
         </div>

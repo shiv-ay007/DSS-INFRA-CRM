@@ -7,6 +7,7 @@ import {
   FaSearch,
   FaFilter,
   FaEdit,
+  FaTrashAlt,
   FaArrowLeft,
   FaChevronDown,
   FaChevronLeft,
@@ -499,36 +500,57 @@ const PmsWbsMasterComponent = () => {
     }
   };
 
-  const handleDeleteStage = (stage) => {
+  const handleDeleteStage = async (stage) => {
     if (isUserObserver) {
       toast.info("Observer Mode: Action is disabled.");
       return;
     }
-    if (window.confirm(`Delete Stage "${stage.stage_code}: ${stage.stage_name}"?`)) {
-      setStages(prev => prev.filter(s => s._id !== stage._id));
-      toast.info(`Deleted Stage ${stage.stage_code}`);
+    if (window.confirm(`Delete Stage "${stage.stage_code}: ${stage.stage_name}"?\nThis will permanently delete this stage from database.`)) {
+      try {
+        await pmsWbsService.deleteStage(stage._id);
+        setStages(prev => prev.filter(s => s._id !== stage._id));
+        setStats(prev => ({ ...prev, stages: Math.max(0, (prev.stages || 1) - 1) }));
+        toast.success(`Permanently deleted Stage ${stage.stage_code}`);
+      } catch (err) {
+        console.error("Delete stage error:", err);
+        toast.error(err?.response?.data?.message || "Failed to delete stage");
+      }
     }
   };
 
-  const handleDeleteWork = (work) => {
+  const handleDeleteWork = async (work) => {
     if (isUserObserver) {
       toast.info("Observer Mode: Action is disabled.");
       return;
     }
-    if (window.confirm(`Delete Work "${work.work_code}: ${work.work_name}"?`)) {
-      setWorks(prev => prev.filter(w => w._id !== work._id));
-      toast.info(`Deleted Work ${work.work_code}`);
+    if (window.confirm(`Delete Work "${work.work_code}: ${work.work_name}"?\nThis will permanently delete this work from database.`)) {
+      try {
+        await pmsWbsService.deleteWork(work._id);
+        setWorks(prev => prev.filter(w => w._id !== work._id));
+        setStats(prev => ({ ...prev, works: Math.max(0, (prev.works || 1) - 1) }));
+        toast.success(`Permanently deleted Work ${work.work_code}`);
+      } catch (err) {
+        console.error("Delete work error:", err);
+        toast.error(err?.response?.data?.message || "Failed to delete work");
+      }
     }
   };
 
-  const handleDeleteTask = (task) => {
+  const handleDeleteTask = async (task) => {
     if (isUserObserver) {
       toast.info("Observer Mode: Action is disabled.");
       return;
     }
-    if (window.confirm(`Delete Task "${task.task_code}: ${task.task_name}"?`)) {
-      setTasks(prev => prev.filter(t => t._id !== task._id));
-      toast.info(`Deleted Task ${task.task_code}`);
+    if (window.confirm(`Delete Task "${task.task_code}: ${task.task_name}"?\nThis will permanently delete this task from database.`)) {
+      try {
+        await pmsWbsService.deleteTask(task._id);
+        setTasks(prev => prev.filter(t => t._id !== task._id));
+        setStats(prev => ({ ...prev, tasks: Math.max(0, (prev.tasks || 1) - 1) }));
+        toast.success(`Permanently deleted Task ${task.task_code}`);
+      } catch (err) {
+        console.error("Delete task error:", err);
+        toast.error(err?.response?.data?.message || "Failed to delete task");
+      }
     }
   };
 
@@ -696,6 +718,13 @@ const PmsWbsMasterComponent = () => {
             >
               <FaEdit className="w-3.5 h-3.5" />
             </button>
+            <button
+              onClick={() => handleDeleteStage(stage)}
+              title="Delete Stage"
+              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded cursor-pointer transition-colors"
+            >
+              <FaTrashAlt className="w-3.5 h-3.5" />
+            </button>
           </div>
         ) : (
           <span className="text-slate-400 text-xs">—</span>
@@ -729,7 +758,7 @@ const PmsWbsMasterComponent = () => {
     actions: {
       label: "Action",
       align: "center",
-      headerClass: "w-24 min-w-[80px]",
+      headerClass: "w-28 min-w-[100px]",
       render: (_, work) => (
         !isUserObserver ? (
           <div className="flex items-center justify-center gap-1.5">
@@ -739,6 +768,13 @@ const PmsWbsMasterComponent = () => {
               className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 rounded cursor-pointer transition-colors"
             >
               <FaEdit className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => handleDeleteWork(work)}
+              title="Delete Work"
+              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded cursor-pointer transition-colors"
+            >
+              <FaTrashAlt className="w-3.5 h-3.5" />
             </button>
           </div>
         ) : (
@@ -768,7 +804,7 @@ const PmsWbsMasterComponent = () => {
     actions: {
       label: "Action",
       align: "center",
-      headerClass: "w-24 min-w-[80px]",
+      headerClass: "w-28 min-w-[100px]",
       render: (_, task) => (
         !isUserObserver ? (
           <div className="flex items-center justify-center gap-1.5">
@@ -778,6 +814,13 @@ const PmsWbsMasterComponent = () => {
               className="p-1.5 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded cursor-pointer transition-colors"
             >
               <FaEdit className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => handleDeleteTask(task)}
+              title="Delete Task"
+              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded cursor-pointer transition-colors"
+            >
+              <FaTrashAlt className="w-3.5 h-3.5" />
             </button>
           </div>
         ) : (

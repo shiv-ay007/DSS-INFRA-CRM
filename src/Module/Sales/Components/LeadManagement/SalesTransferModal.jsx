@@ -15,6 +15,7 @@ import {
   FaWhatsapp
 } from "react-icons/fa";
 import { availableWorkTypes, workCategoryList } from "../../data/addLeadData";
+import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
 
 const teamMembers = [
   "Admin",
@@ -43,13 +44,27 @@ const SalesTransferModal = ({ lead, initialRemark, isOpen, onClose, onSubmit }) 
     pincode: "",
     address: "",
     requirement: "",
+    requirementAttachments: [],
     transferRemark: "",
+    transferRemarkAttachments: [],
     clientRating: 4.5,
     assignedTo: "Admin"
   });
 
   useEffect(() => {
     if (lead) {
+      const existingRemarkAtts = Array.isArray(lead.remarkAttachments) && lead.remarkAttachments.length > 0
+        ? lead.remarkAttachments
+        : Array.isArray(lead.remarksFiles) && lead.remarksFiles.length > 0
+        ? lead.remarksFiles.map((f, idx) => ({
+            id: f.id || idx,
+            name: f.name || f.filename || `Attachment-${idx + 1}`,
+            type: f.type || (f.url?.match(/\.(mp4|webm)$/i) ? "video" : f.url?.match(/\.(mp3|wav|ogg|m4a|webm|aac)$/i) ? "audio" : "image"),
+            url: f.url || f.fileUrl || (typeof f === "string" ? f : ""),
+            preview: f.url || f.fileUrl || (typeof f === "string" ? f : "")
+          }))
+        : [];
+
       setFormData({
         clientName: lead.concernPersonName || lead.clientName || "",
         phoneNumber: lead.phoneNumber || lead.contact || "",
@@ -67,7 +82,9 @@ const SalesTransferModal = ({ lead, initialRemark, isOpen, onClose, onSubmit }) 
         pincode: lead.pincode || "",
         address: lead.address || lead.siteAddress || "",
         requirement: lead.requirement || "",
+        requirementAttachments: lead.requirementAttachments || [],
         transferRemark: initialRemark || lead.remark || "",
+        transferRemarkAttachments: existingRemarkAtts,
         clientRating: Number(lead.clientRating || 4.5),
         assignedTo: lead.assignTo || lead.salesPerson || "Admin"
       });
@@ -402,34 +419,31 @@ const SalesTransferModal = ({ lead, initialRemark, isOpen, onClose, onSubmit }) 
           </div>
 
           {/* SECTION 4: REQUIREMENT & TRANSFER REMARKS */}
-          <div className="space-y-3 bg-slate-50/70 p-4 sm:p-5 rounded-2xl border border-slate-200/80">
+          <div className="space-y-4 bg-slate-50/70 p-4 sm:p-5 rounded-2xl border border-slate-200/80">
             <div className="flex items-center gap-2 text-slate-800 font-extrabold text-xs uppercase tracking-wider pb-2 border-b border-slate-200/60">
               <FaClipboardList className="text-purple-600" />
               <span>Requirement Details & Sales Remarks</span>
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
-                Client Requirement Details
-              </label>
-              <textarea
-                rows={2}
+              <CommentWithMedia
+                title="Client Requirement Details"
+                placeholder="Enter client requirement or record audio note..."
                 value={formData.requirement}
-                onChange={(e) => setFormData({ ...formData, requirement: e.target.value })}
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-medium text-slate-900 text-xs focus:border-blue-500 focus:outline-none shadow-2xs"
+                onChange={(val) => setFormData((prev) => ({ ...prev, requirement: val }))}
+                files={formData.requirementAttachments || []}
+                onFilesChange={(newFiles) => setFormData((prev) => ({ ...prev, requirementAttachments: newFiles }))}
               />
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold text-slate-600 uppercase mb-1">
-                Transfer Remarks / Sales Notes
-              </label>
-              <textarea
-                rows={2}
+              <CommentWithMedia
+                title="Transfer Remarks / Sales Notes"
+                placeholder="Enter sales management notes or record audio note..."
                 value={formData.transferRemark}
-                onChange={(e) => setFormData({ ...formData, transferRemark: e.target.value })}
-                placeholder="Enter sales management notes..."
-                className="w-full px-3 py-2 rounded-xl border border-slate-200 bg-white font-medium text-slate-900 text-xs focus:border-blue-500 focus:outline-none shadow-2xs"
+                onChange={(val) => setFormData((prev) => ({ ...prev, transferRemark: val }))}
+                files={formData.transferRemarkAttachments || []}
+                onFilesChange={(newFiles) => setFormData((prev) => ({ ...prev, transferRemarkAttachments: newFiles }))}
               />
             </div>
           </div>

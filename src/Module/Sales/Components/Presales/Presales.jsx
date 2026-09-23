@@ -40,6 +40,8 @@ import {
   createLeadProjectApi,
   updateLeadProjectApi
 } from "../../services/leadProject.api";
+import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
+import WhatsAppAudioPlayer from "../../../../Common/Components/WhatsAppAudioPlayer";
 
 // 11 Pipeline Stages Definition (As per Functional Spec)
 const PIPELINE_STAGES = [
@@ -114,7 +116,8 @@ const Presales = () => {
           expectedRevenue: Number(bp.expectedBusiness || bp.amount || bp.expectedRevenue || 0),
           assignedTo: bp.assignedTo || bp.salesPerson || leadObj?.salesPerson || "Admin",
           activePerson: bp.assignedTo || bp.salesPerson || leadObj?.salesPerson || "Admin",
-          nextPersonName: bp.nextPersonName || "",
+          projectCoordinatorName: bp.projectCoordinatorName || bp.nextPersonName || "",
+          nextPersonName: bp.projectCoordinatorName || bp.nextPersonName || "",
           designation: bp.designation || bp.nextPersonDesignation || "",
           city: bp.city || leadObj?.city || "--",
           state: bp.state || leadObj?.state || "",
@@ -221,6 +224,7 @@ const Presales = () => {
   const [selectedPresaleId, setSelectedPresaleId] = useState(null);
   const [activeStageId, setActiveStageId] = useState(1);
   const [newRemarkText, setNewRemarkText] = useState("");
+  const [newRemarkAttachments, setNewRemarkAttachments] = useState([]);
 
   // View Details Modal State (Exact matching Details View)
   const [selectedProject, setSelectedProject] = useState(null);
@@ -368,7 +372,8 @@ const Presales = () => {
       id: `rem-${Date.now()}`,
       author: currentPresale.activePerson || "Admin",
       dateTime: `${formattedDate}, ${formattedTime}`,
-      text: newRemarkText.trim()
+      text: newRemarkText.trim(),
+      attachments: newRemarkAttachments || []
     };
 
     const updatedRemarks = [newRemark, ...(currentPresale.remarks || [])];
@@ -382,6 +387,7 @@ const Presales = () => {
       })
     );
     setNewRemarkText("");
+    setNewRemarkAttachments([]);
 
     try {
       if (targetId) {
@@ -1412,7 +1418,7 @@ const Presales = () => {
                   <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">JOB TYPE</th>
                   <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">PRIORITY</th>
                   <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">ASSIGNED TO</th>
-                  <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">NEXT PERSON</th>
+                  <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">PROJECT COORDINATOR</th>
                   <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">LOCATION</th>
                   <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">REQUIREMENT</th>
                   <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">SALES REMARKS</th>
@@ -1999,7 +2005,7 @@ const Presales = () => {
                 <h4 className="text-xs font-bold text-slate-700 uppercase flex items-center gap-1.5">
                   <FaCommentDots className="text-blue-600" /> Discussion Log / Remarks
                 </h4>
-                <div className="space-y-2 max-h-40 overflow-y-auto pr-1">
+                <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
                   {(currentPresale?.remarks || []).length === 0 ? (
                     <p className="text-xs text-slate-400 italic">No remarks logged yet.</p>
                   ) : (
@@ -2007,22 +2013,52 @@ const Presales = () => {
                       <div key={r.id} className="p-2.5 rounded-lg border border-slate-200 bg-slate-50 text-xs">
                         <span className="font-bold text-slate-700">{r.author} • {r.dateTime}:</span>
                         <p className="text-slate-800 mt-0.5">{r.text}</p>
+                        {r.attachments && r.attachments.length > 0 && (
+                          <div className="mt-2 space-y-1.5 pt-1 border-t border-slate-200/60">
+                            {r.attachments.map((att, idx) => {
+                              const isAudio = (att.type === "audio") || (att.name?.match(/\.(mp3|wav|ogg|m4a|webm|aac)$/i)) || (att.url?.match(/\.(mp3|wav|ogg|m4a|webm|aac)($|\?)/i));
+                              if (isAudio) {
+                                return (
+                                  <div key={idx} className="mt-1">
+                                    <WhatsAppAudioPlayer file={att.file} src={att.url || att.preview} />
+                                  </div>
+                                );
+                              }
+                              return (
+                                <a
+                                  key={idx}
+                                  href={att.url || att.preview}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-block text-[11px] text-blue-600 hover:underline mr-2"
+                                >
+                                  📎 {att.name || "Attachment"}
+                                </a>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     ))
                   )}
                 </div>
-                <form onSubmit={handleAddRemark} className="flex gap-2">
-                  <input
-                    type="text"
+                <div className="space-y-2">
+                  <CommentWithMedia
+                    title="New Discussion Note / Voice Note"
+                    placeholder="Write a remark or record audio note..."
                     value={newRemarkText}
-                    onChange={(e) => setNewRemarkText(e.target.value)}
-                    placeholder="Write a remark..."
-                    className="flex-1 px-3 py-1.5 rounded-lg border border-slate-300 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    onChange={(val) => setNewRemarkText(val)}
+                    files={newRemarkAttachments}
+                    onFilesChange={(newFiles) => setNewRemarkAttachments(newFiles)}
                   />
-                  <button type="submit" className="px-4 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-bold">
-                    Add
+                  <button
+                    type="button"
+                    onClick={handleAddRemark}
+                    className="w-full py-2 rounded-lg bg-blue-600 hover:bg-blue-700 active:scale-98 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
+                  >
+                    Add Remark
                   </button>
-                </form>
+                </div>
               </div>
 
               {/* Action Buttons */}

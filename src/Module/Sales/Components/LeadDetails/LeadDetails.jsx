@@ -27,23 +27,30 @@ const LeadDetails = () => {
   // Edit Lead option is strictly only allowed when navigated from Total Leads and user is NOT Observer
   const allowEdit = Boolean((location.state?.allowEdit === true || location.state?.from === "totalLeads") && !isUserObserver);
 
-  // Add Project & View Sales Project Details are strictly only allowed when navigated from Sales Management Sheet
-  const allowAddProject = Boolean(location.state?.from === "salesManagement");
+  // Add Project & View Sales Project Details are enabled for sales views & transferred leads
+  const allowAddProject = Boolean(
+    location.state?.from === "salesManagement" ||
+    lead?.inSalesManagement ||
+    lead?.isSalesTransferred ||
+    location.pathname.includes("/sales/")
+  );
   const isFromSalesManagement = Boolean(
-    location.state?.from === "salesManagement" || lead?.inSalesManagement || allowAddProject
+    allowAddProject ||
+    location.state?.from === "salesManagement" ||
+    lead?.inSalesManagement ||
+    lead?.isSalesTransferred ||
+    location.pathname.includes("/sales/")
   );
 
   const [projectsList, setProjectsList] = useState([]);
 
-  // Fetch project from leadsproject collection strictly for Sales Management views
+  // Fetch project from leadsproject collection for Sales Management views
   const fetchProjectDetails = useCallback(async (currentLead) => {
-    const mongoId = (currentLead?._id && String(currentLead._id).length === 24)
-      ? currentLead._id
-      : (id && String(id).length === 24 ? id : null);
-    if (!mongoId) return;
+    const leadQueryId = currentLead?._id || currentLead?.leadId || currentLead?.id || id;
+    if (!leadQueryId) return;
 
     try {
-      const res = await getAllLeadProjectsApi({ leadId: mongoId });
+      const res = await getAllLeadProjectsApi({ leadId: leadQueryId });
       const list = res?.data?.projects || res?.projects || (Array.isArray(res?.data) ? res.data : []);
       setProjectsList(list);
     } catch (err) {
@@ -125,16 +132,17 @@ const LeadDetails = () => {
       } else {
         fetchLeadData();
       }
+      fetchProjectDetails(updatedData?.lead || lead);
     });
     return () => unsubscribe();
-  }, [id, fetchLeadData]);
+  }, [id, lead, fetchLeadData, fetchProjectDetails]);
 
   // Fetch project from leadsproject collection strictly for Sales Management views
   useEffect(() => {
-    if (lead && isFromSalesManagement) {
+    if (id || lead) {
       fetchProjectDetails(lead);
     }
-  }, [lead, isFromSalesManagement, fetchProjectDetails]);
+  }, [id, lead, fetchProjectDetails]);
 
   const handleAddRemark = (remarkData) => {
     if (!lead) return;
