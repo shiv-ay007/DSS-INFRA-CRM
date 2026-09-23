@@ -477,11 +477,16 @@ const Lostlead = () => {
     workCategory: {
       label: "WORK CATEGORY",
       align: "center",
-      render: (val, row) => (
-        <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-          {row.workCategory || "Design"}
-        </span>
-      )
+      render: (val, row) => {
+        const cat = Array.isArray(row.workCategory)
+          ? row.workCategory.join(", ")
+          : (row.workCategory || "Design");
+        return (
+          <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 truncate max-w-[120px] inline-block" title={cat}>
+            {cat}
+          </span>
+        );
+      }
     },
     workType: {
       label: "WORK TYPE",
@@ -610,7 +615,12 @@ const Lostlead = () => {
       // 2. Dropdown Filters
       if (filterLeadMode !== "ALL" && (item.leadMode || item.leadSource) !== filterLeadMode) return false;
       if (filterLeadType !== "ALL" && item.leadType !== filterLeadType) return false;
-      if (filterWorkCategory !== "ALL" && (item.workCategory || item.leadLabel) !== filterWorkCategory) return false;
+      if (
+        filterWorkCategory !== "ALL" &&
+        !(Array.isArray(item.workCategory)
+          ? item.workCategory.some((c) => c?.toLowerCase() === filterWorkCategory.toLowerCase())
+          : (item.workCategory || item.leadLabel)?.toLowerCase() === filterWorkCategory.toLowerCase())
+      ) return false;
       if (filterWorkType !== "ALL" && (item.workType || item.jobType) !== filterWorkType) return false;
       if (
         filterStatus !== "ALL" &&

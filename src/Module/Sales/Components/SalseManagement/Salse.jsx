@@ -295,11 +295,16 @@ const Salse = () => {
       workCategory: {
         label: "WORK CATEGORY",
         align: "center",
-        render: (val, row) => (
-          <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-            {row.workCategory || row.businessType || "--"}
-          </span>
-        )
+        render: (val, row) => {
+          const cat = Array.isArray(row.workCategory)
+            ? row.workCategory.join(", ")
+            : (row.workCategory || row.businessType || "--");
+          return (
+            <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 truncate max-w-[120px] inline-block" title={cat}>
+              {cat}
+            </span>
+          );
+        }
       },
       workType: {
         label: "WORK TYPE",

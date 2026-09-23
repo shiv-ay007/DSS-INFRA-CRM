@@ -17,6 +17,7 @@ import {
   availableWorkTypes
 } from "../../data/addLeadData";
 import { FaPlus, FaMicrophone, FaImage, FaVideo, FaFileAudio, FaTimes } from "react-icons/fa";
+import ReactSelectMulti from "../Master/PmsTemplate/ReactSelectMulti";
 
 const Addlead = () => {
   const navigate = useNavigate();
@@ -89,7 +90,7 @@ const Addlead = () => {
     date: getTodayDate(),
     leadMode: "",
     leadType: "FRESH",
-    workCategory: "",
+    workCategory: [],
     workType: [],
     leadStatus: "",
     clientName: "",
@@ -119,6 +120,7 @@ const Addlead = () => {
 
   const [formData, setFormData] = useState(initialFormState);
   const [customWorkType, setCustomWorkType] = useState("");
+  const [customWorkTypesList, setCustomWorkTypesList] = useState([]);
   const [errors, setErrors] = useState({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isFetchingPincode, setIsFetchingPincode] = useState(false);
@@ -127,6 +129,15 @@ const Addlead = () => {
   const [audioURL, setAudioURL] = useState(null);
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [audioChunks, setAudioChunks] = useState([]);
+
+  // Combined work types including pre-defined and custom-added ones
+  const allWorkTypeOptions = useMemo(() => {
+    const list = [...workTypeOptions, ...customWorkTypesList];
+    (formData.workType || []).forEach((t) => {
+      if (!list.includes(t)) list.push(t);
+    });
+    return list;
+  }, [workTypeOptions, customWorkTypesList, formData.workType]);
   
   // Populate form fields when editing an existing lead
   const populateLeadFields = (lead) => {
@@ -135,7 +146,24 @@ const Addlead = () => {
     if (Array.isArray(lead.workType)) {
       parsedWorkType = [...lead.workType];
     } else if (typeof lead.workType === "string" && lead.workType.trim()) {
-      parsedWorkType = lead.workType.split(",").map((s) => s.trim()).filter(Boolean);
+      try {
+        const parsed = JSON.parse(lead.workType);
+        parsedWorkType = Array.isArray(parsed) ? parsed : lead.workType.split(",").map((s) => s.trim()).filter(Boolean);
+      } catch {
+        parsedWorkType = lead.workType.split(",").map((s) => s.trim()).filter(Boolean);
+      }
+    }
+
+    let parsedWorkCategory = [];
+    if (Array.isArray(lead.workCategory)) {
+      parsedWorkCategory = [...lead.workCategory];
+    } else if (typeof lead.workCategory === "string" && lead.workCategory.trim()) {
+      try {
+        const parsed = JSON.parse(lead.workCategory);
+        parsedWorkCategory = Array.isArray(parsed) ? parsed : lead.workCategory.split(",").map((s) => s.trim()).filter(Boolean);
+      } catch {
+        parsedWorkCategory = lead.workCategory.split(",").map((s) => s.trim()).filter(Boolean);
+      }
     }
 
     const existingAtts = Array.isArray(lead.remarkAttachments) && lead.remarkAttachments.length > 0
@@ -168,7 +196,7 @@ const Addlead = () => {
       date: leadDate,
       leadMode: lead.leadMode || lead.leadSource || "",
       leadType: lead.leadType || "FRESH",
-      workCategory: lead.workCategory || "",
+      workCategory: parsedWorkCategory,
       workType: parsedWorkType,
       leadStatus: statusVal,
       clientName: lead.clientName || lead.concernPersonName || "",
@@ -331,8 +359,10 @@ const Addlead = () => {
     const val = customWorkType.trim();
     if (!val) return;
 
+    setCustomWorkTypesList((prev) => (prev.includes(val) ? prev : [...prev, val]));
     setFormData((prev) => {
-      const updated = prev.workType.filter((t) => t !== "Other");
+      const current = Array.isArray(prev.workType) ? prev.workType : [];
+      const updated = current.filter((t) => t !== "Other");
       if (!updated.includes(val)) {
         updated.push(val);
       }
@@ -524,9 +554,11 @@ const Addlead = () => {
 
     if (!formData.leadMode) newErrors.leadMode = "Please select lead mode";
     if (!formData.leadType) newErrors.leadType = "Please select lead type";
-    if (!formData.workCategory) newErrors.workCategory = "Please select work category";
+    if (!formData.workCategory || formData.workCategory.length === 0) {
+      newErrors.workCategory = "Please select work category";
+    }
 
-    if (formData.workType.length === 0) {
+    if (!formData.workType || formData.workType.length === 0) {
       newErrors.workType = "Please select at least one work type";
     } else if (formData.workType.includes("Other") && formData.workType.length === 1 && !customWorkType.trim()) {
       newErrors.workType = "Please enter custom work type";
@@ -725,7 +757,20 @@ const Addlead = () => {
       const formattedDate = today.toLocaleDateString('en-GB', options);
       const formattedTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
 
-      let finalWorkType = [...formData.workType];
+      let finalWorkCategory = Array.isArray(formData.workCategory)
+        ? [...formData.workCategory]
+        : formData.workCategory
+        ? [formData.workCategory]
+        : [];
+      if (finalWorkCategory.length === 0) {
+        finalWorkCategory = ["Design"];
+      }
+
+      let finalWorkType = Array.isArray(formData.workType)
+        ? [...formData.workType]
+        : formData.workType
+        ? [formData.workType]
+        : [];
       if (finalWorkType.includes("Other")) {
         finalWorkType = finalWorkType.filter((t) => t !== "Other");
         if (customWorkType.trim() && !finalWorkType.includes(customWorkType.trim())) {
@@ -770,7 +815,7 @@ const Addlead = () => {
         leadMode: formData.leadMode,
         leadSource: formData.leadMode || "Business networking",
         leadType: formData.leadType || "FRESH",
-        workCategory: formData.workCategory || "Design",
+        workCategory: finalWorkCategory,
         jobType: formData.jobType || "NEW",
         clientType: formData.clientType || "Individual",
         workType: finalWorkType,
@@ -834,7 +879,7 @@ const Addlead = () => {
           leadMode: formData.leadMode,
           leadSource: formData.leadMode,
           leadType: formData.leadType,
-          workCategory: formData.workCategory,
+          workCategory: finalWorkCategory,
           workType: finalWorkType,
           leadStatus: formData.leadStatus || "Warm",
           status: formData.leadStatus || "Warm",
@@ -893,7 +938,14 @@ const Addlead = () => {
 
       // Save lead to backend MongoDB Atlas Database with Cloudinary file upload
       const apiRes = await createLeadApi(newLead, rawUploadFiles);
-      if (apiRes && apiRes.success && apiRes.data) {
+
+      if (!apiRes || apiRes.success === false) {
+        toast.error(apiRes?.message || "Failed to create lead in database.");
+        setIsSubmitting(false);
+        return;
+      }
+
+      if (apiRes.data) {
         const bLead = apiRes.data;
         newLead.id = bLead.leadId || bLead._id;
         newLead.leadId = bLead.leadId || bLead._id;
@@ -905,7 +957,11 @@ const Addlead = () => {
           newLead.attachments = bLead.remarksFiles;
         }
       }
-      notifyLeadChange(newLead);
+
+      try {
+        notifyLeadChange(newLead);
+      } catch (e) {}
+
       toast.success("Lead Captured Successfully! 🎯", {
         position: "top-right",
         autoClose: 3000,
@@ -1031,95 +1087,69 @@ const Addlead = () => {
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
               Work Category <span className="text-red-500">*</span>
             </label>
-            <select
-              name="workCategory"
+            <ReactSelectMulti
+              options={workCategoryList}
               value={formData.workCategory}
-              onChange={handleChange}
-              className={`w-full px-3 py-1.5 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-1 transition-all cursor-pointer ${
-                errors.workCategory ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
-              }`}
-            >
-              <option value="">Select Work Category</option>
-              {workCategoryList.map((cat) => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
+              onChange={(selected) => {
+                setFormData((prev) => ({ ...prev, workCategory: selected }));
+                if (errors.workCategory) setErrors((prev) => ({ ...prev, workCategory: "" }));
+              }}
+              placeholder="Search & select category..."
+              themeColor="blue"
+              hasError={Boolean(errors.workCategory)}
+            />
             {errors.workCategory && <p className="text-xs text-red-500 font-medium mt-0.5">{errors.workCategory}</p>}
           </div>
         </div>
 
-        {/* ROW 2: Work Type (Full Width - Multi-select Pills) */}
+        {/* ROW 2: Work Type (Full Width - Searchable & Multi-select Dropdown) */}
         <div id="field-workType" className="pt-1">
           <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-            Work Type <span className="text-red-500">*</span> <span className="text-slate-500 font-normal">(Select all that apply)</span>
+            Work Type <span className="text-red-500">*</span> <span className="text-slate-500 font-normal">(Search & select all that apply)</span>
           </label>
-          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
-            {workTypeOptions.map((type) => {
-              const isSelected = formData.workType.includes(type);
-              return (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => toggleWorkType(type)}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-1 ${
-                    isSelected
-                      ? "bg-blue-600 text-white shadow-2xs"
-                      : "bg-slate-100 text-slate-700 hover:bg-slate-200 border border-black/20"
-                  }`}
-                >
-                  <span>{type}</span>
-                  {isSelected ? "✓" : "+"}
-                </button>
-              );
-            })}
+          <ReactSelectMulti
+            options={allWorkTypeOptions}
+            value={formData.workType}
+            onChange={(selected) => {
+              setFormData((prev) => ({ ...prev, workType: selected }));
+              if (errors.workType) setErrors((prev) => ({ ...prev, workType: "" }));
+            }}
+            placeholder="Search & select work types..."
+            themeColor="blue"
+            hasError={Boolean(errors.workType)}
+          />
 
-            {/* Custom Work Types added dynamically */}
-            {formData.workType
-              .filter((t) => !workTypeOptions.includes(t))
-              .map((customType) => (
-                <button
-                  key={customType}
-                  type="button"
-                  onClick={() => toggleWorkType(customType)}
-                  className="px-2.5 py-1 rounded-lg text-xs font-medium bg-emerald-600 text-white shadow-2xs transition-all cursor-pointer flex items-center gap-1"
-                >
-                  <span>{customType}</span>
-                  <span>✓</span>
-                </button>
-              ))}
-
-            {/* Inline Custom Input Box when Other is selected */}
-            {formData.workType.includes("Other") && (
-              <div className="inline-flex items-center gap-1 my-0.5">
-                <input
-                  type="text"
-                  placeholder="Type custom work type..."
-                  value={customWorkType}
-                  onChange={(e) => {
-                    setCustomWorkType(e.target.value);
-                    if (errors.workType) setErrors((prev) => ({ ...prev, workType: "" }));
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      e.preventDefault();
-                      handleAddCustomWorkType();
-                    }
-                  }}
-                  className={`px-2.5 py-1 rounded-lg border bg-white text-slate-800 text-xs font-medium focus:outline-none focus:ring-1 transition-all w-48 placeholder:text-slate-400 ${
-                    errors.workType ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-slate-300 focus:border-blue-500"
-                  }`}
-                  autoFocus
-                />
-                <button
-                  type="button"
-                  onClick={handleAddCustomWorkType}
-                  className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer shrink-0 shadow-2xs"
-                >
-                  + Add
-                </button>
-              </div>
-            )}
-          </div>
+          {/* Inline Custom Input Box when Other is selected */}
+          {formData.workType.includes("Other") && (
+            <div className="inline-flex items-center gap-1.5 mt-2">
+              <input
+                type="text"
+                placeholder="Type custom work type..."
+                value={customWorkType}
+                onChange={(e) => {
+                  setCustomWorkType(e.target.value);
+                  if (errors.workType) setErrors((prev) => ({ ...prev, workType: "" }));
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleAddCustomWorkType();
+                  }
+                }}
+                className={`px-2.5 py-1.5 rounded-lg border bg-white text-slate-800 text-xs font-medium focus:outline-none focus:ring-1 transition-all w-60 placeholder:text-slate-400 ${
+                  errors.workType ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-slate-300 focus:border-blue-500"
+                }`}
+                autoFocus
+              />
+              <button
+                type="button"
+                onClick={handleAddCustomWorkType}
+                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg transition-colors cursor-pointer shrink-0 shadow-2xs"
+              >
+                + Add
+              </button>
+            </div>
+          )}
           {errors.workType && <p className="text-xs text-red-500 font-medium mt-1">{errors.workType}</p>}
         </div>
 

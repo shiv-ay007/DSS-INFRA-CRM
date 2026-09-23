@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import {
   Plus,
   Mic,
@@ -10,6 +11,8 @@ import {
   X,
   CircleStop,
   FileText,
+  Camera,
+  RefreshCw,
 } from "lucide-react";
 import WhatsAppAudioPlayer from "./WhatsAppAudioPlayer";
 
@@ -36,6 +39,15 @@ const CommentWithMedia = ({
   const [isRecording, setIsRecording] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
   const [recordTime, setRecordTime] = useState(0);
+
+  /* 📷 Camera States & Refs */
+  const [isCameraOpen, setIsCameraOpen] = useState(false);
+  const [cameraFacingMode, setCameraFacingMode] = useState("user");
+  const [cameraError, setCameraError] = useState("");
+  const [cameraLoading, setCameraLoading] = useState(false);
+
+  const videoRef = useRef(null);
+  const cameraStreamRef = useRef(null);
 
   /* ⏱️ Recording Timer */
   useEffect(() => {
@@ -155,10 +167,116 @@ const CommentWithMedia = ({
     setIsPaused(false);
   };
 
+  /* 📷 Camera Controller Functions */
+  const startCamera = async (facing = cameraFacingMode) => {
+    setIsCameraOpen(true);
+    setCameraError("");
+    setCameraLoading(true);
+
+    if (cameraStreamRef.current) {
+      cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+      cameraStreamRef.current = null;
+    }
+
+    try {
+      let stream = null;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: facing,
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+          },
+          audio: false,
+        });
+      } catch (e) {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
+      }
+
+      cameraStreamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => {});
+      }
+    } catch (err) {
+      console.error("Camera access failed:", err);
+      setCameraError(
+        "Camera access denied or unavailable. Please allow camera permissions."
+      );
+    } finally {
+      setCameraLoading(false);
+    }
+  };
+
+  const stopCamera = () => {
+    if (cameraStreamRef.current) {
+      cameraStreamRef.current.getTracks().forEach((track) => track.stop());
+      cameraStreamRef.current = null;
+    }
+    if (videoRef.current) {
+      videoRef.current.srcObject = null;
+    }
+    setIsCameraOpen(false);
+    setCameraError("");
+    setCameraLoading(false);
+  };
+
+  const switchCamera = () => {
+    const nextFacing = cameraFacingMode === "user" ? "environment" : "user";
+    setCameraFacingMode(nextFacing);
+    startCamera(nextFacing);
+  };
+
+  const capturePhoto = () => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    const width = video.videoWidth || 1280;
+    const height = video.videoHeight || 720;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+
+    if (cameraFacingMode === "user") {
+      ctx.translate(width, 0);
+      ctx.scale(-1, 1);
+    }
+
+    ctx.drawImage(video, 0, 0, width, height);
+
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) return;
+        const fileName = `Camera-${Date.now()}.jpg`;
+        const file = new File([blob], fileName, { type: "image/jpeg" });
+
+        const newFile = {
+          file,
+          preview: URL.createObjectURL(blob),
+          type: "image",
+          name: fileName,
+          size: blob.size,
+        };
+
+        onFilesChange?.([...files, newFile]);
+        stopCamera();
+      },
+      "image/jpeg",
+      0.92
+    );
+  };
+
   useEffect(() => {
     return () => {
       if (mediaRecorderRef.current?.stream) {
         mediaRecorderRef.current.stream.getTracks().forEach((t) => t.stop());
+      }
+      if (cameraStreamRef.current) {
+        cameraStreamRef.current.getTracks().forEach((t) => t.stop());
       }
       clearInterval(timerRef.current);
     };
@@ -252,6 +370,16 @@ const CommentWithMedia = ({
             ref={optionBoxRef}
             className="absolute bottom-16 right-4 bg-white border border-gray-200 rounded-lg shadow-lg w-40 z-[60] overflow-hidden py-1"
           >
+            <button
+              type="button"
+              onClick={() => {
+                setShowOptions(false);
+                startCamera(cameraFacingMode);
+              }}
+              className="p-2.5 flex gap-2.5 w-full items-center text-xs font-medium text-gray-700 hover:bg-gray-100 cursor-pointer"
+            >
+              <Camera className="w-4 h-4 text-emerald-600" /> Camera
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -433,6 +561,102 @@ const CommentWithMedia = ({
           </div>
         </div>
       )}
+
+      {/* 📸 LIVE CAMERA MODAL (Rendered in Portal directly to document.body to be above header & all elements) */}
+      {isCameraOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div className="fixed inset-0 z-[999999] bg-black/85 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+            <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col">
+              {/* Modal Header */}
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-950/80">
+                <div className="flex items-center gap-2 text-white text-sm font-semibold">
+                  <Camera className="w-4 h-4 text-emerald-400" />
+                  <span>Take Photo</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={stopCamera}
+                  className="w-7 h-7 rounded-full flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                  title="Close Camera"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Video Viewport */}
+              <div className="relative aspect-4/3 w-full bg-black flex items-center justify-center overflow-hidden">
+                {cameraLoading && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-300 gap-2.5 bg-black/70 z-10">
+                    <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                    <span className="text-xs font-medium">Starting camera...</span>
+                  </div>
+                )}
+
+                {cameraError ? (
+                  <div className="p-6 text-center text-red-400 text-xs sm:text-sm max-w-xs space-y-3">
+                    <p>{cameraError}</p>
+                    <button
+                      type="button"
+                      onClick={() => startCamera(cameraFacingMode)}
+                      className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-semibold cursor-pointer transition-colors"
+                    >
+                      Retry
+                    </button>
+                  </div>
+                ) : (
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className={`w-full h-full object-cover ${
+                      cameraFacingMode === "user" ? "scale-x-[-1]" : ""
+                    }`}
+                  />
+                )}
+              </div>
+
+              {/* Controls Bar */}
+              <div className="px-6 py-4 bg-slate-950/90 border-t border-slate-800 flex items-center justify-between">
+                {/* Switch Camera */}
+                <button
+                  type="button"
+                  onClick={switchCamera}
+                  disabled={cameraLoading || Boolean(cameraError)}
+                  title="Switch Camera (Front / Rear)"
+                  className="p-2.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 disabled:opacity-40 transition-all cursor-pointer flex items-center gap-1.5 text-xs font-medium"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                  <span className="hidden sm:inline">Flip</span>
+                </button>
+
+                {/* Shutter Capture Button */}
+                <button
+                  type="button"
+                  onClick={capturePhoto}
+                  disabled={cameraLoading || Boolean(cameraError)}
+                  title="Capture Photo"
+                  className="w-14 h-14 rounded-full bg-white hover:bg-slate-100 disabled:opacity-40 p-1 flex items-center justify-center transition-transform active:scale-95 shadow-lg cursor-pointer"
+                >
+                  <div className="w-12 h-12 rounded-full border-2 border-slate-900 bg-emerald-500 hover:bg-emerald-600 flex items-center justify-center transition-colors">
+                    <Camera className="w-6 h-6 text-white" />
+                  </div>
+                </button>
+
+                {/* Cancel Button */}
+                <button
+                  type="button"
+                  onClick={stopCamera}
+                  className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors text-xs font-semibold cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 };

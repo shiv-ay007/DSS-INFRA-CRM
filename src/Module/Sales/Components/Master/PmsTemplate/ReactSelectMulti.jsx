@@ -7,19 +7,27 @@ import { FaCheck, FaTimes } from "react-icons/fa";
  */
 const CheckboxOption = (props) => {
   const { isSelected, label } = props;
+  const themeColor = props.selectProps?.themeColor || "indigo";
+  const activeColor = {
+    indigo: "bg-indigo-600 border-indigo-600",
+    blue: "bg-blue-600 border-blue-600",
+    emerald: "bg-emerald-600 border-emerald-600",
+    amber: "bg-amber-600 border-amber-600"
+  }[themeColor] || "bg-indigo-600 border-indigo-600";
+
   return (
     <components.Option {...props}>
       <div className="flex items-center gap-2.5 py-0.5 cursor-pointer select-none">
         <div
           className={`w-4 h-4 rounded border flex items-center justify-center transition-all shrink-0 ${
             isSelected
-              ? "bg-indigo-600 border-indigo-600 text-white shadow-xs"
-              : "border-slate-300 bg-white hover:border-indigo-400"
+              ? `${activeColor} text-white shadow-xs`
+              : "border-slate-300 bg-white hover:border-slate-400"
           }`}
         >
           {isSelected && <FaCheck className="w-2.5 h-2.5" />}
         </div>
-        <span className={`text-xs ${isSelected ? "font-bold text-indigo-900" : "font-medium text-slate-700"}`}>
+        <span className={`text-xs ${isSelected ? "font-bold text-slate-900" : "font-medium text-slate-700"}`}>
           {label}
         </span>
       </div>
@@ -166,7 +174,7 @@ export const ReactSelectMulti = ({
 
   // Normalize current selected value
   const selectedOptions = useMemo(() => {
-    const valSet = new Set(Array.isArray(value) ? value : []);
+    const valSet = new Set(Array.isArray(value) ? value : (value ? [value] : []));
     return normalizedOptions.filter((opt) => valSet.has(opt.value));
   }, [normalizedOptions, value]);
 
@@ -187,6 +195,13 @@ export const ReactSelectMulti = ({
   };
 
   const allSelected = normalizedOptions.length > 0 && selectedOptions.length === normalizedOptions.length;
+
+  const focusColors = {
+    indigo: { border: "#6366f1", shadow: "rgba(99, 102, 241, 0.15)", hover: "#818cf8" },
+    blue: { border: "#2563eb", shadow: "rgba(37, 99, 235, 0.15)", hover: "#3b82f6" },
+    emerald: { border: "#059669", shadow: "rgba(5, 150, 105, 0.15)", hover: "#10b981" },
+    amber: { border: "#d97706", shadow: "rgba(217, 119, 6, 0.15)", hover: "#f59e0b" }
+  }[themeColor] || { border: "#6366f1", shadow: "rgba(99, 102, 241, 0.15)", hover: "#818cf8" };
 
   return (
     <div className={`w-full ${className}`}>
@@ -227,20 +242,20 @@ export const ReactSelectMulti = ({
             borderColor: hasError
               ? "#ef4444"
               : state.isFocused
-              ? "#6366f1"
-              : "#e2e8f0",
-            borderRadius: "0.625rem",
-            minHeight: "44px",
+              ? focusColors.border
+              : "rgba(0, 0, 0, 0.2)",
+            borderRadius: "0.5rem",
+            minHeight: "38px",
             boxShadow: hasError
-              ? "0 0 0 3px rgba(239, 68, 68, 0.15)"
+              ? "0 0 0 2px rgba(239, 68, 68, 0.15)"
               : state.isFocused
-              ? "0 0 0 3px rgba(99, 102, 241, 0.12)"
+              ? `0 0 0 2px ${focusColors.shadow}`
               : "none",
             "&:hover": {
-              borderColor: hasError ? "#dc2626" : "#818cf8"
+              borderColor: hasError ? "#dc2626" : focusColors.hover
             },
             cursor: "pointer",
-            padding: "2px 4px",
+            padding: "1px 3px",
             transition: "all 0.15s ease"
           }),
           multiValue: (base) => ({
