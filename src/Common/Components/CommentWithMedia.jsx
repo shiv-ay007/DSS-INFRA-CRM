@@ -562,85 +562,100 @@ const CommentWithMedia = ({
         </div>
       )}
 
-      {/* 📸 LIVE CAMERA MODAL (Rendered in Portal directly to document.body to be above header & all elements) */}
+      {/* 📸 FULL-SCREEN PHONE-STYLE CAMERA MODAL */}
       {isCameraOpen &&
         typeof document !== "undefined" &&
         createPortal(
-          <div className="fixed inset-0 z-[999999] bg-black/85 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
-            <div className="bg-slate-900 border border-slate-700/80 rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl flex flex-col">
-              {/* Modal Header */}
-              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800 bg-slate-950/80">
-                <div className="flex items-center gap-2 text-white text-sm font-semibold">
-                  <Camera className="w-4 h-4 text-emerald-400" />
-                  <span>Take Photo</span>
+          <div className="fixed inset-0 z-[999999] bg-black text-white flex flex-col justify-between overflow-hidden select-none">
+            {/* Background Live Video Feed (Edge to edge full-screen like phone camera) */}
+            <div className="absolute inset-0 w-full h-full bg-black flex items-center justify-center overflow-hidden">
+              {cameraLoading && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-white gap-3 bg-black/80 z-10">
+                  <div className="w-10 h-10 border-3 border-emerald-500 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-sm font-medium tracking-wide">Starting camera...</span>
                 </div>
-                <button
-                  type="button"
-                  onClick={stopCamera}
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
-                  title="Close Camera"
-                >
-                  <X className="w-4 h-4" />
-                </button>
+              )}
+
+              {cameraError ? (
+                <div className="p-8 text-center text-red-400 text-sm max-w-sm space-y-4 z-10 bg-slate-900/90 rounded-2xl border border-red-500/20 backdrop-blur-md">
+                  <p className="leading-relaxed">{cameraError}</p>
+                  <button
+                    type="button"
+                    onClick={() => startCamera(cameraFacingMode)}
+                    className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-semibold cursor-pointer transition-colors shadow-md"
+                  >
+                    Retry Camera
+                  </button>
+                </div>
+              ) : (
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className={`w-full h-full object-cover ${
+                    cameraFacingMode === "user" ? "scale-x-[-1]" : ""
+                  }`}
+                />
+              )}
+
+              {/* Viewfinder Target in Center */}
+              {!cameraLoading && !cameraError && (
+                <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                  <div className="w-56 h-56 sm:w-72 sm:h-72 border border-white/20 rounded-3xl relative">
+                    <div className="absolute top-0 left-0 w-5 h-5 border-t-2 border-l-2 border-white/80 rounded-tl-sm -mt-0.5 -ml-0.5" />
+                    <div className="absolute top-0 right-0 w-5 h-5 border-t-2 border-r-2 border-white/80 rounded-tr-sm -mt-0.5 -mr-0.5" />
+                    <div className="absolute bottom-0 left-0 w-5 h-5 border-b-2 border-l-2 border-white/80 rounded-bl-sm -mb-0.5 -ml-0.5" />
+                    <div className="absolute bottom-0 right-0 w-5 h-5 border-b-2 border-r-2 border-white/80 rounded-br-sm -mb-0.5 -mr-0.5" />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Top Bar Floating */}
+            <div className="relative z-20 flex items-center justify-between p-4 sm:p-6 bg-gradient-to-b from-black/80 via-black/40 to-transparent">
+              <div className="flex items-center gap-2 bg-black/50 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/10 text-xs font-semibold tracking-wide">
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                <span>PHOTO</span>
               </div>
 
-              {/* Video Viewport */}
-              <div className="relative aspect-4/3 w-full bg-black flex items-center justify-center overflow-hidden">
-                {cameraLoading && (
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-300 gap-2.5 bg-black/70 z-10">
-                    <div className="w-8 h-8 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" />
-                    <span className="text-xs font-medium">Starting camera...</span>
-                  </div>
-                )}
+              <button
+                type="button"
+                onClick={stopCamera}
+                className="w-10 h-10 rounded-full bg-black/60 hover:bg-black/90 backdrop-blur-md border border-white/20 flex items-center justify-center text-white transition-all active:scale-95 cursor-pointer shadow-lg"
+                title="Close Camera"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-                {cameraError ? (
-                  <div className="p-6 text-center text-red-400 text-xs sm:text-sm max-w-xs space-y-3">
-                    <p>{cameraError}</p>
-                    <button
-                      type="button"
-                      onClick={() => startCamera(cameraFacingMode)}
-                      className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-xs font-semibold cursor-pointer transition-colors"
-                    >
-                      Retry
-                    </button>
-                  </div>
-                ) : (
-                  <video
-                    ref={videoRef}
-                    autoPlay
-                    playsInline
-                    muted
-                    className={`w-full h-full object-cover ${
-                      cameraFacingMode === "user" ? "scale-x-[-1]" : ""
-                    }`}
-                  />
-                )}
-              </div>
-
-              {/* Controls Bar */}
-              <div className="px-6 py-4 bg-slate-950/90 border-t border-slate-800 flex items-center justify-between">
-                {/* Switch Camera */}
+            {/* Bottom Bar Floating (Phone Shutter & Controls) */}
+            <div className="relative z-20 pb-8 sm:pb-12 pt-14 px-6 sm:px-12 bg-gradient-to-t from-black/95 via-black/60 to-transparent">
+              <div className="max-w-md mx-auto flex items-center justify-around">
+                {/* Flip Camera */}
                 <button
                   type="button"
                   onClick={switchCamera}
                   disabled={cameraLoading || Boolean(cameraError)}
                   title="Switch Camera (Front / Rear)"
-                  className="p-2.5 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-200 disabled:opacity-40 transition-all cursor-pointer flex items-center gap-1.5 text-xs font-medium"
+                  className="w-13 h-13 rounded-full bg-white/15 hover:bg-white/25 active:scale-90 backdrop-blur-md border border-white/20 flex flex-col items-center justify-center text-white disabled:opacity-40 transition-all cursor-pointer shadow-lg"
                 >
-                  <RefreshCw className="w-4 h-4" />
-                  <span className="hidden sm:inline">Flip</span>
+                  <RefreshCw className="w-5 h-5" />
+                  <span className="text-[9px] font-bold mt-0.5 tracking-wider">FLIP</span>
                 </button>
 
-                {/* Shutter Capture Button */}
+                {/* Big Phone Camera Shutter Button */}
                 <button
                   type="button"
                   onClick={capturePhoto}
                   disabled={cameraLoading || Boolean(cameraError)}
                   title="Capture Photo"
-                  className="w-14 h-14 rounded-full bg-white hover:bg-slate-100 disabled:opacity-40 p-1 flex items-center justify-center transition-transform active:scale-95 shadow-lg cursor-pointer"
+                  className="w-20 h-20 rounded-full border-4 border-white p-1 flex items-center justify-center transition-all active:scale-90 disabled:opacity-40 shadow-2xl cursor-pointer hover:scale-105"
                 >
-                  <div className="w-12 h-12 rounded-full border-2 border-slate-900 bg-emerald-500 hover:bg-emerald-600 flex items-center justify-center transition-colors">
-                    <Camera className="w-6 h-6 text-white" />
+                  <div className="w-full h-full rounded-full bg-white hover:bg-slate-100 flex items-center justify-center shadow-inner transition-colors">
+                    <div className="w-13 h-13 rounded-full bg-emerald-500 flex items-center justify-center text-white shadow-md">
+                      <Camera className="w-6 h-6" />
+                    </div>
                   </div>
                 </button>
 
@@ -648,9 +663,11 @@ const CommentWithMedia = ({
                 <button
                   type="button"
                   onClick={stopCamera}
-                  className="px-3 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white transition-colors text-xs font-semibold cursor-pointer"
+                  className="w-13 h-13 rounded-full bg-white/15 hover:bg-white/25 active:scale-90 backdrop-blur-md border border-white/20 flex flex-col items-center justify-center text-white transition-all cursor-pointer shadow-lg"
+                  title="Cancel"
                 >
-                  Cancel
+                  <X className="w-5 h-5" />
+                  <span className="text-[9px] font-bold mt-0.5 tracking-wider">EXIT</span>
                 </button>
               </div>
             </div>
