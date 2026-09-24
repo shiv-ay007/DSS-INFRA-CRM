@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import {
   FaArrowLeft,
   FaPlus,
@@ -42,6 +42,7 @@ import {
 } from "../../services/leadProject.api";
 import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
 import WhatsAppAudioPlayer from "../../../../Common/Components/WhatsAppAudioPlayer";
+import PresalesPipelineView from "./Components/PresalesPipelineView";
 
 // 11 Pipeline Stages Definition (As per Functional Spec)
 const PIPELINE_STAGES = [
@@ -71,16 +72,64 @@ const isStageApplicable = (stageId, scope) => {
 
 const Presales = () => {
   const navigate = useNavigate();
-  const { role, isObserver } = useAuth();
+  const { id } = useParams();
+  const location = useLocation();
+  const { role, isObserver, user } = useAuth();
   const currentRole = role || "Worker";
   const isUserObserver = isObserver || String(currentRole).toLowerCase() === "observer";
 
   // Active View Mode: "table" (default Table form) vs "pipeline"
   const [viewMode, setViewMode] = useState("table");
   const [loading, setLoading] = useState(true);
+  const [activePipelinePresale, setActivePipelinePresale] = useState(null);
 
   // Presales List state (directly from backend API)
   const [presalesList, setPresalesList] = useState([]);
+
+  // Resolve target presale for 11-Stage Pipeline Full-Page View
+  const activePipelineRecord = useMemo(() => {
+    if (activePipelinePresale) {
+      if (!activePipelinePresale.allProjects && presalesList.length > 0) {
+        const foundClient = presalesList.find(
+          (p) =>
+            p.id === activePipelinePresale.id ||
+            p._id === activePipelinePresale._id ||
+            (Array.isArray(p.allProjects) &&
+              p.allProjects.some(
+                (sub) => sub.id === activePipelinePresale.id || sub._id === activePipelinePresale._id
+              ))
+        );
+        if (foundClient && Array.isArray(foundClient.allProjects)) {
+          return { ...activePipelinePresale, allProjects: foundClient.allProjects };
+        }
+      }
+      return activePipelinePresale;
+    }
+
+    if (id) {
+      // 1. Direct match with top-level client
+      const foundClient = presalesList.find((p) => p.id === id || p._id === id || p.leadId === id);
+      if (foundClient) return foundClient;
+
+      // 2. Search inside allProjects of every client in presalesList
+      for (const client of presalesList) {
+        if (Array.isArray(client.allProjects)) {
+          const matchSub = client.allProjects.find(
+            (proj) => proj.id === id || proj._id === id || proj.leadId === id
+          );
+          if (matchSub) {
+            return {
+              ...matchSub,
+              allProjects: client.allProjects
+            };
+          }
+        }
+      }
+
+      return location.state?.presale || null;
+    }
+    return null;
+  }, [activePipelinePresale, id, presalesList, location.state]);
 
   // Fetch all projects directly from backend lead-projects API
   const fetchBackendProjects = async () => {
@@ -115,9 +164,11 @@ const Presales = () => {
           expectedBusiness: Number(bp.expectedBusiness || bp.amount || bp.expectedRevenue || 0),
           expectedRevenue: Number(bp.expectedBusiness || bp.amount || bp.expectedRevenue || 0),
           assignedTo: bp.assignedTo || bp.salesPerson || leadObj?.salesPerson || "Admin",
-          activePerson: bp.assignedTo || bp.salesPerson || leadObj?.salesPerson || "Admin",
+          activePerson: bp.nextPersonName || bp.projectCoordinatorName || bp.activePerson || bp.assignedTo || bp.salesPerson || leadObj?.salesPerson || "Admin",
           projectCoordinatorName: bp.projectCoordinatorName || bp.nextPersonName || "",
           nextPersonName: bp.projectCoordinatorName || bp.nextPersonName || "",
+          projectStatus: bp.projectStatus || "On Track",
+          projectSubStatus: bp.projectSubStatus || "VISIT",
           designation: bp.designation || bp.nextPersonDesignation || "",
           city: bp.city || leadObj?.city || "--",
           state: bp.state || leadObj?.state || "",
@@ -248,8 +299,7 @@ const Presales = () => {
   const [filterAssignedTo, setFilterAssignedTo] = useState("ALL");
   const [filterCity, setFilterCity] = useState("ALL");
 
-  // Modals
-  const [isPipelineModalOpen, setIsPipelineModalOpen] = useState(false);
+  // Closure modal state
   const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
   const [closureOption, setClosureOption] = useState("Closed — Consultancy Only");
 
@@ -1121,6 +1171,72 @@ const Presales = () => {
     </div>
   );
 
+  // If an active pipeline record is selected or URL has /presales/:id, render dedicated full page
+  if (activePipelineRecord) {
+    return (
+      <div className="w-full max-w-full min-w-0 pb-16 px-1 sm:px-0 font-sans">
+        <PresalesPipelineView
+          presale={activePipelineRecord}
+          allProjects={activePipelineRecord.allProjects}
+          onClose={() => {
+            setActivePipelinePresale(null);
+            if (id) {
+              navigate("/sales/presales");
+            }
+          }}
+          onUpdatePresale={(updatedItem) => {
+            setPresalesList((prev) =>
+              prev.map((p) => {
+                if (p.id === updatedItem.id || p._id === updatedItem._id) {
+                  return {
+                    ...p,
+                    ...updatedItem,
+                    allProjects: Array.isArray(p.allProjects)
+                      ? p.allProjects.map((sub) =>
+                          sub.id === updatedItem.id || sub._id === updatedItem._id
+                            ? { ...sub, ...updatedItem }
+                            : sub
+                        )
+                      : p.allProjects
+                  };
+                }
+                if (
+                  Array.isArray(p.allProjects) &&
+                  p.allProjects.some(
+                    (sub) => sub.id === updatedItem.id || sub._id === updatedItem._id
+                  )
+                ) {
+                  return {
+                    ...p,
+                    allProjects: p.allProjects.map((sub) =>
+                      sub.id === updatedItem.id || sub._id === updatedItem._id
+                        ? { ...sub, ...updatedItem }
+                        : sub
+                    )
+                  };
+                }
+                return p;
+              })
+            );
+            setActivePipelinePresale((prev) => {
+              if (!prev) return updatedItem;
+              const newAll = Array.isArray(prev.allProjects)
+                ? prev.allProjects.map((sub) =>
+                    sub.id === updatedItem.id || sub._id === updatedItem._id
+                      ? { ...sub, ...updatedItem }
+                      : sub
+                  )
+                : prev.allProjects;
+              return { ...prev, ...updatedItem, allProjects: newAll };
+            });
+          }}
+          readOnly={isUserObserver}
+          currentUser={user?.name || "Admin"}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="w-full max-w-full min-w-0 space-y-4 pb-16 px-1 sm:px-0 font-sans">
       
@@ -1178,6 +1294,25 @@ const Presales = () => {
                   </span>
                 )}
               </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (presalesList.length > 0) {
+                    const target = presalesList[0];
+                    setActivePipelinePresale(target);
+                    navigate(`/sales/presales/${target.id}`, { state: { presale: target } });
+                  } else {
+                    toast.info("No presale records available yet.");
+                  }
+                }}
+                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-cyan-400 hover:bg-cyan-300 text-slate-950 transition-all flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
+                title="Open 11-Stage Design Pipeline"
+              >
+                <FaStream className="w-3.5 h-3.5 text-slate-950" />
+                <span className="hidden sm:inline">11-Stage Pipeline</span>
+              </button>
+
               <span className="px-3 py-1 rounded-lg text-xs font-bold bg-white/10 text-white border border-white/15">
                 {presalesList.length} Active Records
               </span>
@@ -1469,6 +1604,19 @@ const Presales = () => {
                         {/* 2. ACTIONS */}
                         <td className="py-2.5 px-3 text-center border-r border-slate-100 whitespace-nowrap">
                           <div className="flex items-center justify-center gap-1.5">
+                            {/* OPEN 11-STAGE DESIGN PIPELINE (FULL PAGE) */}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActivePipelinePresale(item);
+                                navigate(`/sales/presales/${item.id}`, { state: { presale: item } });
+                              }}
+                              className="w-7 h-7 rounded-lg border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-700 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
+                              title="Open 11-Stage Design Pipeline"
+                            >
+                              <FaStream className="text-xs" />
+                            </button>
+
                             {/* VIEW LEAD DETAILS PAGE */}
                             <button
                               type="button"
@@ -1807,297 +1955,6 @@ const Presales = () => {
         </div>
       )}
 
-      {/* ──────────────────────────────────────────────────────────────────
-          MODE 2: FULL-SCREEN PIPELINE VIEW OR MODAL
-      ────────────────────────────────────────────────────────────────── */}
-      {(viewMode === "pipeline" || isPipelineModalOpen) && (
-        <div className={isPipelineModalOpen ? "fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-6 overflow-y-auto" : "space-y-5"}>
-          <div className={isPipelineModalOpen ? "bg-[#F8FAFC] border border-slate-200 rounded-3xl max-w-6xl w-full p-5 sm:p-6 shadow-2xl space-y-5 max-h-[92vh] overflow-y-auto" : "space-y-5"}>
-            
-            {!currentPresale ? (
-              <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center space-y-3">
-                <p className="text-sm font-semibold text-slate-600">No Presale record selected or available.</p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (isPipelineModalOpen) setIsPipelineModalOpen(false);
-                    else setViewMode("table");
-                  }}
-                  className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold cursor-pointer"
-                >
-                  Back to Table View
-                </button>
-              </div>
-            ) : (
-              <>
-                {/* MODAL HEADER */}
-                <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-200 bg-white p-4 rounded-xl">
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (isPipelineModalOpen) setIsPipelineModalOpen(false);
-                        else setViewMode("table");
-                      }}
-                      className="w-8 h-8 rounded-lg border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 flex items-center justify-center transition-all cursor-pointer shadow-2xs"
-                      title="Close Pipeline View"
-                    >
-                      <FaTimes className="text-xs" />
-                    </button>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h2 className="text-base sm:text-lg font-bold text-slate-900">
-                          11-Stage Design Pipeline: {currentPresale.clientName}
-                        </h2>
-                        <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-                          {currentPresale.id}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-500">
-                        Engagement Scope: <span className="font-bold text-blue-700">{currentPresale.engagementScope}</span> • City: {currentPresale.city}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <select
-                      value={currentPresale.engagementScope}
-                      onChange={(e) => handleScopeChange(e.target.value)}
-                      className="text-xs font-bold text-blue-700 bg-blue-50 border border-blue-200 rounded-lg px-2.5 py-1.5 focus:outline-none cursor-pointer"
-                    >
-                      <option value="Consultancy Only">Consultancy Only (Stages 1-2)</option>
-                      <option value="Design Only">Design Only (Stages 1-10)</option>
-                      <option value="Design + Construction">Design + Construction (Stages 1-11)</option>
-                    </select>
-                  </div>
-                </div>
-
-            {/* PIPELINE STEPPER (11 STAGES) */}
-            <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-6">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
-                  <FaLayerGroup className="text-blue-600" /> Pipeline Stepper (Click any stage to edit)
-                </h3>
-                <span className="text-[11px] font-bold text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">
-                  Selected: Stage {activeStageId} ({activeStageConfig.name})
-                </span>
-              </div>
-
-              {/* Row 1: Stages 1 to 9 */}
-              <div className="relative">
-                <div className="absolute top-4 left-4 right-4 h-0.5 bg-slate-200 -z-0"></div>
-                <div className="grid grid-cols-9 gap-1 relative z-10">
-                  {PIPELINE_STAGES.slice(0, 9).map((stage) => {
-                    const applicable = isStageApplicable(stage.id, currentPresale?.engagementScope);
-                    const isCurrent = stage.id === (currentPresale?.currentStageId || 1);
-                    const isSelected = stage.id === activeStageId;
-                    const isCompleted = stage.id < (currentPresale?.currentStageId || 1) && applicable;
-
-                    return (
-                      <div
-                        key={stage.id}
-                        onClick={() => setActiveStageId(stage.id)}
-                        className={`flex flex-col items-center select-none text-center cursor-pointer transition-all ${
-                          !applicable ? "opacity-35" : "opacity-100"
-                        }`}
-                      >
-                        <span className={`text-[11px] font-mono font-bold mb-1 ${isSelected ? "text-blue-600 font-extrabold" : "text-slate-400"}`}>
-                          {stage.id}
-                        </span>
-                        <div
-                          className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs transition-all ${
-                            !applicable
-                              ? "bg-slate-100 text-slate-400 border border-slate-300"
-                              : isSelected
-                              ? "ring-4 ring-blue-100 bg-blue-600 text-white shadow-sm scale-110"
-                              : isCurrent
-                              ? "bg-slate-900 text-white ring-2 ring-slate-400"
-                              : isCompleted
-                              ? "bg-emerald-600 text-white"
-                              : "bg-white border-2 border-slate-300 text-slate-400 hover:border-slate-500 hover:text-slate-600"
-                          }`}
-                        >
-                          {!applicable ? "✕" : isCompleted ? <FaCheck className="text-[10px]" /> : stage.id}
-                        </div>
-                        <span className={`text-[11px] mt-1.5 font-bold truncate max-w-[70px] ${!applicable ? "text-slate-400 line-through" : isSelected ? "text-blue-700 font-extrabold" : "text-slate-600"}`}>
-                          {stage.name}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Row 2: Stages 10 & 11 */}
-              <div className="pt-3 border-t border-slate-100 relative">
-                <div className="max-w-md">
-                  <div className="grid grid-cols-2 gap-8 relative">
-                    <div className="absolute top-4 left-6 right-6 h-0.5 bg-slate-200 -z-0"></div>
-                    {PIPELINE_STAGES.slice(9, 11).map((stage) => {
-                      const applicable = isStageApplicable(stage.id, currentPresale?.engagementScope);
-                      const isCurrent = stage.id === (currentPresale?.currentStageId || 1);
-                      const isSelected = stage.id === activeStageId;
-                      const isCompleted = stage.id < (currentPresale?.currentStageId || 1) && applicable;
-
-                      return (
-                        <div
-                          key={stage.id}
-                          onClick={() => setActiveStageId(stage.id)}
-                          className={`flex flex-col items-center select-none text-center cursor-pointer relative z-10 transition-all ${
-                            !applicable ? "opacity-35" : "opacity-100"
-                          }`}
-                        >
-                          <span className={`text-[11px] font-mono font-bold mb-1 ${isSelected ? "text-blue-600 font-extrabold" : "text-slate-400"}`}>
-                            {stage.id}
-                          </span>
-                          <div
-                            className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs transition-all ${
-                              !applicable
-                                ? "bg-slate-100 text-slate-400 border border-slate-300"
-                                : isSelected
-                                ? "ring-4 ring-blue-100 bg-blue-600 text-white shadow-sm scale-110"
-                                : isCurrent
-                                ? "bg-slate-900 text-white ring-2 ring-slate-400"
-                                : isCompleted
-                                ? "bg-emerald-600 text-white"
-                                : "bg-white border-2 border-slate-300 text-slate-400 hover:border-slate-500 hover:text-slate-600"
-                            }`}
-                          >
-                            {!applicable ? "✕" : isCompleted ? <FaCheck className="text-[10px]" /> : stage.id}
-                          </div>
-                          <span className={`text-xs mt-1.5 font-bold ${!applicable ? "text-slate-400 line-through" : isSelected ? "text-blue-700 font-extrabold" : "text-slate-600"}`}>
-                            {stage.name}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* ACTIVE STAGE FORM */}
-            <div className="bg-white border border-slate-200 rounded-xl p-5 shadow-xs space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-slate-100">
-                <h3 className="text-sm sm:text-base font-extrabold text-slate-900 uppercase flex items-center gap-2">
-                  <span className="w-2.5 h-2.5 rounded-full bg-blue-600"></span>
-                  <span>STAGE {activeStageConfig.id} — {activeStageConfig.fullName.toUpperCase()}</span>
-                </h3>
-                {isCurrentStageApplicable && (
-                  <button
-                    type="button"
-                    onClick={handleSaveStage}
-                    disabled={savingStage}
-                    className="px-5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer disabled:opacity-50"
-                  >
-                    {savingStage ? <FaSpinner className="animate-spin text-xs" /> : <FaSave className="text-xs" />}
-                    <span>{savingStage ? "Saving..." : "Save Stage"}</span>
-                  </button>
-                )}
-              </div>
-              <div>{renderStageForm()}</div>
-            </div>
-
-            {/* DISCUSSION REMARKS & FOOTER ACTIONS */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* Remarks */}
-              <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs space-y-3">
-                <h4 className="text-xs font-bold text-slate-700 uppercase flex items-center gap-1.5">
-                  <FaCommentDots className="text-blue-600" /> Discussion Log / Remarks
-                </h4>
-                <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
-                  {(currentPresale?.remarks || []).length === 0 ? (
-                    <p className="text-xs text-slate-400 italic">No remarks logged yet.</p>
-                  ) : (
-                    (currentPresale?.remarks || []).map((r) => (
-                      <div key={r.id} className="p-2.5 rounded-lg border border-slate-200 bg-slate-50 text-xs">
-                        <span className="font-bold text-slate-700">{r.author} • {r.dateTime}:</span>
-                        <p className="text-slate-800 mt-0.5">{r.text}</p>
-                        {r.attachments && r.attachments.length > 0 && (
-                          <div className="mt-2 space-y-1.5 pt-1 border-t border-slate-200/60">
-                            {r.attachments.map((att, idx) => {
-                              const isAudio = (att.type === "audio") || (att.name?.match(/\.(mp3|wav|ogg|m4a|webm|aac)$/i)) || (att.url?.match(/\.(mp3|wav|ogg|m4a|webm|aac)($|\?)/i));
-                              if (isAudio) {
-                                return (
-                                  <div key={idx} className="mt-1">
-                                    <WhatsAppAudioPlayer file={att.file} src={att.url || att.preview} />
-                                  </div>
-                                );
-                              }
-                              return (
-                                <a
-                                  key={idx}
-                                  href={att.url || att.preview}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="inline-block text-[11px] text-blue-600 hover:underline mr-2"
-                                >
-                                  📎 {att.name || "Attachment"}
-                                </a>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    ))
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <CommentWithMedia
-                    title="New Discussion Note / Voice Note"
-                    placeholder="Write a remark or record audio note..."
-                    value={newRemarkText}
-                    onChange={(val) => setNewRemarkText(val)}
-                    files={newRemarkAttachments}
-                    onFilesChange={(newFiles) => setNewRemarkAttachments(newFiles)}
-                  />
-                  <button
-                    type="button"
-                    onClick={handleAddRemark}
-                    className="w-full py-2 rounded-lg bg-blue-600 hover:bg-blue-700 active:scale-98 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
-                  >
-                    Add Remark
-                  </button>
-                </div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs flex flex-col justify-between gap-3">
-                <div>
-                  <h4 className="text-xs font-bold text-slate-700 uppercase mb-1">Presale Pipeline Actions</h4>
-                  <p className="text-xs text-slate-500">
-                    Close the record or promote to Construction Active Project based on scope and contract completion.
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
-                  <button
-                    type="button"
-                    onClick={() => setIsCloseModalOpen(true)}
-                    className="px-4 py-2 rounded-lg border border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold transition-all"
-                  >
-                    Mark as Closed
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleMoveToActive}
-                    disabled={!isMoveToActiveEnabled}
-                    className={`px-5 py-2 rounded-lg text-xs font-bold transition-all ${
-                      isMoveToActiveEnabled
-                        ? "bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer"
-                        : "bg-slate-200 text-slate-400 cursor-not-allowed"
-                    }`}
-                  >
-                    Move to Active Project
-                  </button>
-                </div>
-              </div>
-            </div>
-            </>
-          )}
-
-          </div>
-        </div>
-      )}
 
 
 
@@ -2205,20 +2062,45 @@ const Presales = () => {
                           </span>
                         </div>
 
-                        {!isUserObserver && (
+                        <div className="flex items-center gap-1.5">
                           <button
                             type="button"
                             onClick={() => {
                               setIsProjectsModalOpen(false);
-                              handleEditProject(proj);
+                              const targetProj = {
+                                ...proj,
+                                allProjects: selectedClientProjects.allProjects || [proj]
+                              };
+                              setActivePipelinePresale(targetProj);
+                              navigate(`/sales/presales/${proj.id || proj._id}`, {
+                                state: {
+                                  presale: targetProj,
+                                  allProjects: selectedClientProjects.allProjects || [proj]
+                                }
+                              });
                             }}
-                            className="px-2.5 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-                            title="Edit Project in Sales Form"
+                            className="px-2.5 py-1.5 rounded-lg border border-purple-200 bg-purple-50 hover:bg-purple-100 text-purple-700 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                            title="Open 11-Stage Pipeline for this project"
                           >
-                            <FaEdit className="text-xs" />
-                            <span>Edit</span>
+                            <FaStream className="text-xs" />
+                            <span>Pipeline</span>
                           </button>
-                        )}
+
+                          {!isUserObserver && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setIsProjectsModalOpen(false);
+                                handleEditProject(proj);
+                              }}
+                              className="px-2.5 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                              title="Edit Project in Sales Form"
+                            >
+                              <FaEdit className="text-xs" />
+                              <span>Edit</span>
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </div>
 
