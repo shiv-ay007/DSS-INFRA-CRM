@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { FaCommentDots, FaPaperPlane, FaSpinner, FaArrowRight } from "react-icons/fa";
+import { FaCommentDots, FaPaperPlane, FaSpinner, FaArrowRight, FaCheck } from "react-icons/fa";
 import { toast } from "react-toastify";
 import CommentWithMedia from "../../../../../Common/Components/CommentWithMedia";
 import WhatsAppAudioPlayer from "../../../../../Common/Components/WhatsAppAudioPlayer";
@@ -45,79 +45,76 @@ const PresalesDiscussionLog = ({
   }, [remarks, activeStageId]);
 
   const handleSubmit = async (e) => {
-    if (e) e.preventDefault();
+    if (e && typeof e.preventDefault === "function") e.preventDefault();
     if (readOnly || isSubmitting) return;
-
-    if (!remarkText.trim() && (!remarkAttachments || remarkAttachments.length === 0)) {
-      toast.error("Please enter a note or record an audio note first!");
-      return;
-    }
 
     setIsSubmitting(true);
 
     try {
-      // 1. Save stage form data (dates, status) if filled
+      // 1. Always save the current stage form data (dates, rates, statuses, notes)
       if (typeof onSaveCurrentStage === "function") {
-        await onSaveCurrentStage();
+        const stageSaved = await onSaveCurrentStage();
+        if (stageSaved === false) {
+          setIsSubmitting(false);
+          return;
+        }
       }
 
-      if (projectId) {
-        // Build FormData with current stageId & stageName
-        const formData = new FormData();
-        formData.append("text", remarkText.trim());
-        formData.append("author", currentUser || "Admin");
-        formData.append("stageId", activeStageId);
-        formData.append("stageName", activeStageName || `Stage ${activeStageId}`);
+      // 2. If a discussion note or audio was provided, upload to Cloudinary & log
+      const hasRemarkContent = Boolean(
+        (remarkText && remarkText.trim() !== "") ||
+        (Array.isArray(remarkAttachments) && remarkAttachments.length > 0)
+      );
 
-        // Append binary files / audio notes
-        remarkAttachments.forEach((att) => {
-          if (att.file) {
-            formData.append("files", att.file, att.name || "media");
+      if (hasRemarkContent) {
+        if (projectId) {
+          const formData = new FormData();
+          formData.append("text", remarkText.trim());
+          formData.append("author", currentUser || "Admin");
+          formData.append("stageId", activeStageId);
+          formData.append("stageName", activeStageName || `Stage ${activeStageId}`);
+
+          remarkAttachments.forEach((att) => {
+            if (att.file) {
+              formData.append("files", att.file, att.name || "media");
+            }
+          });
+
+          const res = await addPresaleRemarkApi(projectId, formData);
+          if (res?.data?.newRemark) {
+            onAddRemark?.(res.data.newRemark);
           }
-        });
-
-        const res = await addPresaleRemarkApi(projectId, formData);
-
-        if (res?.success || res?.statusCode === 200 || res?.data) {
-          const newRemark = res.data?.newRemark || res.data?.[0];
-          if (newRemark) {
-            onAddRemark?.(newRemark);
-          }
-          toast.success(`Remark logged for Stage ${activeStageId}! Moving to next stage... 🚀`);
-          setRemarkText("");
-          setRemarkAttachments([]);
-
-          // Automatically advance to the next stage
-          onNextStage?.();
         } else {
-          toast.error(res?.message || "Failed to log remark");
+          const now = new Date();
+          const newEntry = {
+            id: Date.now(),
+            stageId: activeStageId,
+            stageName: activeStageName,
+            author: currentUser || "Admin",
+            dateTime: now,
+            text: remarkText.trim(),
+            attachments: remarkAttachments.map((f, idx) => ({
+              id: idx,
+              name: f.name || `Attachment-${idx + 1}`,
+              type: f.type || "file",
+              url: f.preview || f.url || "",
+              preview: f.preview || f.url || ""
+            }))
+          };
+          onAddRemark?.(newEntry);
         }
-      } else {
-        // Fallback local state if no projectId yet
-        const now = new Date();
-        const newEntry = {
-          id: Date.now(),
-          stageId: activeStageId,
-          stageName: activeStageName,
-          author: currentUser || "Admin",
-          dateTime: now,
-          text: remarkText.trim(),
-          attachments: remarkAttachments.map((f, idx) => ({
-            id: idx,
-            name: f.name || `Attachment-${idx + 1}`,
-            type: f.type || "file",
-            url: f.preview || f.url || "",
-            preview: f.preview || f.url || ""
-          }))
-        };
-        onAddRemark?.(newEntry);
+
         setRemarkText("");
         setRemarkAttachments([]);
-        onNextStage?.();
+      }
+
+      // 3. Move to next stage
+      if (typeof onNextStage === "function") {
+        onNextStage();
       }
     } catch (err) {
-      console.error("Error submitting remark:", err);
-      toast.error(err.response?.data?.message || err.message || "Failed to save remark on server");
+      console.error("Error submitting stage & remark:", err);
+      toast.error(err.response?.data?.message || err.message || "Failed to save on server");
     } finally {
       setIsSubmitting(false);
     }
@@ -227,25 +224,27 @@ const PresalesDiscussionLog = ({
             onFilesChange={(newFiles) => setRemarkAttachments(newFiles)}
           />
 
-          <button
-            type="button"
-            disabled={isSubmitting}
-            onClick={handleSubmit}
-            className="w-full py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 active:scale-98 text-white text-xs font-bold transition-all shadow-xs flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-          >
-            {isSubmitting ? (
-              <>
-                <FaSpinner className="animate-spin text-xs" />
-                <span>Uploading & Moving to Next...</span>
-              </>
-            ) : (
-              <>
-                <FaPaperPlane className="text-xs" />
-                <span>Save to Discussion Log & Next</span>
-                <FaArrowRight className="text-xs ml-1" />
-              </>
-            )}
-          </button>
+          <div className="pt-1">
+            <button
+              type="button"
+              disabled={isSubmitting}
+              onClick={handleSubmit}
+              className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white text-xs sm:text-sm font-bold transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+            >
+              {isSubmitting ? (
+                <>
+                  <FaSpinner className="animate-spin text-sm" />
+                  <span>Saving Stage & Moving to Next...</span>
+                </>
+              ) : (
+                <>
+                  <FaCheck className="text-xs" />
+                  <span>{activeStageId < 11 ? "Save & Next Stage" : "Save & Complete Stage"}</span>
+                  {activeStageId < 11 && <FaArrowRight className="text-xs ml-0.5" />}
+                </>
+              )}
+            </button>
+          </div>
         </div>
       ) : (
         <div className="p-3 bg-slate-100 text-slate-500 rounded-lg text-xs italic text-center">

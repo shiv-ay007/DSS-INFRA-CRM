@@ -6,8 +6,10 @@ import {
   FaCalendarAlt,
   FaFileAlt,
   FaExternalLinkAlt,
-  FaRupeeSign
+  FaRupeeSign,
+  FaCommentDots
 } from "react-icons/fa";
+import WhatsAppAudioPlayer from "../../../../../Common/Components/WhatsAppAudioPlayer";
 import { PIPELINE_ACCEPTANCE_STATUSES } from "./SubStageFormRenderer";
 
 const FIELD_LABELS = {
@@ -73,6 +75,8 @@ const SavedStageSummaryCard = ({
   // Filter out internal metadata or empty fields
   const entries = Object.entries(stageData).filter(([key, val]) => {
     if (key === "negotiationCycle" || key === "_id" || key === "id") return false;
+    if (key === "notes" || key === "visitRemarks" || key === "attachments") return false;
+    if (Array.isArray(val)) return false;
     return val !== null && val !== undefined && String(val).trim() !== "";
   });
 
@@ -231,6 +235,88 @@ const SavedStageSummaryCard = ({
           );
         })}
       </div>
+
+      {/* Dedicated Completion Remarks & Media Block */}
+      {(stageData.notes || stageData.visitRemarks || (Array.isArray(stageData.attachments) && stageData.attachments.length > 0)) && (
+        <div className="bg-white border border-emerald-200/90 rounded-xl p-4 shadow-2xs space-y-3">
+          <div className="flex items-center gap-2 text-xs font-bold text-slate-800 uppercase pb-2 border-b border-slate-100">
+            <FaCommentDots className="text-emerald-600 text-sm" />
+            <span>Stage {stageId} Completion Remarks & Media</span>
+          </div>
+
+          {(stageData.notes || stageData.visitRemarks) && (
+            <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs sm:text-sm text-slate-800 font-medium whitespace-pre-line leading-relaxed">
+              {stageData.notes || stageData.visitRemarks}
+            </div>
+          )}
+
+          {/* Media Attachments (Photos, Voice Notes, Files via Cloudinary) */}
+          {Array.isArray(stageData.attachments) && stageData.attachments.length > 0 && (
+            <div className="pt-1 space-y-2">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">
+                Attached Media & Voice Notes ({stageData.attachments.length})
+              </span>
+              <div className="flex flex-wrap items-center gap-3">
+                {stageData.attachments.map((att, attIdx) => {
+                  const mediaUrl = att.url || att.preview || (typeof att === "string" ? att : "");
+                  const isAudio =
+                    att.type === "audio" ||
+                    att.name?.match(/\.(mp3|wav|ogg|m4a|webm|aac)$/i) ||
+                    mediaUrl?.match(/\.(mp3|wav|ogg|m4a|webm|aac)($|\?)/i);
+
+                  const isImage =
+                    att.type === "image" ||
+                    att.name?.match(/\.(jpg|jpeg|png|webp|gif|svg)$/i) ||
+                    mediaUrl?.match(/\.(jpg|jpeg|png|webp|gif|svg)($|\?)/i);
+
+                  if (isAudio) {
+                    return (
+                      <div key={attIdx} className="w-full sm:w-auto min-w-[240px]">
+                        <WhatsAppAudioPlayer file={att.file} src={mediaUrl} />
+                      </div>
+                    );
+                  }
+
+                  if (isImage) {
+                    return (
+                      <a
+                        key={attIdx}
+                        href={mediaUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="group relative inline-block rounded-xl overflow-hidden border border-slate-300 hover:border-emerald-500 transition-all shadow-2xs hover:scale-105"
+                      >
+                        <img
+                          src={mediaUrl}
+                          alt={att.name || "Site Photo"}
+                          className="w-24 h-24 object-cover"
+                        />
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-[10px] font-bold">
+                          View Photo
+                        </div>
+                      </a>
+                    );
+                  }
+
+                  return (
+                    <a
+                      key={attIdx}
+                      href={mediaUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 text-xs font-semibold"
+                    >
+                      <FaFileAlt className="text-xs" />
+                      <span>{att.name || "Attached Document"}</span>
+                      <FaExternalLinkAlt className="text-[10px]" />
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Negotiation Cycles Preview (If any exist) */}
       {negotiationCycles.length > 0 && (

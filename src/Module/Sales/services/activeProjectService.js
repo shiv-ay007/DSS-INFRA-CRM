@@ -1043,6 +1043,33 @@ export const activeProjectService = {
             updatedItem = true;
           }
 
+          // Work Category & Work Type sync from Lead / Project
+          const resolvedCategory = (() => {
+            const cat = bp.workCategory || leadObj.workCategory || bp.businessType || leadObj.businessType;
+            if (Array.isArray(cat)) {
+              return cat.filter(Boolean).join(", ");
+            }
+            return cat ? String(cat) : "";
+          })();
+          const resolvedWorkType = (() => {
+            const wt = bp.workType || leadObj.workType;
+            if (Array.isArray(wt)) {
+              return wt.filter(Boolean).join(", ");
+            }
+            return wt ? String(wt) : "";
+          })();
+
+          if (resolvedCategory && (existing.workCategory !== resolvedCategory || !existing.workCategory)) {
+            existing.workCategory = resolvedCategory;
+            existing.category = resolvedCategory;
+            existing.engagementScope = resolvedCategory;
+            updatedItem = true;
+          }
+          if (resolvedWorkType && (existing.workType !== resolvedWorkType || !existing.workType)) {
+            existing.workType = resolvedWorkType;
+            updatedItem = true;
+          }
+
           // Stage & Task Repair / Synchronization with PMS Template (including fieldData)
           if (matchedTmpl && Array.isArray(matchedTmpl.stages) && matchedTmpl.stages.length > 0) {
             existing.stages = mapPmsStagesToExecutionStages(matchedTmpl.stages, wbsData, existing.stages);
@@ -1075,7 +1102,22 @@ export const activeProjectService = {
           const email = bp.emailAddress || bp.email || leadObj.emailAddress || "";
           const city = bp.city || leadObj.city || "Lucknow";
           const address = bp.address || leadObj.address || `${city}, UP`;
-          const wType = Array.isArray(bp.workType) ? bp.workType.join(", ") : (bp.workType || bp.workCategory || bp.businessType || "Design + Construction");
+
+          const resolvedCategory = (() => {
+            const cat = bp.workCategory || leadObj.workCategory || bp.businessType || leadObj.businessType;
+            if (Array.isArray(cat)) {
+              return cat.filter(Boolean).join(", ");
+            }
+            return cat ? String(cat) : "Civil Works";
+          })();
+          const resolvedWorkType = (() => {
+            const wt = bp.workType || leadObj.workType;
+            if (Array.isArray(wt)) {
+              return wt.filter(Boolean).join(", ");
+            }
+            return wt ? String(wt) : (bp.workCategory || bp.businessType || "Design + Construction");
+          })();
+
           const revVal = Number(bp.expectedBusiness || bp.amount || bp.expectedRevenue || 0);
 
           const newProj = calculateProjectRollup({
@@ -1092,7 +1134,10 @@ export const activeProjectService = {
             email,
             city,
             address,
-            workType: wType,
+            workType: resolvedWorkType,
+            workCategory: resolvedCategory,
+            category: resolvedCategory,
+            engagementScope: resolvedCategory,
             revenue: revVal > 0 ? `₹ ${revVal.toLocaleString("en-IN")}` : "₹ 0",
             activePerson: bp.assignedTo || bp.salesPerson || leadObj.salesPerson || "Admin",
             contractSignedDate: bp.createdAt ? new Date(bp.createdAt).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],

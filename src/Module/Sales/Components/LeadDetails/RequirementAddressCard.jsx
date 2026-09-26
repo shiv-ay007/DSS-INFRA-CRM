@@ -40,7 +40,30 @@ const RequirementAddressCard = ({ lead }) => {
   
   const googleLocation = lead?.googleLocation || "";
   const requirement = lead?.requirement || lead?.projectDetail || lead?.projectDetails || "New Lead Inquiry";
+  const projectDetailText = lead?.projectDetail || lead?.projectDetails || "";
   const remarksText = lead?.remarks || lead?.remark || "";
+
+  // Collect project detail media files
+  const projectDetailAttachments = [];
+  if (Array.isArray(lead?.projectDetailFiles)) {
+    lead.projectDetailFiles.forEach((item) => {
+      if (item?.url && !projectDetailAttachments.some((a) => a.url === item.url)) {
+        projectDetailAttachments.push(item);
+      }
+    });
+  }
+  if (Array.isArray(lead?.projectDetailAttachments)) {
+    lead.projectDetailAttachments.forEach((item) => {
+      const url = item?.url || item?.preview;
+      if (url && !projectDetailAttachments.some((a) => a.url === url)) {
+        projectDetailAttachments.push({
+          url,
+          fileType: item.type || item.fileType || "image",
+          name: item.name || "Project Attachment"
+        });
+      }
+    });
+  }
 
   // Collect all media attachments from various backend/frontend shapes
   const attachments = [];
@@ -136,14 +159,105 @@ const RequirementAddressCard = ({ lead }) => {
           </span>
         </div>
 
-        {/* DETAILED REQUIREMENT */}
-        <div className="p-4 rounded-xl bg-slate-50/90 border border-slate-200/70 space-y-1.5">
-          <span className="text-slate-500 text-xs font-bold uppercase tracking-wider block">
-            Requirement Details
-          </span>
+        {/* DETAILED REQUIREMENT / PROJECT DETAIL */}
+        <div className="p-4 rounded-xl bg-slate-50/90 border border-slate-200/70 space-y-3">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-slate-700 text-xs font-bold uppercase tracking-wider block">
+              Requirement & Project Details
+            </span>
+            {projectDetailAttachments.length > 0 && (
+              <span className="text-[11px] font-bold text-indigo-800 bg-indigo-100 px-2 py-0.5 rounded-md flex items-center gap-1">
+                <FaPaperclip className="text-[10px]" />
+                <span>{projectDetailAttachments.length} {projectDetailAttachments.length === 1 ? "Attachment" : "Attachments"}</span>
+              </span>
+            )}
+          </div>
           <p className="text-slate-800 font-semibold text-xs sm:text-sm leading-relaxed whitespace-pre-line">
             {requirement}
           </p>
+
+          {/* Project Detail Media Files */}
+          {projectDetailAttachments.length > 0 && (
+            <div className="space-y-2 pt-2 border-t border-slate-200/60">
+              <span className="text-slate-600 text-[11px] font-bold uppercase tracking-wider block">
+                Project Attached Media:
+              </span>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {projectDetailAttachments.map((att, idx) => {
+                  const isAudio = att.fileType === "audio" || (att.url && att.url.match(/\.(mp3|wav|ogg|m4a|webm|aac)($|\?)/i));
+                  const isImg = att.fileType === "image" || (att.url && att.url.match(/\.(png|jpg|jpeg|webp|gif|svg)($|\?)/i));
+                  const isVideo = att.fileType === "video" || (att.url && att.url.match(/\.(mp4|webm|mov|mkv)($|\?)/i));
+
+                  if (isAudio) {
+                    return (
+                      <div key={idx} className="p-3 bg-white rounded-xl border border-indigo-200 shadow-2xs space-y-2">
+                        <div className="flex items-center gap-2 text-xs font-bold text-indigo-900">
+                          <FaHeadphones className="text-indigo-600 shrink-0" />
+                          <span className="truncate">{att.name || "Project Audio Note"}</span>
+                        </div>
+                        <audio controls className="w-full h-8" src={att.url}>
+                          Your browser does not support the audio element.
+                        </audio>
+                      </div>
+                    );
+                  }
+
+                  if (isImg) {
+                    return (
+                      <div key={idx} className="group relative rounded-xl border border-slate-200 bg-white p-2 shadow-2xs space-y-1.5 overflow-hidden">
+                        <a href={att.url} target="_blank" rel="noreferrer" className="block overflow-hidden rounded-lg">
+                          <img
+                            src={att.url}
+                            alt={att.name || "Project Attachment"}
+                            className="w-full h-36 object-cover rounded-lg group-hover:scale-105 transition-transform duration-200"
+                          />
+                        </a>
+                        <div className="flex items-center justify-between text-[11px] font-bold text-slate-600 px-1">
+                          <span className="truncate flex items-center gap-1">
+                            <FaImage className="text-indigo-600 shrink-0" />
+                            <span>{att.name || "Drawing / Photo"}</span>
+                          </span>
+                          <a href={att.url} target="_blank" rel="noreferrer" className="text-indigo-600 hover:text-indigo-800">
+                            <FaExternalLinkAlt className="text-[10px]" />
+                          </a>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  if (isVideo) {
+                    return (
+                      <div key={idx} className="p-2 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-1.5">
+                        <video controls className="w-full h-36 rounded-lg object-cover" src={att.url} />
+                        <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700 px-1">
+                          <FaVideo className="text-purple-600 shrink-0" />
+                          <span className="truncate">{att.name || "Video"}</span>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div key={idx} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-200 shadow-2xs">
+                      <div className="flex items-center gap-2 truncate text-xs font-bold text-slate-700">
+                        <FaFileAlt className="text-indigo-600 shrink-0" />
+                        <span className="truncate">{att.name || "Project Document"}</span>
+                      </div>
+                      <a
+                        href={att.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-2.5 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold flex items-center gap-1"
+                      >
+                        <FaDownload className="text-[10px]" />
+                        <span>Open</span>
+                      </a>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* LOST REASON (IF LEAD IS LOST) */}

@@ -464,8 +464,13 @@ const Salse = () => {
   // KPI numbers
   const stats = useMemo(() => {
     const totalAmt = salesData.reduce((sum, d) => sum + Number(d.amount || d.expectedBusiness || 0), 0);
+    const inLakhs = (totalAmt / 100000).toLocaleString("en-IN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
     return {
-      totalAmountFormatted: `₹${totalAmt.toLocaleString("en-IN")}`,
+      totalAmountFormatted: `₹${inLakhs} Lakhs`,
+      totalAmountRaw: `₹${totalAmt.toLocaleString("en-IN")}`,
       qualified: salesData.length,
       followedUp: salesData.filter((d) => d.status === "INTERESTED" || d.isInterested).length
     };
@@ -554,7 +559,10 @@ const Salse = () => {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         
         {/* Card 1: Total Amount (Light Green Card) */}
-        <div className="p-5 rounded-2xl bg-[#ECFDF5] border border-emerald-200 shadow-2xs hover:shadow-xs transition-shadow">
+        <div
+          title={stats.totalAmountRaw}
+          className="p-5 rounded-2xl bg-[#ECFDF5] border border-emerald-200 shadow-2xs hover:shadow-xs transition-shadow cursor-default"
+        >
           <div className="text-xs sm:text-sm font-bold text-emerald-700 mb-1">
             Total Amount
           </div>

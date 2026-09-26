@@ -20,3 +20,10 @@ export const savePresaleStageApi = async (payload) => {
 export const addPresaleRemarkApi = async (projectId, formData) => {
   return await api.post(`/presales/${projectId}/remark`, formData);
 };
+
+/**
+ * 4. Close Presale at any stage with reason, remark & Cloudinary media
+ */
+export const closePresaleApi = async (projectId, formData) => {
+  return await api.post(`/presales/${projectId}/close`, formData);
+};

@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import {
   FaUsers,
   FaUserPlus,
@@ -7,21 +7,13 @@ import {
   FaChartLine,
   FaMoneyBillWave,
   FaCoins,
-  FaGift,
-  FaPiggyBank,
-  FaChevronLeft,
-  FaChevronRight
+  FaGift
 } from "react-icons/fa";
 
 const LeadKpiSlider = ({ stats }) => {
   const scrollRef = useRef(null);
-
-  const scroll = (direction) => {
-    if (scrollRef.current) {
-      const scrollAmount = direction === "left" ? -320 : 320;
-      scrollRef.current.scrollBy({ left: scrollAmount, behavior: "smooth" });
-    }
-  };
+  const [scrollProgress, setScrollProgress] = useState(0);
+  const [canScroll, setCanScroll] = useState(false);
 
   const cardsData = [
     {
@@ -103,38 +95,69 @@ const LeadKpiSlider = ({ stats }) => {
       cardGradient: "from-teal-50/90 via-emerald-50/30 to-white",
       borderColor: "border-teal-200/90",
       textColor: "text-teal-900"
-    },
-    {
-      id: "expectedIncentives",
-      label: "Expect. Incentive",
-      value: stats.expectedIncentives,
-      icon: <FaPiggyBank className="w-4 h-4 text-purple-600" />,
-      iconBg: "bg-purple-100/90 text-purple-600",
-      cardGradient: "from-purple-50/90 via-fuchsia-50/30 to-white",
-      borderColor: "border-purple-200/90",
-      textColor: "text-purple-900"
     }
   ];
 
-  return (
-    <div className="relative group w-full">
-      {/* LEFT SCROLL BUTTON */}
-      <button
-        type="button"
-        onClick={() => scroll("left")}
-        className="absolute -left-3 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-white/95 text-slate-700 hover:bg-white hover:text-black border border-slate-300 shadow-md flex items-center justify-center transition-all cursor-pointer opacity-80 hover:opacity-100 hover:scale-105 active:scale-95"
-        title="Slide Left"
-      >
-        <FaChevronLeft className="text-xs" />
-      </button>
+  // Helper to check if a value is 0 or empty
+  const isZeroValue = (val) => {
+    if (val === undefined || val === null) return true;
+    const str = String(val).trim();
+    if (str === "0" || str === "0.0%" || str === "0%" || str === "0.0") return true;
+    const clean = str.replace(/[₹,\sLakhsL%]/gi, "");
+    if (clean === "" || clean === "0" || clean === "0.00" || Number(clean) === 0) return true;
+    return false;
+  };
 
+  const visibleCards = cardsData.filter((card) => !isZeroValue(card.value));
+
+  const checkScroll = useCallback(() => {
+    if (scrollRef.current) {
+      const { scrollLeft, scrollWidth, clientWidth } = scrollRef.current;
+      const maxScroll = scrollWidth - clientWidth;
+      if (maxScroll > 5) {
+        setCanScroll(true);
+        setScrollProgress((scrollLeft / maxScroll) * 100);
+      } else {
+        setCanScroll(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(checkScroll, 100);
+    window.addEventListener("resize", checkScroll);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener("resize", checkScroll);
+    };
+  }, [visibleCards.length, checkScroll]);
+
+  const handleScroll = () => {
+    checkScroll();
+  };
+
+  const handleRangeChange = (e) => {
+    const val = Number(e.target.value);
+    setScrollProgress(val);
+    if (scrollRef.current) {
+      const { scrollWidth, clientWidth } = scrollRef.current;
+      const maxScroll = scrollWidth - clientWidth;
+      scrollRef.current.scrollLeft = (val / 100) * maxScroll;
+    }
+  };
+
+  if (visibleCards.length === 0) return null;
+
+  return (
+    <div className="relative w-full space-y-2">
       {/* HORIZONTAL SLIDER CONTAINER */}
       <div
         ref={scrollRef}
-        className="flex items-center gap-3.5 overflow-x-auto no-scrollbar scroll-smooth py-1 px-1"
-        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
+        onScroll={handleScroll}
+        className="flex items-center gap-3.5 overflow-x-auto scroll-smooth py-1 px-1 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-slate-100 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-slate-400"
+        style={{ scrollbarWidth: "thin", scrollbarColor: "#CBD5E1 #F1F5F9" }}
       >
-        {cardsData.map((card) => (
+        {visibleCards.map((card) => (
           <div
             key={card.id}
             className={`w-[210px] min-w-[210px] h-[105px] shrink-0 p-3.5 rounded-2xl bg-gradient-to-br ${card.cardGradient} border ${card.borderColor} shadow-2xs hover:shadow-md transition-all flex flex-col justify-between`}
@@ -155,15 +178,20 @@ const LeadKpiSlider = ({ stats }) => {
         ))}
       </div>
 
-      {/* RIGHT SCROLL BUTTON */}
-      <button
-        type="button"
-        onClick={() => scroll("right")}
-        className="absolute -right-3 top-1/2 -translate-y-1/2 z-20 w-8 h-8 rounded-full bg-white/95 text-slate-700 hover:bg-white hover:text-black border border-slate-300 shadow-md flex items-center justify-center transition-all cursor-pointer opacity-80 hover:opacity-100 hover:scale-105 active:scale-95"
-        title="Slide Right"
-      >
-        <FaChevronRight className="text-xs" />
-      </button>
+      {/* BOTTOM SLIDER OPTION */}
+      {canScroll && (
+        <div className="flex items-center justify-center gap-2 pt-0.5">
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={scrollProgress}
+            onChange={handleRangeChange}
+            className="w-48 sm:w-64 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#FF5722] hover:accent-[#E64A19] transition-all"
+            title="Slide to scroll cards"
+          />
+        </div>
+      )}
     </div>
   );
 };

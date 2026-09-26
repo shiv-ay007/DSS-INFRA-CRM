@@ -249,8 +249,10 @@ const Lead = () => {
               address: backendLead.address || "--",
               pincode: backendLead.pincode || "--",
               city: backendLead.city || "--",
-              state: backendLead.state || "--",
               projectDetail: backendLead.projectDetail || backendLead.notes || "",
+              projectDetails: backendLead.projectDetail || backendLead.notes || "",
+              projectDetailFiles: backendLead.projectDetailFiles || [],
+              projectDetailAttachments: (Array.isArray(backendLead.projectDetailFiles) && backendLead.projectDetailFiles.length > 0) ? backendLead.projectDetailFiles : (backendLead.projectDetailAttachments || []),
               remarks: backendLead.remarks || backendLead.remark || "",
               remark: backendLead.remarks || backendLead.remark || backendLead.requirement || backendLead.notes || "",
               requirement: backendLead.requirement || backendLead.remarks || backendLead.remark || backendLead.notes || "",
@@ -678,9 +680,85 @@ const Lead = () => {
       align: "center",
       render: (val, row) => {
         const pd = row.projectDetail || row.projectDetails || "--";
+        const projAttachments = [];
+        if (Array.isArray(row.projectDetailFiles)) {
+          row.projectDetailFiles.forEach((f) => {
+            const url = f?.url || f?.preview;
+            if (url && !projAttachments.some((x) => (x.url || x.preview) === url)) {
+              projAttachments.push({ ...f, type: f.fileType || f.type || "image" });
+            }
+          });
+        }
+        if (Array.isArray(row.projectDetailAttachments)) {
+          row.projectDetailAttachments.forEach((att) => {
+            const url = att?.url || att?.preview;
+            if (url && !projAttachments.some((x) => (x.url || x.preview) === url)) {
+              projAttachments.push({ ...att, type: att.type || att.fileType || "image" });
+            }
+          });
+        }
+
         return (
-          <div className="max-w-[150px] truncate text-xs text-slate-700 font-medium mx-auto text-center" title={pd}>
-            {pd}
+          <div className="flex items-center justify-center gap-1.5 max-w-[200px] mx-auto text-center">
+            <div className="truncate text-xs text-slate-700 font-medium flex-1" title={pd}>
+              {pd}
+            </div>
+            {projAttachments.length > 0 && (
+              <div className="flex items-center gap-1 shrink-0">
+                {projAttachments.map((att, idx) => {
+                  const url = att.url || att.preview || "";
+                  const type = (att.fileType || att.type || "").toLowerCase();
+                  const isAudio = type === "audio" || /\.(mp3|wav|m4a|aac|ogg|webm)(\?.*)?$/i.test(url);
+                  const isImage = type === "image" || /\.(jpg|jpeg|png|webp|gif|svg)(\?.*)?$/i.test(url);
+
+                  if (isImage) {
+                    return (
+                      <a
+                        key={idx}
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-6 h-6 rounded-md border border-indigo-300 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 flex items-center justify-center transition-all cursor-pointer shadow-2xs shrink-0"
+                        title={att.name || "View Project Image"}
+                      >
+                        <FaImage className="w-3 h-3 text-indigo-600" />
+                      </a>
+                    );
+                  }
+
+                  if (isAudio) {
+                    return (
+                      <a
+                        key={idx}
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-6 h-6 rounded-md bg-indigo-100 text-indigo-800 border border-indigo-300 hover:bg-indigo-200 flex items-center justify-center transition-all cursor-pointer shadow-2xs shrink-0"
+                        title={att.name || "Play Project Voice Note"}
+                      >
+                        <FaPlay className="w-2.5 h-2.5 text-indigo-700" />
+                      </a>
+                    );
+                  }
+
+                  return (
+                    <a
+                      key={idx}
+                      href={url}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-6 h-6 rounded-md border border-indigo-300 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 flex items-center justify-center transition-all cursor-pointer shadow-2xs shrink-0"
+                      title={att.name || "View Project Document"}
+                    >
+                      <FaFileAlt className="w-3 h-3 text-indigo-600" />
+                    </a>
+                  );
+                })}
+              </div>
+            )}
           </div>
         );
       }

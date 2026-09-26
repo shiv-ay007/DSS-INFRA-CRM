@@ -191,7 +191,14 @@ const ActiveProjectsListComponent = () => {
   }, [projects]);
 
   const categoryOptions = useMemo(() => {
-    const set = new Set(projects.map((p) => p.workCategory || p.category).filter(Boolean));
+    const set = new Set(
+      projects.flatMap((p) => {
+        const cat = p.workCategory || p.category || p.engagementScope;
+        if (Array.isArray(cat)) return cat.filter(Boolean);
+        if (typeof cat === "string") return cat.split(",").map((s) => s.trim()).filter(Boolean);
+        return [];
+      })
+    );
     return ["All", ...Array.from(set).sort()];
   }, [projects]);
 
@@ -226,8 +233,8 @@ const ActiveProjectsListComponent = () => {
       .filter((p) => {
         if (selectedClient !== "All" && p.clientName !== selectedClient) return false;
         if (selectedCategory !== "All") {
-          const cat = p.workCategory || p.category;
-          if (cat !== selectedCategory) return false;
+          const cat = String(p.workCategory || p.category || p.engagementScope || "").toLowerCase();
+          if (!cat.includes(selectedCategory.toLowerCase())) return false;
         }
         if (selectedWorkType !== "All") {
           const wt = p.workType || p.projectType;
@@ -396,10 +403,18 @@ const ActiveProjectsListComponent = () => {
                 {displayProj}
               </span>
               <span className="inline-block bg-sky-50 text-sky-800 font-semibold text-[11px] px-2 py-0.5 rounded border border-sky-200">
-                Type: {row.workType || row.projectType || "Construction"}
+                Type: {(() => {
+                  const wt = row.workType || row.projectType;
+                  if (Array.isArray(wt)) return wt.filter(Boolean).join(", ");
+                  return wt || "Construction";
+                })()}
               </span>
               <span className="inline-block bg-purple-50 text-purple-800 font-semibold text-[11px] px-2 py-0.5 rounded border border-purple-200">
-                Category: {row.workCategory || row.category || "Construction"}
+                Category: {(() => {
+                  const cat = row.workCategory || row.category || row.engagementScope;
+                  if (Array.isArray(cat)) return cat.filter(Boolean).join(", ");
+                  return cat || "Civil Works";
+                })()}
               </span>
             </div>
           );

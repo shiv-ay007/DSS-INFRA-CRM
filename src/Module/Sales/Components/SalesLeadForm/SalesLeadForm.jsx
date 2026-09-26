@@ -10,7 +10,7 @@ import {
 import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
-import { workCategoryList, indianStatesList } from "../../data/addLeadData";
+import { indianStatesList } from "../../data/addLeadData";
 import { getLeadByIdApi, updateLeadApi } from "../../services/totalLeads.api";
 import { createLeadProjectApi } from "../../services/leadProject.api";
 import {
@@ -45,7 +45,7 @@ const SalesLeadForm = () => {
     companyName: "",
     projectName: "",
     workType: "",
-    businessType: "Information Technology",
+    businessType: "Design",
     clientDesignation: "Managing Director",
     expectedBusiness: 50000,
     priority: "high",
@@ -67,21 +67,55 @@ const SalesLeadForm = () => {
   // Populate form data whenever lead is resolved
   const populateFormData = (leadData, initialRemark = "") => {
     if (!leadData) return;
-    const existingRemarkAtts = Array.isArray(leadData.remarkAttachments) && leadData.remarkAttachments.length > 0
-      ? leadData.remarkAttachments
-      : Array.isArray(leadData.remarksFiles) && leadData.remarksFiles.length > 0
-      ? leadData.remarksFiles.map((f, idx) => ({
-          id: f.id || idx,
-          name: f.name || f.filename || `Attachment-${idx + 1}`,
-          type: f.type || (f.url?.match(/\.(mp4|webm)$/i) ? "video" : f.url?.match(/\.(mp3|wav|ogg|m4a|webm|aac)$/i) ? "audio" : "image"),
-          url: f.url || f.fileUrl || (typeof f === "string" ? f : ""),
-          preview: f.url || f.fileUrl || (typeof f === "string" ? f : "")
-        }))
-      : [];
 
-    const existingReqAtts = Array.isArray(leadData.requirementAttachments) && leadData.requirementAttachments.length > 0
-      ? leadData.requirementAttachments
-      : [];
+    const normalizeAttachmentList = (list) => {
+      if (!Array.isArray(list)) return [];
+      return list.map((f, idx) => {
+        const url = f?.url || f?.fileUrl || f?.preview || (typeof f === "string" ? f : "");
+        const name = f?.name || f?.filename || `Attachment-${idx + 1}`;
+        let type = f?.type || f?.fileType;
+        if (!type) {
+          if (name.match(/\.(jpg|jpeg|png|webp|gif|svg)$/i) || url.match(/\.(jpg|jpeg|png|webp|gif|svg)($|\?)/i)) {
+            type = "image";
+          } else if (
+            name.match(/\.(mp3|wav|ogg|m4a|webm|aac)$/i) ||
+            url.match(/\.(mp3|wav|ogg|m4a|webm|aac)($|\?)/i) ||
+            name.toLowerCase().includes("recording") ||
+            name.toLowerCase().includes("audio")
+          ) {
+            type = "audio";
+          } else if (name.match(/\.(mp4|webm|mov|mkv)$/i) || url.match(/\.(mp4|webm|mov|mkv)($|\?)/i)) {
+            type = "video";
+          } else {
+            type = "document";
+          }
+        }
+        return {
+          ...f,
+          id: f?.id || idx,
+          name,
+          type,
+          url,
+          preview: f?.preview || url
+        };
+      });
+    };
+
+    const existingRemarkAtts = normalizeAttachmentList(
+      Array.isArray(leadData.remarkAttachments) && leadData.remarkAttachments.length > 0
+        ? leadData.remarkAttachments
+        : (Array.isArray(leadData.remarksFiles) && leadData.remarksFiles.length > 0
+            ? leadData.remarksFiles
+            : (Array.isArray(leadData.attachments) && leadData.attachments.length > 0
+                ? leadData.attachments
+                : []))
+    );
+
+    const existingReqAtts = normalizeAttachmentList(
+      Array.isArray(leadData.requirementAttachments) && leadData.requirementAttachments.length > 0
+        ? leadData.requirementAttachments
+        : []
+    );
 
     setFormData({
       clientName: leadData.concernPersonName || leadData.clientName || "",
@@ -90,11 +124,12 @@ const SalesLeadForm = () => {
       whatsappNumber: leadData.whatsappNumber || leadData.phoneNumber || leadData.phone || "",
       emailAddress: leadData.emailAddress || leadData.email || "",
       companyName: leadData.companyName || leadData.company || "",
-      projectName: leadData.projectName || "",
       workType: Array.isArray(leadData.workType)
         ? leadData.workType.join(", ")
         : (leadData.workType || ""),
-      businessType: leadData.workCategory || leadData.businessType || "Information Technology",
+      businessType: Array.isArray(leadData.workCategory)
+        ? leadData.workCategory.filter(Boolean).join(", ")
+        : (leadData.businessType || leadData.workCategory || "Design"),
       clientDesignation: leadData.clientDesignation || "Managing Director",
       expectedBusiness: Number(leadData.expectedBusiness || leadData.amount || leadData.budget || 50000),
       priority: (leadData.leadLabel || leadData.priority || "").toUpperCase() === "HOT" || (leadData.leadLabel || leadData.priority || "").toLowerCase() === "high"
@@ -348,6 +383,13 @@ const SalesLeadForm = () => {
       ? (typeof formData.workType === "string" ? formData.workType.split(",").map((s) => s.trim()).filter(Boolean) : formData.workType)
       : (lead?.workType || []);
 
+    const cleanBusinessType = Array.isArray(formData.businessType)
+      ? formData.businessType.filter(Boolean).join(", ")
+      : (formData.businessType || "Information Technology");
+    const cleanWorkCategory = Array.isArray(formData.workCategory)
+      ? formData.workCategory.filter(Boolean).join(", ")
+      : (cleanBusinessType || "Design");
+
     const finalLeadData = {
       ...(lead || {}),
       clientName: formData.clientName,
@@ -359,10 +401,9 @@ const SalesLeadForm = () => {
       emailAddress: formData.emailAddress,
       email: formData.emailAddress,
       companyName: formData.companyName,
-      projectName: formData.projectName,
       workType: finalWorkType,
-      businessType: formData.businessType,
-      workCategory: formData.businessType,
+      businessType: cleanBusinessType,
+      workCategory: Array.isArray(lead?.workCategory) && lead.workCategory.length > 0 ? lead.workCategory : [cleanWorkCategory],
       clientDesignation: formData.clientDesignation,
       amount: Number(formData.expectedBusiness) || 0,
       expectedBusiness: Number(formData.expectedBusiness) || 0,
@@ -418,8 +459,11 @@ const SalesLeadForm = () => {
 
       // Save project data ONLY to leadsproject collection with Lead ObjectId reference
       const leadMongoId = lead?._id || (targetId && String(targetId).length === 24 ? targetId : finalLeadData._id || finalLeadData.leadId || id);
+
       const projectPayload = {
         ...formData,
+        businessType: cleanBusinessType,
+        workCategory: cleanWorkCategory,
         leadId: leadMongoId,
         projectId: editingProjectId || undefined,
         workType: finalWorkType,
@@ -665,19 +709,14 @@ const SalesLeadForm = () => {
 
           <div>
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-              Work Category <span className="text-red-500">*</span>
+              Work Category
             </label>
-            <select
-              value={formData.businessType}
-              onChange={(e) => handleInputChange("businessType", e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all cursor-pointer"
-            >
-              {workCategoryList.map((cat) => (
-                <option key={cat} value={cat}>
-                  {cat}
-                </option>
-              ))}
-            </select>
+            <input
+              type="text"
+              readOnly
+              value={formData.businessType || (Array.isArray(formData.workCategory) ? formData.workCategory.filter(Boolean).join(", ") : formData.workCategory) || "Design"}
+              className="w-full px-3 py-2 rounded-lg border border-black/20 bg-slate-50 text-slate-800 text-xs sm:text-sm font-medium focus:outline-none cursor-not-allowed"
+            />
           </div>
         </div>
 
@@ -867,6 +906,7 @@ const SalesLeadForm = () => {
               onChange={(val) => setFormData((prev) => ({ ...prev, requirement: val }))}
               files={formData.requirementAttachments || []}
               onFilesChange={(newFiles) => setFormData((prev) => ({ ...prev, requirementAttachments: newFiles }))}
+              iconView={true}
             />
           </div>
 
@@ -878,6 +918,7 @@ const SalesLeadForm = () => {
               onChange={(val) => setFormData((prev) => ({ ...prev, transferRemark: val }))}
               files={formData.transferRemarkAttachments || []}
               onFilesChange={(newFiles) => setFormData((prev) => ({ ...prev, transferRemarkAttachments: newFiles }))}
+              iconView={true}
             />
           </div>
         </div>

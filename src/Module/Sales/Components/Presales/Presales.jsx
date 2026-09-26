@@ -1155,18 +1155,21 @@ const Presales = () => {
   }, [presalesList]);
 
   // Reusable MasterForm-style KPI Card
-  const KpiCard = ({ gradient, icon, label, value, subtitle, IconBg }) => (
-    <div className={`relative overflow-hidden rounded-xl p-4 shadow-md ${gradient} text-white group`}>
+  const KpiCard = ({ gradient, icon, label, value, subtitle, IconBg, title }) => (
+    <div
+      title={title}
+      className={`relative overflow-hidden rounded-xl p-4 shadow-md ${gradient} text-white group`}
+    >
       <div className="absolute -right-4 -bottom-6 opacity-15 transform group-hover:scale-110 transition-transform duration-500 pointer-events-none">
         {IconBg}
       </div>
       <div className="relative z-1 flex items-start justify-between">
-        <div>
+        <div className="min-w-0 pr-2">
           <p className="text-[10px] uppercase font-bold tracking-widest opacity-90">{label}</p>
-          <h3 className="text-3xl font-black mt-1 leading-none">{value}</h3>
-          <p className="text-[10px] opacity-80 mt-1 font-medium">{subtitle}</p>
+          <h3 className="text-xl sm:text-2xl xl:text-3xl font-black mt-1 leading-none truncate">{value}</h3>
+          <p className="text-[10px] opacity-80 mt-1 font-medium truncate">{subtitle}</p>
         </div>
-        <div className="p-2.5 bg-white/20 rounded-lg backdrop-blur-sm shadow-inner">{icon}</div>
+        <div className="p-2.5 bg-white/20 rounded-lg backdrop-blur-sm shadow-inner shrink-0">{icon}</div>
       </div>
     </div>
   );
@@ -1336,7 +1339,8 @@ const Presales = () => {
         <KpiCard
           gradient="bg-gradient-to-br from-emerald-600 to-teal-700"
           label="Total Value"
-          value={`₹${totalRevenue.toLocaleString("en-IN")}`}
+          value={`₹${(totalRevenue / 100000).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} Lakhs`}
+          title={`₹${totalRevenue.toLocaleString("en-IN")}`}
           subtitle="Expected business pipeline"
           icon={<FaRupeeSign className="w-5 h-5 text-white" />}
           IconBg={<FaRupeeSign className="w-20 h-20" />}

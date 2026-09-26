@@ -1,9 +1,9 @@
 import api from "./axiosInstance"
 
 /**
- * Helper: Agar remarks files (Image/Audio/PDF/Video) ho toh FormData banata hai
+ * Helper: Agar remarks files aur project detail files (Image/Audio/PDF/Video) ho toh FormData banata hai
  */
-const buildFormData = (data, files = []) => {
+const buildFormData = (data, files = [], projectFiles = []) => {
   const formData = new FormData();
 
   Object.entries(data).forEach(([key, value]) => {
@@ -12,7 +12,9 @@ const buildFormData = (data, files = []) => {
         key === "remarkAttachments" ||
         key === "attachments" ||
         key === "remarksFiles" ||
-        key === "remarksFile"
+        key === "remarksFile" ||
+        key === "projectDetailAttachments" ||
+        key === "projectDetailFiles"
       ) {
         return; // Exclude client-side preview objects and raw DB file arrays
       }
@@ -34,8 +36,18 @@ const buildFormData = (data, files = []) => {
   fileList.forEach((item) => {
     const rawFile = item instanceof File || item instanceof Blob ? item : item?.file || item?.blob;
     if (rawFile instanceof File || rawFile instanceof Blob) {
-      const fileName = item?.name || rawFile.name || `file-${Date.now()}`;
+      const fileName = item?.name || rawFile.name || `remark-${Date.now()}`;
       formData.append("remarksFiles", rawFile, fileName);
+    }
+  });
+
+  // Append all files under projectDetailFiles
+  const pFileList = Array.isArray(projectFiles) ? projectFiles : projectFiles ? [projectFiles] : [];
+  pFileList.forEach((item) => {
+    const rawFile = item instanceof File || item instanceof Blob ? item : item?.file || item?.blob;
+    if (rawFile instanceof File || rawFile instanceof Blob) {
+      const fileName = item?.name || rawFile.name || `project-${Date.now()}`;
+      formData.append("projectDetailFiles", rawFile, fileName);
     }
   });
 
@@ -45,26 +57,44 @@ const buildFormData = (data, files = []) => {
 // ========================================================
 // 1. CREATE LEAD API (Used in AddLead.jsx)
 // ========================================================
-export const createLeadApi = async (leadData, files = null) => {
+export const createLeadApi = async (leadData, files = null, projectFiles = null) => {
   try {
     let payload = leadData;
 
-    // Check if files passed explicitly or present inside leadData
-    const candidateFiles = files || leadData?.remarkAttachments || leadData?.attachments || leadData?.remarksFiles || leadData?.remarksFile || leadData?.file;
-    const fileArray = Array.isArray(candidateFiles) ? candidateFiles : candidateFiles ? [candidateFiles] : [];
+    let remarkFileList = [];
+    let projFileList = [];
 
-    let hasActualFiles = false;
-    for (const item of fileArray) {
-      const raw = item instanceof File || item instanceof Blob ? item : item?.file || item?.blob;
-      if (raw instanceof File || raw instanceof Blob) {
-        hasActualFiles = true;
-        break;
-      }
+    if (
+      files &&
+      typeof files === "object" &&
+      !Array.isArray(files) &&
+      !(files instanceof File) &&
+      !(files instanceof Blob) &&
+      (files.remarkFiles || files.remarksFiles || files.projectDetailFiles || files.projectFiles)
+    ) {
+      remarkFileList = files.remarkFiles || files.remarksFiles || [];
+      projFileList = files.projectDetailFiles || files.projectFiles || [];
+    } else {
+      remarkFileList = files || leadData?.remarkAttachments || leadData?.attachments || leadData?.remarksFiles || leadData?.remarksFile || leadData?.file;
+      projFileList = projectFiles || leadData?.projectDetailAttachments || leadData?.projectDetailFiles;
     }
 
+    const rArr = Array.isArray(remarkFileList) ? remarkFileList : remarkFileList ? [remarkFileList] : [];
+    const pArr = Array.isArray(projFileList) ? projFileList : projFileList ? [projFileList] : [];
+
+    const hasRemarkFiles = rArr.some((item) => {
+      const raw = item instanceof File || item instanceof Blob ? item : item?.file || item?.blob;
+      return raw instanceof File || raw instanceof Blob;
+    });
+
+    const hasProjFiles = pArr.some((item) => {
+      const raw = item instanceof File || item instanceof Blob ? item : item?.file || item?.blob;
+      return raw instanceof File || raw instanceof Blob;
+    });
+
     const config = {};
-    if (hasActualFiles) {
-      payload = buildFormData(leadData, fileArray);
+    if (hasRemarkFiles || hasProjFiles) {
+      payload = buildFormData(leadData, rArr, pArr);
       config.headers = { "Content-Type": undefined };
     } else {
       // Ensure remarks text is present in JSON payload
@@ -122,24 +152,44 @@ export const getLeadByIdApi = async (id) => {
 // ========================================================
 // 4. UPDATE LEAD API (Edit modal ya updates ke liye)
 // ========================================================
-export const updateLeadApi = async (id, leadData, files = null) => {
+export const updateLeadApi = async (id, leadData, files = null, projectFiles = null) => {
   try {
     let payload = leadData;
-    const candidateFiles = files || leadData?.remarkAttachments || leadData?.attachments || leadData?.remarksFiles || leadData?.remarksFile || leadData?.file;
-    const fileArray = Array.isArray(candidateFiles) ? candidateFiles : candidateFiles ? [candidateFiles] : [];
 
-    let hasActualFiles = false;
-    for (const item of fileArray) {
-      const raw = item instanceof File || item instanceof Blob ? item : item?.file || item?.blob;
-      if (raw instanceof File || raw instanceof Blob) {
-        hasActualFiles = true;
-        break;
-      }
+    let remarkFileList = [];
+    let projFileList = [];
+
+    if (
+      files &&
+      typeof files === "object" &&
+      !Array.isArray(files) &&
+      !(files instanceof File) &&
+      !(files instanceof Blob) &&
+      (files.remarkFiles || files.remarksFiles || files.projectDetailFiles || files.projectFiles)
+    ) {
+      remarkFileList = files.remarkFiles || files.remarksFiles || [];
+      projFileList = files.projectDetailFiles || files.projectFiles || [];
+    } else {
+      remarkFileList = files || leadData?.remarkAttachments || leadData?.attachments || leadData?.remarksFiles || leadData?.remarksFile || leadData?.file;
+      projFileList = projectFiles || leadData?.projectDetailAttachments || leadData?.projectDetailFiles;
     }
 
+    const rArr = Array.isArray(remarkFileList) ? remarkFileList : remarkFileList ? [remarkFileList] : [];
+    const pArr = Array.isArray(projFileList) ? projFileList : projFileList ? [projFileList] : [];
+
+    const hasRemarkFiles = rArr.some((item) => {
+      const raw = item instanceof File || item instanceof Blob ? item : item?.file || item?.blob;
+      return raw instanceof File || raw instanceof Blob;
+    });
+
+    const hasProjFiles = pArr.some((item) => {
+      const raw = item instanceof File || item instanceof Blob ? item : item?.file || item?.blob;
+      return raw instanceof File || raw instanceof Blob;
+    });
+
     const config = {};
-    if (hasActualFiles) {
-      payload = buildFormData(leadData, fileArray);
+    if (hasRemarkFiles || hasProjFiles) {
+      payload = buildFormData(leadData, rArr, pArr);
       config.headers = { "Content-Type": undefined };
     } else {
       if (!payload.remarks && payload.remark) {

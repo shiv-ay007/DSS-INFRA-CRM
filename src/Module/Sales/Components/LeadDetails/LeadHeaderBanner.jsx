@@ -23,17 +23,6 @@ const LeadHeaderBanner = ({
   const assignee = lead?.assignTo || lead?.assignedTo || lead?.salesPerson || "";
   const isAssigned = lead?.isAssigned === true || (!!assignee && assignee !== "Unassigned" && assignee !== "--" && assignee !== "");
 
-  const handleAddProject = () => {
-    if (isUserObserver) {
-      toast.info("Observer Mode: Adding project is disabled.");
-      return;
-    }
-    const targetId = lead?._id || lead?.id || lead?.leadId;
-    navigate(`/sales/leads/sales-form/${targetId}`, {
-      state: { lead, returnToLeadDetails: true, from: "salesManagement" }
-    });
-  };
-
   const handleEditLead = () => {
     if (isUserObserver) {
       toast.info("Observer Mode: Editing is disabled.");
@@ -42,6 +31,17 @@ const LeadHeaderBanner = ({
     const targetId = lead?.leadId || lead?._id || lead?.id;
     navigate(`/sales/leads/edit/${targetId}`, {
       state: { lead, from: "leadDetails" }
+    });
+  };
+
+  const handleAddProject = () => {
+    if (isUserObserver) {
+      toast.info("Observer Mode: Adding project is disabled.");
+      return;
+    }
+    const targetId = lead?._id || lead?.id || lead?.leadId;
+    navigate(`/sales/leads/sales-form/${targetId}`, {
+      state: { lead, returnToLeadDetails: true, from: "salesManagement" }
     });
   };
 
@@ -55,7 +55,7 @@ const LeadHeaderBanner = ({
         showBackButton={true}
         rightActions={
           <div className="flex flex-wrap items-center justify-start sm:justify-end gap-2.5">
-            {/* Add Project Button (Only allowed when navigated from Sales Management Sheet) */}
+            {/* Add Project Button (STRICTLY only allowed when navigated from Sales Management Sheet) */}
             {allowAddProject && (
               <button
                 type="button"
@@ -65,10 +65,10 @@ const LeadHeaderBanner = ({
                     ? "bg-slate-400 hover:bg-slate-500 cursor-not-allowed opacity-75"
                     : "bg-indigo-600 hover:bg-indigo-700 active:scale-95 cursor-pointer"
                 }`}
-                title={isUserObserver ? "Disabled for Observer (View Only)" : "Add / Update Project in Sales Management"}
+                title={isUserObserver ? "Disabled for Observer (View Only)" : "Add Project in Sales Management"}
               >
                 <FaFolderPlus className="w-3.5 h-3.5" />
-                <span>Add Project</span>
+                <span>+ Add Project</span>
               </button>
             )}
 

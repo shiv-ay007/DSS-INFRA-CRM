@@ -24,27 +24,33 @@ const LeadDetails = () => {
   const [showFollowupModal, setShowFollowupModal] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
-  // Edit Lead option is strictly only allowed when navigated from Total Leads and user is NOT Observer
-  const allowEdit = Boolean((location.state?.allowEdit === true || location.state?.from === "totalLeads") && !isUserObserver);
+  const [fromSource, setFromSource] = useState(() => {
+    return location.state?.from || (id ? sessionStorage.getItem(`lead_from_${id}`) : "") || "";
+  });
 
-  // Add Project & View Sales Project Details are enabled for sales views & transferred leads
+  useEffect(() => {
+    if (location.state?.from) {
+      setFromSource(location.state.from);
+      if (id) sessionStorage.setItem(`lead_from_${id}`, location.state.from);
+    }
+  }, [id, location.state?.from]);
+
+  // Edit Lead option is strictly only allowed when navigated from Total Leads and user is NOT Observer
+  const allowEdit = Boolean((location.state?.allowEdit === true || fromSource === "totalLeads") && !isUserObserver);
+
+  // Add Project option is STRICTLY only allowed when navigated from Sales Management Sheet
   const allowAddProject = Boolean(
-    location.state?.from === "salesManagement" ||
-    lead?.inSalesManagement ||
-    lead?.isSalesTransferred ||
-    location.pathname.includes("/sales/")
-  );
-  const isFromSalesManagement = Boolean(
-    allowAddProject ||
-    location.state?.from === "salesManagement" ||
-    lead?.inSalesManagement ||
-    lead?.isSalesTransferred ||
-    location.pathname.includes("/sales/")
+    (fromSource === "salesManagement" ||
+      (location.state?.from === undefined && (lead?.inSalesManagement || lead?.isSalesTransferred))) &&
+    fromSource !== "totalLeads" &&
+    fromSource !== "leadManagement" &&
+    fromSource !== "lostLeads" &&
+    !isUserObserver
   );
 
   const [projectsList, setProjectsList] = useState([]);
 
-  // Fetch project from leadsproject collection for Sales Management views
+  // Fetch project from leadsproject collection strictly for Sales Management views
   const fetchProjectDetails = useCallback(async (currentLead) => {
     const leadQueryId = currentLead?._id || currentLead?.leadId || currentLead?.id || id;
     if (!leadQueryId) return;
@@ -54,9 +60,15 @@ const LeadDetails = () => {
       const list = res?.data?.projects || res?.projects || (Array.isArray(res?.data) ? res.data : []);
       setProjectsList(list);
     } catch (err) {
-      console.error("Error fetching project details from leadsproject collection:", err);
+      console.error("Error fetching projects for lead:", err);
     }
   }, [id]);
+
+  useEffect(() => {
+    if ((id || lead) && allowAddProject) {
+      fetchProjectDetails(lead);
+    }
+  }, [id, lead, allowAddProject, fetchProjectDetails]);
 
   const fetchLeadData = useCallback(async () => {
     // 1. Check location state
@@ -132,17 +144,9 @@ const LeadDetails = () => {
       } else {
         fetchLeadData();
       }
-      fetchProjectDetails(updatedData?.lead || lead);
     });
     return () => unsubscribe();
-  }, [id, lead, fetchLeadData, fetchProjectDetails]);
-
-  // Fetch project from leadsproject collection strictly for Sales Management views
-  useEffect(() => {
-    if (id || lead) {
-      fetchProjectDetails(lead);
-    }
-  }, [id, lead, fetchProjectDetails]);
+  }, [id, fetchLeadData]);
 
   const handleAddRemark = (remarkData) => {
     if (!lead) return;
@@ -245,12 +249,13 @@ const LeadDetails = () => {
           </div>
         </div>
 
-        {/* 3. ONLY FOR SALES MANAGEMENT: FULL-WIDTH LEAD PROJECT RECORDS TABLE */}
-        {isFromSalesManagement && (
+        {/* 3. SALES PROJECT DETAILS TABLE (STRICTLY only when viewed from Sales Management Sheet) */}
+        {allowAddProject && (
           <SalesProjectDetailsTable
             lead={lead}
             projects={projectsList}
-            onAddProjectClick={() => {
+            onProjectUpdated={() => fetchProjectDetails(lead)}
+            onAddNewProject={() => {
               const targetId = lead?._id || lead?.id || lead?.leadId || id;
               navigate(`/sales/leads/sales-form/${targetId}`, {
                 state: { lead, returnToLeadDetails: true, from: "salesManagement" }

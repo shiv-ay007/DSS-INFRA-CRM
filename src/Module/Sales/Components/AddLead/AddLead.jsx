@@ -103,6 +103,7 @@ const Addlead = () => {
     state: "",
     expectedBusiness: "",
     projectDetail: "",
+    projectDetailAttachments: [],
     remark: "",
     remarkAttachments: [],
     // Keeping other fields for completeness
@@ -177,6 +178,17 @@ const Addlead = () => {
         }))
       : [];
 
+    const existingProjectDetailAtts = Array.isArray(lead.projectDetailAttachments) && lead.projectDetailAttachments.length > 0
+      ? lead.projectDetailAttachments
+      : Array.isArray(lead.projectDetailFiles) && lead.projectDetailFiles.length > 0
+      ? lead.projectDetailFiles.map((f, idx) => ({
+          id: f.id || idx,
+          name: f.name || f.filename || `Project-Attachment-${idx + 1}`,
+          type: f.type || (f.url?.match(/\.(mp4|webm)$/i) ? "video" : f.url?.match(/\.(mp3|wav|ogg)$/i) ? "audio" : "image"),
+          url: f.url || f.fileUrl || (typeof f === "string" ? f : "")
+        }))
+      : [];
+
     let leadDate = "";
     if (lead.date) {
       leadDate = lead.date.includes("T") ? lead.date.split("T")[0] : lead.date;
@@ -209,6 +221,7 @@ const Addlead = () => {
       state: lead.state || "",
       expectedBusiness: lead.expectedBusiness || lead.expectedRevenue || "",
       projectDetail: lead.projectDetail || lead.projectDetails || "",
+      projectDetailAttachments: existingProjectDetailAtts,
       remark: lead.remark || lead.remarks || lead.requirement || "",
       remarkAttachments: existingAtts,
       leadSource: lead.leadSource || lead.leadMode || "",
@@ -707,49 +720,94 @@ const Addlead = () => {
 
     try {
       const processedAttachments = await Promise.all(
-      (formData.remarkAttachments || []).map(async (att) => {
-        const sourceFile = att.file || att.blob;
-        const sourcePreview = att.url || att.preview || "";
-        
-        let finalUrl = await fileToBase64(sourceFile || sourcePreview);
-        if (!finalUrl && sourcePreview) {
-          finalUrl = sourcePreview;
-        }
+        (formData.remarkAttachments || []).map(async (att) => {
+          const sourceFile = att.file || att.blob;
+          const sourcePreview = att.url || att.preview || "";
+          
+          let finalUrl = await fileToBase64(sourceFile || sourcePreview);
+          if (!finalUrl && sourcePreview) {
+            finalUrl = sourcePreview;
+          }
 
-        let resolvedType = att.type || "";
-        if (!resolvedType && sourceFile && sourceFile.type) {
-          resolvedType = sourceFile.type.startsWith("image")
-            ? "image"
-            : sourceFile.type.startsWith("audio")
-            ? "audio"
-            : sourceFile.type.startsWith("video")
-            ? "video"
-            : "document";
-        }
-        const fileName = att.name || sourceFile?.name || "attachment";
-        if (!resolvedType && fileName) {
-          if (fileName.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i)) resolvedType = "image";
-          else if (fileName.match(/\.(mp3|wav|ogg|m4a|webm|aac)$/i) || fileName.includes("audio")) resolvedType = "audio";
-          else if (fileName.match(/\.(mp4|webm|mov|mkv)$/i) || fileName.includes("video")) resolvedType = "video";
-          else resolvedType = "document";
-        }
+          let resolvedType = att.type || "";
+          if (!resolvedType && sourceFile && sourceFile.type) {
+            resolvedType = sourceFile.type.startsWith("image")
+              ? "image"
+              : sourceFile.type.startsWith("audio")
+              ? "audio"
+              : sourceFile.type.startsWith("video")
+              ? "video"
+              : "document";
+          }
+          const fileName = att.name || sourceFile?.name || "attachment";
+          if (!resolvedType && fileName) {
+            if (fileName.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i)) resolvedType = "image";
+            else if (fileName.match(/\.(mp3|wav|ogg|m4a|webm|aac)$/i) || fileName.includes("audio")) resolvedType = "audio";
+            else if (fileName.match(/\.(mp4|webm|mov|mkv)$/i) || fileName.includes("video")) resolvedType = "video";
+            else resolvedType = "document";
+          }
 
-        const attId = att.id || Date.now() + Math.random();
-        window.__DSS_MEDIA_CACHE = window.__DSS_MEDIA_CACHE || {};
-        if (finalUrl) {
-          window.__DSS_MEDIA_CACHE[attId] = finalUrl;
-          if (fileName) window.__DSS_MEDIA_CACHE[fileName] = finalUrl;
-        }
+          const attId = att.id || Date.now() + Math.random();
+          window.__DSS_MEDIA_CACHE = window.__DSS_MEDIA_CACHE || {};
+          if (finalUrl) {
+            window.__DSS_MEDIA_CACHE[attId] = finalUrl;
+            if (fileName) window.__DSS_MEDIA_CACHE[fileName] = finalUrl;
+          }
 
-        return {
-          id: attId,
-          name: fileName,
-          type: resolvedType || "image",
-          size: att.size || sourceFile?.size || 0,
-          url: finalUrl
-        };
-      })
-    );
+          return {
+            id: attId,
+            name: fileName,
+            type: resolvedType || "image",
+            size: att.size || sourceFile?.size || 0,
+            url: finalUrl
+          };
+        })
+      );
+
+      const processedProjectDetailAttachments = await Promise.all(
+        (formData.projectDetailAttachments || []).map(async (att) => {
+          const sourceFile = att.file || att.blob;
+          const sourcePreview = att.url || att.preview || "";
+          
+          let finalUrl = await fileToBase64(sourceFile || sourcePreview);
+          if (!finalUrl && sourcePreview) {
+            finalUrl = sourcePreview;
+          }
+
+          let resolvedType = att.type || "";
+          if (!resolvedType && sourceFile && sourceFile.type) {
+            resolvedType = sourceFile.type.startsWith("image")
+              ? "image"
+              : sourceFile.type.startsWith("audio")
+              ? "audio"
+              : sourceFile.type.startsWith("video")
+              ? "video"
+              : "document";
+          }
+          const fileName = att.name || sourceFile?.name || "project-attachment";
+          if (!resolvedType && fileName) {
+            if (fileName.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i)) resolvedType = "image";
+            else if (fileName.match(/\.(mp3|wav|ogg|m4a|webm|aac)$/i) || fileName.includes("audio")) resolvedType = "audio";
+            else if (fileName.match(/\.(mp4|webm|mov|mkv)$/i) || fileName.includes("video")) resolvedType = "video";
+            else resolvedType = "document";
+          }
+
+          const attId = att.id || Date.now() + Math.random();
+          window.__DSS_MEDIA_CACHE = window.__DSS_MEDIA_CACHE || {};
+          if (finalUrl) {
+            window.__DSS_MEDIA_CACHE[attId] = finalUrl;
+            if (fileName) window.__DSS_MEDIA_CACHE[fileName] = finalUrl;
+          }
+
+          return {
+            id: attId,
+            name: fileName,
+            type: resolvedType || "image",
+            size: att.size || sourceFile?.size || 0,
+            url: finalUrl
+          };
+        })
+      );
 
       const selectedDate = formData.date ? new Date(formData.date) : new Date();
       const today = isNaN(selectedDate.getTime()) ? new Date() : selectedDate;
@@ -840,6 +898,8 @@ const Addlead = () => {
         googleLocation: formData.googleLocation || "",
         projectDetail: formData.projectDetail || "",
         projectDetails: formData.projectDetail || "",
+        projectDetailAttachments: processedProjectDetailAttachments,
+        projectDetailFiles: processedProjectDetailAttachments,
         remark: formData.remark || "",
         remarks: formData.remark || "",
         remarkAttachments: processedAttachments,
@@ -861,6 +921,10 @@ const Addlead = () => {
 
       // Extract raw File / Blob objects to upload to Cloudinary
       const rawUploadFiles = (formData.remarkAttachments || [])
+        .map((att) => att.file || att.blob || (att instanceof File || att instanceof Blob ? att : null))
+        .filter(Boolean);
+
+      const rawProjectDetailFiles = (formData.projectDetailAttachments || [])
         .map((att) => att.file || att.blob || (att instanceof File || att instanceof Blob ? att : null))
         .filter(Boolean);
 
@@ -893,6 +957,8 @@ const Addlead = () => {
           expectedRevenue: Number(formData.expectedBusiness) || 0,
           projectDetail: formData.projectDetail.trim(),
           projectDetails: formData.projectDetail.trim(),
+          projectDetailAttachments: processedProjectDetailAttachments,
+          projectDetailFiles: processedProjectDetailAttachments,
           remark: formData.remark.trim(),
           remarks: formData.remark.trim(),
           date: formData.date || today.toISOString().split("T")[0],
@@ -910,7 +976,7 @@ const Addlead = () => {
           updatePayload.leadBy = formData.salesPerson;
         }
 
-        const apiRes = await updateLeadApi(targetId, updatePayload, rawUploadFiles);
+        const apiRes = await updateLeadApi(targetId, updatePayload, rawUploadFiles, rawProjectDetailFiles);
 
         if (!apiRes || apiRes.success === false) {
           toast.error(apiRes?.message || "Failed to update lead in database.");
@@ -937,7 +1003,7 @@ const Addlead = () => {
       }
 
       // Save lead to backend MongoDB Atlas Database with Cloudinary file upload
-      const apiRes = await createLeadApi(newLead, rawUploadFiles);
+      const apiRes = await createLeadApi(newLead, rawUploadFiles, rawProjectDetailFiles);
 
       if (!apiRes || apiRes.success === false) {
         toast.error(apiRes?.message || "Failed to create lead in database.");
@@ -955,6 +1021,10 @@ const Addlead = () => {
         if (Array.isArray(bLead.remarksFiles) && bLead.remarksFiles.length > 0) {
           newLead.remarkAttachments = bLead.remarksFiles;
           newLead.attachments = bLead.remarksFiles;
+        }
+        newLead.projectDetailFiles = bLead.projectDetailFiles || [];
+        if (Array.isArray(bLead.projectDetailFiles) && bLead.projectDetailFiles.length > 0) {
+          newLead.projectDetailAttachments = bLead.projectDetailFiles;
         }
       }
 
@@ -1433,18 +1503,15 @@ const Addlead = () => {
           <div></div>
         </div>
 
-        {/* ROW 8: Project Detail (Full Width Textarea) */}
+        {/* ROW 8: Project Detail with CommentWithMedia Component */}
         <div className="pt-1">
-          <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-0.5">
-            Project Detail
-          </label>
-          <textarea
-            rows={3}
-            name="projectDetail"
-            placeholder="Enter Project Detail"
+          <CommentWithMedia
+            title="Project Detail"
+            placeholder="Write project details, specifications, drawings or record voice note..."
             value={formData.projectDetail}
-            onChange={handleChange}
-            className="w-full px-3 py-1.5 rounded-lg border border-black/20 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none focus:ring-0 focus:border-black/50 transition-all placeholder:text-slate-400 resize-y"
+            onChange={(val) => setFormData((prev) => ({ ...prev, projectDetail: val }))}
+            files={formData.projectDetailAttachments}
+            onFilesChange={(newFiles) => setFormData((prev) => ({ ...prev, projectDetailAttachments: newFiles }))}
           />
         </div>
 

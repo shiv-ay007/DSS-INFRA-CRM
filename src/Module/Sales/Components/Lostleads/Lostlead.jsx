@@ -3,8 +3,17 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import Table from "../../../../Common/Components/Table";
-import { availableWorkTypes, workCategoryList, leadTypesList } from "../../data/addLeadData";
-import { FaFilter, FaSearch, FaUserPlus } from "react-icons/fa";
+import {
+  FaFilter,
+  FaSearch,
+  FaUserPlus,
+  FaImage,
+  FaPlay,
+  FaFileAlt,
+  FaUserTimes,
+  FaRupeeSign,
+  FaTags
+} from "react-icons/fa";
 
 const leadModesList = [
   "ALL",
@@ -136,8 +145,14 @@ const Lostlead = () => {
           address: item.address || leadObj.address || item.siteAddress || leadObj.siteAddress || "--",
           city: item.city || leadObj.city || "--",
           pincode: item.pincode || leadObj.pincode || "--",
-          state: item.state || leadObj.state || "--",
           projectDetail: item.projectDetail || leadObj.projectDetail || item.projectDetails || leadObj.projectDetails || item.notes || leadObj.notes || "--",
+          projectDetails: item.projectDetail || leadObj.projectDetail || item.projectDetails || leadObj.projectDetails || item.notes || leadObj.notes || "--",
+          projectDetailFiles: item.projectDetailFiles || leadObj.projectDetailFiles || [],
+          projectDetailAttachments: (Array.isArray(item.projectDetailFiles) && item.projectDetailFiles.length > 0)
+            ? item.projectDetailFiles
+            : (Array.isArray(leadObj.projectDetailFiles) && leadObj.projectDetailFiles.length > 0)
+            ? leadObj.projectDetailFiles
+            : (item.projectDetailAttachments || leadObj.projectDetailAttachments || []),
           expectedBusiness: String(item.expectedBusiness || item.budget || leadObj.expectedBusiness || leadObj.budget || 0),
           reason: itemReason,
           lostReason: itemReason,
@@ -575,9 +590,85 @@ const Lostlead = () => {
       align: "center",
       render: (val, row) => {
         const pd = row.projectDetail || row.projectDetails || "--";
+        const projAttachments = [];
+        if (Array.isArray(row.projectDetailFiles)) {
+          row.projectDetailFiles.forEach((f) => {
+            const url = f?.url || f?.preview;
+            if (url && !projAttachments.some((x) => (x.url || x.preview) === url)) {
+              projAttachments.push({ ...f, type: f.fileType || f.type || "image" });
+            }
+          });
+        }
+        if (Array.isArray(row.projectDetailAttachments)) {
+          row.projectDetailAttachments.forEach((att) => {
+            const url = att?.url || att?.preview;
+            if (url && !projAttachments.some((x) => (x.url || x.preview) === url)) {
+              projAttachments.push({ ...att, type: att.type || att.fileType || "image" });
+            }
+          });
+        }
+
         return (
-          <div className="max-w-[150px] truncate text-xs text-slate-700 font-medium mx-auto text-center" title={pd}>
-            {pd}
+          <div className="flex items-center justify-center gap-1.5 max-w-[200px] mx-auto text-center">
+            <div className="truncate text-xs text-slate-700 font-medium flex-1" title={pd}>
+              {pd}
+            </div>
+            {projAttachments.length > 0 && (
+              <div className="flex items-center gap-1 shrink-0">
+                {projAttachments.map((att, idx) => {
+                  const url = att.url || att.preview || "";
+                  const type = (att.fileType || att.type || "").toLowerCase();
+                  const isAudio = type === "audio" || /\.(mp3|wav|m4a|aac|ogg|webm)(\?.*)?$/i.test(url);
+                  const isImage = type === "image" || /\.(jpg|jpeg|png|webp|gif|svg)(\?.*)?$/i.test(url);
+
+                  if (isImage) {
+                    return (
+                      <a
+                        key={idx}
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-6 h-6 rounded-md border border-indigo-300 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 flex items-center justify-center transition-all cursor-pointer shadow-2xs shrink-0"
+                        title={att.name || "View Project Image"}
+                      >
+                        <FaImage className="w-3 h-3 text-indigo-600" />
+                      </a>
+                    );
+                  }
+
+                  if (isAudio) {
+                    return (
+                      <a
+                        key={idx}
+                        href={url}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-6 h-6 rounded-md bg-indigo-100 text-indigo-800 border border-indigo-300 hover:bg-indigo-200 flex items-center justify-center transition-all cursor-pointer shadow-2xs shrink-0"
+                        title={att.name || "Play Project Voice Note"}
+                      >
+                        <FaPlay className="w-2.5 h-2.5 text-indigo-700" />
+                      </a>
+                    );
+                  }
+
+                  return (
+                    <a
+                      key={idx}
+                      href={url}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-6 h-6 rounded-md border border-indigo-300 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 flex items-center justify-center transition-all cursor-pointer shadow-2xs shrink-0"
+                      title={att.name || "View Project Document"}
+                    >
+                      <FaFileAlt className="w-3 h-3 text-indigo-600" />
+                    </a>
+                  );
+                })}
+              </div>
+            )}
           </div>
         );
       }
@@ -648,12 +739,76 @@ const Lostlead = () => {
     return filteredLeads.reduce((sum, item) => sum + (Number(item.expectedBusiness || item.expectedBusinessAmount || item.expectedRevenue) || 0), 0);
   }, [filteredLeads]);
 
+  const budgetLostCount = useMemo(() => {
+    return filteredLeads.filter((item) => {
+      const reason = String(item.lostReason || item.reason || "").toUpperCase();
+      return reason.includes("PRICE") || reason.includes("BUDGET") || reason.includes("PAISE");
+    }).length;
+  }, [filteredLeads]);
+
+  const formattedLostAmount = useMemo(() => {
+    const inLakhs = (totalLostAmount / 100000).toLocaleString("en-IN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+    return `₹${inLakhs} Lakhs`;
+  }, [totalLostAmount]);
+
   const paginatedLeads = useMemo(() => {
     const start = (currentPage - 1) * rowsPerPage;
     return filteredLeads.slice(start, start + rowsPerPage);
   }, [filteredLeads, currentPage, rowsPerPage]);
 
+  const isZeroValue = (val) => {
+    if (val === undefined || val === null) return true;
+    const str = String(val).trim();
+    if (str === "0" || str === "0.0%" || str === "0%" || str === "0.0") return true;
+    const clean = str.replace(/[₹,\sLakhsL%]/gi, "");
+    if (clean === "" || clean === "0" || clean === "0.00" || Number(clean) === 0) return true;
+    return false;
+  };
 
+  const lostCardsData = [
+    {
+      id: "total",
+      label: "Total Lost Leads",
+      value: filteredLeads.length,
+      formattedValue: String(filteredLeads.length),
+      icon: <FaUserTimes className="w-4 h-4" />,
+      iconBg: "bg-rose-100/90 text-rose-600",
+      cardGradient: "from-rose-50/90 via-pink-50/30 to-white",
+      borderColor: "border-rose-200/90",
+      textColor: "text-rose-900"
+    },
+    {
+      id: "amount",
+      label: "Total Lost Value",
+      value: totalLostAmount,
+      formattedValue: formattedLostAmount,
+      tooltip: `₹${totalLostAmount.toLocaleString("en-IN")}`,
+      icon: <FaRupeeSign className="w-4 h-4" />,
+      iconBg: "bg-amber-100/90 text-amber-600",
+      cardGradient: "from-amber-50/90 via-yellow-50/30 to-white",
+      borderColor: "border-amber-200/90",
+      textColor: "text-amber-900"
+    },
+    {
+      id: "budget",
+      label: "Budget / Price Out",
+      value: budgetLostCount,
+      formattedValue: String(budgetLostCount),
+      icon: <FaTags className="w-4 h-4" />,
+      iconBg: "bg-purple-100/90 text-purple-600",
+      cardGradient: "from-purple-50/90 via-fuchsia-50/30 to-white",
+      borderColor: "border-purple-200/90",
+      textColor: "text-purple-900"
+    }
+  ];
+
+  const visibleLostCards = lostCardsData.filter((card) => {
+    if (typeof card.value === "number") return card.value > 0;
+    return !isZeroValue(card.formattedValue);
+  });
 
   return (
     <div className="space-y-4 font-sans pb-16">
@@ -699,7 +854,38 @@ const Lostlead = () => {
         />
       </div>
 
-      {/* ================= 2. COLLAPSIBLE FILTER PANEL ================= */}
+      {/* ================= 2. KPI METRIC SUMMARY CARDS ================= */}
+      {visibleLostCards.length > 0 && (
+        <div className={`grid grid-cols-1 ${
+          visibleLostCards.length === 1
+            ? "max-w-xs"
+            : visibleLostCards.length === 2
+            ? "sm:grid-cols-2 max-w-xl"
+            : "sm:grid-cols-2 md:grid-cols-3"
+        } gap-4`}>
+          {visibleLostCards.map((card) => (
+            <div
+              key={card.id}
+              title={card.tooltip}
+              className={`h-[105px] p-3.5 rounded-2xl bg-gradient-to-br ${card.cardGradient} border ${card.borderColor} shadow-2xs hover:shadow-md transition-all flex flex-col justify-between group ${card.tooltip ? "cursor-default" : ""}`}
+            >
+              <div className="flex items-center justify-between">
+                <span className={`text-[11px] font-extrabold uppercase tracking-wider ${card.textColor}`}>
+                  {card.label}
+                </span>
+                <div className={`w-8 h-8 rounded-xl ${card.iconBg} flex items-center justify-center shadow-2xs`}>
+                  {card.icon}
+                </div>
+              </div>
+              <div className="text-xl sm:text-2xl font-black text-slate-900 font-mono tracking-tight truncate">
+                {card.formattedValue}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* ================= 3. COLLAPSIBLE FILTER PANEL ================= */}
       {showFilters && (
         <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs p-5 space-y-3.5 transition-all">
           {/* Top Search, Show Dropdown & Status Tabs */}

@@ -15,6 +15,7 @@ import {
   RefreshCw,
   Square,
 } from "lucide-react";
+import { FaImage, FaPlay, FaVideo, FaFileAlt, FaMicrophone } from "react-icons/fa";
 import WhatsAppAudioPlayer from "./WhatsAppAudioPlayer";
 
 const CommentWithMedia = ({
@@ -25,7 +26,15 @@ const CommentWithMedia = ({
   files = [],
   onFilesChange,
   allowMedia = true,
+  iconView = false,
 }) => {
+  const [activeMediaModal, setActiveMediaModal] = useState(null);
+  const [isIconView, setIsIconView] = useState(iconView);
+
+  useEffect(() => {
+    setIsIconView(iconView);
+  }, [iconView]);
+
   const imageInputRef = useRef(null);
   const videoInputRef = useRef(null);
   const audioInputRef = useRef(null);
@@ -110,6 +119,44 @@ const CommentWithMedia = ({
   const removeFile = (index) => {
     const updated = files.filter((_, i) => i !== index);
     onFilesChange?.(updated);
+  };
+
+  /* Detect media type safely from file, type string, or filename / url */
+  const getMediaType = (item) => {
+    if (!item) return "document";
+    const file = item.file;
+    const type = (file?.type || item.type || item.fileType || "").toLowerCase();
+    const name = (file?.name || item.name || item.filename || "").toLowerCase();
+    const url = (item.preview || item.url || (typeof item === "string" ? item : "")).toLowerCase();
+
+    if (
+      type.includes("image") ||
+      url.startsWith("data:image") ||
+      name.match(/\.(jpg|jpeg|png|gif|webp|svg)$/i) ||
+      url.match(/\.(jpg|jpeg|png|gif|webp|svg)($|\?)/i)
+    ) {
+      return "image";
+    }
+    if (
+      type.includes("audio") ||
+      url.startsWith("data:audio") ||
+      name.match(/\.(mp3|wav|ogg|m4a|webm|aac)$/i) ||
+      url.match(/\.(mp3|wav|ogg|m4a|webm|aac)($|\?)/i) ||
+      name.includes("audio") ||
+      name.startsWith("recording")
+    ) {
+      return "audio";
+    }
+    if (
+      type.includes("video") ||
+      url.startsWith("data:video") ||
+      name.match(/\.(mp4|webm|ogg|mov|mkv)$/i) ||
+      url.match(/\.(mp4|webm|ogg|mov|mkv)($|\?)/i) ||
+      name.includes("video")
+    ) {
+      return "video";
+    }
+    return "document";
   };
 
   /* 🎤 Start Recording */
@@ -548,129 +595,259 @@ const CommentWithMedia = ({
           onChange={handleFileSelect}
         />
 
-        {files.length > 0 && (
-          <p className="mt-2 text-xs font-semibold text-slate-500 text-end">
-            📎 {files.length} file{files.length > 1 ? "s" : ""} selected
-          </p>
-        )}
-      </div>
+        {/* 1. FULL RICH PREVIEW MODE (Default) */}
+        {files.length > 0 && !isIconView && (
+          <div className="mt-3 pt-3 border-t border-gray-100 space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold text-slate-500">
+                📎 {files.length} file{files.length > 1 ? "s" : ""} selected
+              </span>
+              <button
+                type="button"
+                onClick={() => setIsIconView(true)}
+                className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-md transition-colors cursor-pointer flex items-center gap-1.5"
+                title="Switch to compact icon view"
+              >
+                <span>Show as Icons</span>
+                <span className="text-xs">🔲</span>
+              </button>
+            </div>
 
-      {/* 🔥 PREVIEW SECTION */}
-      {files.length > 0 && (
-        <div className="px-4 pb-4 space-y-3">
-          {/* Images & Videos Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
-            {files.map((item, i) => {
-              const { file, preview, type } = item;
-              const isImage =
-                file?.type?.startsWith("image") ||
-                type?.toLowerCase() === "image";
-              const isVideo =
-                file?.type?.startsWith("video") ||
-                type?.toLowerCase() === "video";
+            {/* Images & Videos Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
+              {files.map((item, i) => {
+                const mediaType = getMediaType(item);
+                if (mediaType !== "image" && mediaType !== "video") return null;
 
-              if (!isImage && !isVideo) return null;
+                const url = item.preview || item.url || (item.file ? URL.createObjectURL(item.file) : "");
+                const isImage = mediaType === "image";
+                const isVideo = mediaType === "video";
 
-              return (
-                <div
-                  key={i}
-                  className="relative border rounded-lg overflow-hidden bg-gray-50 group"
-                >
-                  {/* Remove */}
-                  <button
-                    type="button"
-                    onClick={() => removeFile(i)}
-                    className="absolute top-1 right-1 z-10 bg-white/90 rounded-full p-1 shadow-sm hover:bg-red-50 cursor-pointer"
+                return (
+                  <div
+                    key={i}
+                    className="relative border rounded-lg overflow-hidden bg-gray-50 group"
                   >
-                    <X className="w-3.5 h-3.5 text-red-500" />
-                  </button>
+                    {/* Remove */}
+                    <button
+                      type="button"
+                      onClick={() => removeFile(i)}
+                      className="absolute top-1 right-1 z-10 bg-white/90 rounded-full p-1 shadow-sm hover:bg-red-50 cursor-pointer"
+                    >
+                      <X className="w-3.5 h-3.5 text-red-500" />
+                    </button>
 
-                  {isImage && (
-                    <img
-                      src={preview}
-                      alt=""
-                      onClick={() => window.open(preview, "_blank")}
-                      className="h-28 w-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                    {isImage && (
+                      <img
+                        src={url}
+                        alt={item.name || ""}
+                        onClick={() => setActiveMediaModal({ type: "image", url, name: item.file?.name || item.name || "Image Preview" })}
+                        className="h-28 w-full object-cover cursor-pointer hover:opacity-90 transition-opacity"
+                      />
+                    )}
+
+                    {isVideo && (
+                      <video
+                        src={url}
+                        controls
+                        className="h-28 w-full object-cover bg-black"
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 🎧 Audio List with Full WhatsApp Wave Player */}
+            <div className="space-y-2 flex flex-col gap-2">
+              {files.map((item, i) => {
+                const mediaType = getMediaType(item);
+                if (mediaType !== "audio") return null;
+
+                const url = item.preview || item.url || (item.file ? URL.createObjectURL(item.file) : "");
+
+                return (
+                  <div key={i} className="w-full">
+                    <WhatsAppAudioPlayer
+                      file={item.file}
+                      src={url}
+                      onRemove={() => removeFile(i)}
                     />
-                  )}
+                  </div>
+                );
+              })}
+            </div>
 
-                  {isVideo && (
-                    <video
-                      src={preview}
-                      controls
-                      className="h-28 w-full object-cover bg-black"
-                    />
-                  )}
-                </div>
-              );
-            })}
+            {/* 📄 Other Documents */}
+            <div className="flex flex-wrap gap-2">
+              {files.map((item, i) => {
+                const mediaType = getMediaType(item);
+                if (mediaType !== "document") return null;
+
+                const url = item.preview || item.url || (item.file ? URL.createObjectURL(item.file) : "");
+
+                return (
+                  <div
+                    key={i}
+                    className="flex items-center gap-2 p-2 border rounded-lg bg-gray-50 hover:bg-white transition-all group"
+                  >
+                    <FileText className="w-4 h-4 text-gray-400 group-hover:text-blue-500" />
+                    <a
+                      href={url || "#"}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs font-medium text-gray-700 truncate max-w-[150px] hover:text-blue-600"
+                    >
+                      {item.file?.name || item.name || "View Document"}
+                    </a>
+                    <button
+                      type="button"
+                      onClick={() => removeFile(i)}
+                      className="p-1 hover:bg-red-50 rounded-full text-gray-400 hover:text-red-500 cursor-pointer"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           </div>
+        )}
 
-          {/* 🎧 Audio List */}
-          <div className="space-y-2 flex flex-col gap-2">
+        {/* 2. COMPACT ICON PREVIEW MODE */}
+        {files.length > 0 && isIconView && (
+          <div className="mt-2.5 pt-2 border-t border-gray-100 flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mr-1">
+              Media ({files.length}):
+            </span>
             {files.map((item, i) => {
-              const { file, preview, type } = item;
-              const isAudio =
-                file?.type?.startsWith("audio") ||
-                type?.toLowerCase() === "audio";
+              const mediaType = getMediaType(item);
+              const url = item.preview || item.url || (item.file ? URL.createObjectURL(item.file) : "");
+              const fileName = item.file?.name || item.name || `Attachment ${i + 1}`;
 
-              if (!isAudio) return null;
+              // 1. IMAGE: Emerald/green icon button
+              if (mediaType === "image") {
+                return (
+                  <div key={i} className="relative group shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setActiveMediaModal({ type: "image", url, name: fileName })}
+                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 flex items-center justify-center transition-all cursor-pointer shadow-2xs"
+                      title={fileName ? `${fileName} (Click to preview image)` : "Click to preview image"}
+                    >
+                      <FaImage className="w-3.5 h-3.5 text-emerald-600" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeFile(i);
+                      }}
+                      className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center text-[9px] font-bold shadow-xs cursor-pointer opacity-90 group-hover:opacity-100 transition-opacity"
+                      title="Remove file"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                );
+              }
 
+              // 2. AUDIO: Amber/orange icon button
+              if (mediaType === "audio") {
+                return (
+                  <div key={i} className="relative group shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setActiveMediaModal({ type: "audio", url, name: fileName })}
+                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg border border-amber-300 bg-amber-100 hover:bg-amber-200 text-amber-800 flex items-center justify-center transition-all cursor-pointer shadow-2xs"
+                      title={fileName ? `${fileName} (Click to play audio note)` : "Click to play audio note"}
+                    >
+                      <FaPlay className="w-2.5 h-2.5 text-amber-700 ml-0.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeFile(i);
+                      }}
+                      className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center text-[9px] font-bold shadow-xs cursor-pointer opacity-90 group-hover:opacity-100 transition-opacity"
+                      title="Remove file"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                );
+              }
+
+              // 3. VIDEO: Blue icon button
+              if (mediaType === "video") {
+                return (
+                  <div key={i} className="relative group shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setActiveMediaModal({ type: "video", url, name: fileName })}
+                      className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg border border-blue-300 bg-blue-50 hover:bg-blue-100 text-blue-700 flex items-center justify-center transition-all cursor-pointer shadow-2xs"
+                      title={fileName ? `${fileName} (Click to view video)` : "Click to view video"}
+                    >
+                      <FaVideo className="w-3.5 h-3.5 text-blue-600" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeFile(i);
+                      }}
+                      className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center text-[9px] font-bold shadow-xs cursor-pointer opacity-90 group-hover:opacity-100 transition-opacity"
+                      title="Remove file"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                );
+              }
+
+              // 4. DOCUMENT: Slate/gray icon button
               return (
-                <div key={i} className="w-full">
-                  <WhatsAppAudioPlayer
-                    file={file}
-                    src={preview}
-                    onRemove={() => removeFile(i)}
-                  />
-                </div>
-              );
-            })}
-          </div>
-
-          {/* 📄 Other Documents */}
-          <div className="flex flex-wrap gap-2">
-            {files.map((item, i) => {
-              const { file, preview, type } = item;
-              const isImage =
-                file?.type?.startsWith("image") ||
-                type?.toLowerCase() === "image";
-              const isVideo =
-                file?.type?.startsWith("video") ||
-                type?.toLowerCase() === "video";
-              const isAudio =
-                file?.type?.startsWith("audio") ||
-                type?.toLowerCase() === "audio";
-
-              if (isImage || isVideo || isAudio) return null;
-
-              return (
-                <div
-                  key={i}
-                  className="flex items-center gap-2 p-2 border rounded-lg bg-gray-50 hover:bg-white transition-all group"
-                >
-                  <FileText className="w-4 h-4 text-gray-400 group-hover:text-blue-500" />
+                <div key={i} className="relative group shrink-0">
                   <a
-                    href={preview}
+                    href={url || "#"}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-xs font-medium text-gray-700 truncate max-w-[150px] hover:text-blue-600"
+                    onClick={(e) => {
+                      if (!url) e.preventDefault();
+                    }}
+                    className="w-7 h-7 sm:w-8 sm:h-8 rounded-lg border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-all cursor-pointer shadow-2xs"
+                    title={fileName || "View Document"}
                   >
-                    {file?.name || item.name || "View Document"}
+                    <FaFileAlt className="w-3.5 h-3.5 text-slate-600" />
                   </a>
                   <button
                     type="button"
-                    onClick={() => removeFile(i)}
-                    className="p-1 hover:bg-red-50 rounded-full text-gray-400 hover:text-red-500 cursor-pointer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      removeFile(i);
+                    }}
+                    className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center text-[9px] font-bold shadow-xs cursor-pointer opacity-90 group-hover:opacity-100 transition-opacity"
+                    title="Remove file"
                   >
-                    <X size={14} />
+                    ✕
                   </button>
                 </div>
               );
             })}
+            <button
+              type="button"
+              onClick={() => setIsIconView(false)}
+              className="text-[11px] font-semibold text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-md transition-colors cursor-pointer ml-auto flex items-center gap-1.5"
+              title="Switch to full view"
+            >
+              <span>Full View</span>
+              <span className="text-xs">🖼️</span>
+            </button>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* 📸 FULL-SCREEN PHONE-STYLE CAMERA MODAL */}
       {isCameraOpen &&
@@ -845,6 +1022,68 @@ const CommentWithMedia = ({
                   <span className="text-[9px] font-bold mt-0.5 tracking-wider">EXIT</span>
                 </button>
               </div>
+            </div>
+          </div>,
+          document.body
+        )}
+
+      {/* 🌟 MEDIA PREVIEW MODALS */}
+      {activeMediaModal &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs cursor-pointer animate-fadeIn"
+            onClick={() => setActiveMediaModal(null)}
+          >
+            <div
+              className="relative max-w-2xl w-full bg-white rounded-2xl p-4 shadow-2xl border border-slate-200 overflow-hidden flex flex-col items-center cursor-default"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Header */}
+              <div className="w-full flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
+                <span className="text-xs sm:text-sm font-bold text-slate-800 truncate max-w-[80%]">
+                  {activeMediaModal.name || "Media Preview"}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setActiveMediaModal(null)}
+                  className="w-7 h-7 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center cursor-pointer text-xs font-bold transition-colors"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Body */}
+              {activeMediaModal.type === "image" && (
+                <img
+                  src={activeMediaModal.url}
+                  alt={activeMediaModal.name || "Preview"}
+                  className="max-h-[75vh] w-auto max-w-full object-contain rounded-lg"
+                />
+              )}
+
+              {activeMediaModal.type === "audio" && (
+                <div className="w-full bg-amber-50/60 border border-amber-200/80 rounded-2xl p-5 flex flex-col items-center space-y-4">
+                  <div className="w-14 h-14 rounded-full bg-amber-500 text-white flex items-center justify-center shadow-lg shadow-amber-500/30">
+                    <FaMicrophone className="w-7 h-7" />
+                  </div>
+                  <audio
+                    controls
+                    autoPlay
+                    src={activeMediaModal.url}
+                    className="w-full h-10 rounded-lg outline-none"
+                  />
+                </div>
+              )}
+
+              {activeMediaModal.type === "video" && (
+                <video
+                  controls
+                  autoPlay
+                  src={activeMediaModal.url}
+                  className="max-h-[75vh] w-full rounded-lg bg-black"
+                />
+              )}
             </div>
           </div>,
           document.body

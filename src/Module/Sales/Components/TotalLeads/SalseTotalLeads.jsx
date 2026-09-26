@@ -7,6 +7,7 @@ import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
 import { availableWorkTypes, workCategoryList, indianStatesList } from "../../data/addLeadData";
 import { FaUser, FaRegCheckCircle, FaUsers, FaUserCheck, FaImage, FaVideo, FaMicrophone, FaFileAlt, FaPaperclip, FaTimes, FaDownload, FaPlay, FaPause, FaTrashAlt } from "react-icons/fa";
 import { HiOutlineUsers } from "react-icons/hi";
+import LeadKpiSlider from "../LeadManagement/LeadKpiSlider";
 
 import { getAllLeadsApi, updateLeadApi, markInterestedFromTableApi, deleteLeadApi } from "../../services/totalLeads.api";
 import { markLeadAsLossApi, createLossLeadApi } from "../../services/lostLeads.api";
@@ -211,8 +212,27 @@ const SalseTotalLeads = () => {
             pincode: backendLead.pincode || "--",
             city: backendLead.city || "--",
             state: backendLead.state || "--",
-            googleLocation: backendLead.googleLocation || "",
             projectDetail: backendLead.projectDetail || backendLead.notes || "",
+            projectDetails: backendLead.projectDetail || backendLead.notes || "",
+            projectDetailFiles: backendLead.projectDetailFiles || [],
+            projectDetailAttachments: (() => {
+              const list = [];
+              if (Array.isArray(backendLead.projectDetailFiles) && backendLead.projectDetailFiles.length > 0) {
+                list.push(...backendLead.projectDetailFiles.map((f) => ({
+                  ...f,
+                  type: f.fileType || f.type || "image"
+                })));
+              }
+              if (Array.isArray(backendLead.projectDetailAttachments)) {
+                backendLead.projectDetailAttachments.forEach((a) => {
+                  const url = a?.url || a?.preview;
+                  if (url && !list.some((x) => (x.url || x.preview) === url)) {
+                    list.push(a);
+                  }
+                });
+              }
+              return list;
+            })(),
             remarks: backendLead.remarks || backendLead.remark || "",
             remark: backendLead.remarks || backendLead.remark || backendLead.requirement || backendLead.notes || "",
             requirement: backendLead.requirement || backendLead.remarks || backendLead.remark || backendLead.notes || "",
@@ -953,9 +973,104 @@ const SalseTotalLeads = () => {
       align: "center",
       render: (val, row) => {
         const pd = row.projectDetail || row.projectDetails || "--";
+        const projAttachments = [];
+        if (Array.isArray(row.projectDetailFiles)) {
+          row.projectDetailFiles.forEach((f) => {
+            const url = f?.url || f?.preview;
+            if (url && !projAttachments.some((x) => (x.url || x.preview) === url)) {
+              projAttachments.push({ ...f, type: f.fileType || f.type || "image" });
+            }
+          });
+        }
+        if (Array.isArray(row.projectDetailAttachments)) {
+          row.projectDetailAttachments.forEach((att) => {
+            const url = att?.url || att?.preview;
+            if (url && !projAttachments.some((x) => (x.url || x.preview) === url)) {
+              projAttachments.push({ ...att, type: att.type || att.fileType || "image" });
+            }
+          });
+        }
+
         return (
-          <div className="max-w-[150px] truncate text-xs text-slate-700 font-medium mx-auto text-center" title={pd}>
-            {pd}
+          <div className="flex items-center justify-center gap-1.5 max-w-[200px] mx-auto text-center">
+            {/* Project Detail Text */}
+            <div className="truncate text-xs text-slate-700 font-medium flex-1" title={pd}>
+              {pd}
+            </div>
+
+            {/* Inline Media Preview & Play/Pause Controls */}
+            {projAttachments.length > 0 && (
+              <div className="flex items-center gap-1 shrink-0">
+                {projAttachments.map((att, idx) => {
+                  const attId = att.id || `${row.id}-pd-${idx}`;
+                  const mediaType = getMediaType(att);
+                  const isPlaying = playingMediaId === attId;
+
+                  // 1. IMAGE: Icon-only button -> Opens Lightbox Preview on Click!
+                  if (mediaType === "image") {
+                    const imgSrc = getImagePreviewUrl(att);
+                    return (
+                      <button
+                        key={attId}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setLightboxImage({
+                            url: imgSrc,
+                            title: att.name || `${row.clientName || "Lead"} Project Drawing`
+                          });
+                        }}
+                        className="w-6 h-6 rounded-md border border-indigo-300 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 flex items-center justify-center transition-all cursor-pointer shadow-2xs shrink-0"
+                        title="Click to view project drawing / image"
+                      >
+                        <FaImage className="w-3 h-3 text-indigo-600" />
+                      </button>
+                    );
+                  }
+
+                  // 2. AUDIO / VIDEO: Icon-only button -> Opens Audio Player Modal on Click!
+                  if (mediaType === "audio" || mediaType === "video") {
+                    return (
+                      <button
+                        key={attId}
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAudioPlayerModal({
+                            url: att.url,
+                            title: att.name || `${row.clientName || "Lead"} Project Voice Note`,
+                            attId: attId
+                          });
+                        }}
+                        className={`w-6 h-6 rounded-md flex items-center justify-center transition-all cursor-pointer shadow-2xs border ${
+                          isPlaying
+                            ? "bg-indigo-600 text-white border-indigo-700 animate-pulse"
+                            : "bg-indigo-100 text-indigo-800 border-indigo-300 hover:bg-indigo-200"
+                        }`}
+                        title="Click to open project audio note"
+                      >
+                        <FaPlay className="w-2.5 h-2.5 text-indigo-700" />
+                      </button>
+                    );
+                  }
+
+                  // 3. Document or Other file type:
+                  return (
+                    <a
+                      key={attId}
+                      href={att.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="w-6 h-6 rounded-md border border-indigo-300 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 flex items-center justify-center transition-all cursor-pointer shadow-2xs shrink-0"
+                      title={att.name || "View Project Document"}
+                    >
+                      <FaFileAlt className="w-3 h-3 text-indigo-600" />
+                    </a>
+                  );
+                })}
+              </div>
+            )}
           </div>
         );
       }
@@ -1416,6 +1531,45 @@ const SalseTotalLeads = () => {
         return "bg-slate-400";
     }
   };
+
+  // Helper to format currency into Lakhs
+  const formatLakhs = (val) => {
+    const num = Number(val) || 0;
+    return `₹${(num / 100000).toFixed(2)}L`;
+  };
+
+  // KPI Metrics Aggregations
+  const stats = useMemo(() => {
+    const total = leads.length;
+    const fresh = leads.filter((l) => (l.leadType || "").toUpperCase() === "FRESH").length;
+    const converted = leads.filter((l) => (l.status || "").toUpperCase() === "CONVERTED").length;
+    const interested = leads.filter((l) => (l.status || "").toUpperCase().includes("INTERESTED")).length;
+    const conversionRate = total > 0 ? `${((converted / total) * 100).toFixed(1)}%` : "0.0%";
+    
+    // Revenue calculations
+    const totalRevenue = leads
+      .filter((l) => (l.status || "").toUpperCase() === "CONVERTED")
+      .reduce((sum, l) => sum + (Number(l.expectedBusiness) || 0), 0);
+    
+    const expectedRevenue = leads
+      .reduce((sum, l) => sum + (Number(l.expectedBusiness) || 0), 0);
+
+    const totalIncentives = totalRevenue * 0.02; // 2% incentive
+    const expectedIncentives = expectedRevenue * 0.02;
+
+    return {
+      total: String(total),
+      fresh: String(fresh),
+      converted: String(converted),
+      interested: String(interested),
+      conversionRate,
+      totalRevenue: formatLakhs(totalRevenue),
+      expectedRevenue: formatLakhs(expectedRevenue),
+      totalIncentives: formatLakhs(totalIncentives),
+      expectedIncentives: formatLakhs(expectedIncentives)
+    };
+  }, [leads]);
+
   return (
     <div className="space-y-4 font-sans pb-16">
       
@@ -1473,6 +1627,9 @@ const SalseTotalLeads = () => {
           }
         />
       </div>
+
+      {/* ================= 2. DASHBOARD STYLE SLIDABLE KPI STAT CARDS ================= */}
+      <LeadKpiSlider stats={stats} />
 
       {/* COLLAPSIBLE FILTER PANEL (Opens on click) */}
       {showFilters && (
@@ -1743,11 +1900,77 @@ const SalseTotalLeads = () => {
                   ₹ {Number(activeLeadModal.expectedRevenue || 0).toLocaleString("en-IN")}
                 </strong>
               </div>
-              <div className="p-3 rounded-xl bg-slate-50 col-span-2">
-                <span className="text-slate-400 block text-[10px]">Scope & Requirements</span>
+              <div className="p-3 rounded-xl bg-slate-50 col-span-2 space-y-2">
+                <span className="text-slate-400 block text-[10px]">Scope & Requirements (Project Detail)</span>
                 <p className="mt-1 text-slate-700 leading-relaxed font-medium">
-                  {activeLeadModal.projectDetails || "No additional project notes provided."}
+                  {activeLeadModal.projectDetails || activeLeadModal.projectDetail || "No additional project notes provided."}
                 </p>
+                {/* Project Detail Media Attachments */}
+                {(() => {
+                  const modalProjAtts = [
+                    ...(activeLeadModal.projectDetailFiles || []),
+                    ...(activeLeadModal.projectDetailAttachments || [])
+                  ].filter((v, i, a) => v?.url && a.findIndex(t => t.url === v.url) === i);
+
+                  if (modalProjAtts.length === 0) return null;
+
+                  return (
+                    <div className="pt-2 border-t border-slate-200/60">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
+                        Project Media Attachments ({modalProjAtts.length})
+                      </span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {modalProjAtts.map((att, idx) => {
+                          const mType = getMediaType(att);
+                          const isImg = mType === "image";
+                          const isAudio = mType === "audio" || mType === "video";
+                          const attId = att.id || `modal-pd-${idx}`;
+
+                          if (isImg) {
+                            return (
+                              <button
+                                key={attId}
+                                type="button"
+                                onClick={() => setLightboxImage({ url: getImagePreviewUrl(att), title: att.name || "Project Drawing" })}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50/80 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold cursor-pointer"
+                              >
+                                <FaImage className="w-3 h-3 text-indigo-600" />
+                                <span>{att.name || `Photo ${idx + 1}`}</span>
+                              </button>
+                            );
+                          }
+
+                          if (isAudio) {
+                            return (
+                              <button
+                                key={attId}
+                                type="button"
+                                onClick={() => setAudioPlayerModal({ url: att.url, title: att.name || "Project Audio Note", attId })}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50/80 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold cursor-pointer"
+                              >
+                                <FaPlay className="w-2.5 h-2.5 text-indigo-600" />
+                                <span>{att.name || "Play Voice Note"}</span>
+                              </button>
+                            );
+                          }
+
+                          return (
+                            <a
+                              key={attId}
+                              href={att.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50/80 hover:bg-indigo-100 text-indigo-700 text-xs font-semibold cursor-pointer"
+                            >
+                              <FaFileAlt className="w-3 h-3 text-indigo-600" />
+                              <span>{att.name || "Document"}</span>
+                            </a>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
               <div className="p-3 rounded-xl bg-slate-50">
                 <span className="text-slate-400 block text-[10px]">City & Region</span>
