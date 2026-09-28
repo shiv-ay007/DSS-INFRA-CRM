@@ -17,7 +17,8 @@ import {
   FaEnvelope,
   FaCalendarAlt,
   FaTimes,
-  FaTasks
+  FaTasks,
+  FaFileAlt
 } from "react-icons/fa";
 import { HiOutlineTemplate } from "react-icons/hi";
 import { HiSparkles } from "react-icons/hi2";
@@ -330,7 +331,8 @@ const PmsTemplateComponent = () => {
           workWillDoneBy: firstFieldData.workWillDoneBy || item.workWillDoneBy || "Civil Contractor",
           contractorType: firstFieldData.contractorType || item.contractorType || "",
           materialsList,
-          status: statusLabel,
+          status: item.status === "Draft" ? "Draft" : statusLabel,
+          isDraft: item.status === "Draft" || item.isDraft === true,
           stagesList: resolvedStages
         };
       });
@@ -496,11 +498,24 @@ const PmsTemplateComponent = () => {
     actions: {
       label: "Action",
       align: "center",
-      headerClass: "w-20 min-w-[80px]",
+      headerClass: "w-24 min-w-[90px]",
       render: (_, row) => {
         const rowId = row.id;
+        const isDraft = row.status === "Draft" || row.isDraft === true;
         return (
           <div className="flex items-center justify-center gap-1.5">
+            {/* Draft Resume Icon Button (Shows for Draft tasks) */}
+            {isDraft && !isUserObserver && (
+              <button
+                onClick={() => navigate(`/sales/master/pms-template/edit/${rowId}`)}
+                title="Draft (Incomplete) - Click to Resume & Complete"
+                aria-label="Resume Draft"
+                className="p-1.5 rounded-md text-amber-700 bg-amber-100 hover:bg-amber-200 border border-amber-300 transition-all cursor-pointer shadow-2xs hover:scale-105 flex items-center gap-1"
+              >
+                <FaFileAlt className="w-3.5 h-3.5 text-amber-600" />
+              </button>
+            )}
+
             {/* View Icon Button */}
             <button
               onClick={() => navigate(`/sales/master/pms-template/details/${rowId}`)}
@@ -511,8 +526,8 @@ const PmsTemplateComponent = () => {
               <FaEye className="w-3.5 h-3.5" />
             </button>
 
-            {/* Edit Icon Button (Hidden for Observer) */}
-            {!isUserObserver && (
+            {/* Edit Icon Button (Hidden for Observer, and hidden if draft because Draft button is already shown) */}
+            {!isUserObserver && !isDraft && (
               <button
                 onClick={() => navigate(`/sales/master/pms-template/edit/${rowId}`)}
                 title="Edit Template"
@@ -557,14 +572,22 @@ const PmsTemplateComponent = () => {
       headerClass: "min-w-[250px]",
       render: (_, row) => (
         <div className="py-1 flex flex-col items-start gap-1 text-left">
-          {/* Project Name with distinct background */}
-          <span
-            onClick={() => navigate(`/sales/master/pms-template/details/${row.id}`)}
-            title={row.projectName}
-            className="inline-block max-w-[280px] truncate bg-slate-100 hover:bg-slate-200 text-slate-900 font-bold text-xs px-2.5 py-1 rounded border border-slate-200 cursor-pointer transition-colors"
-          >
-            {row.projectName}
-          </span>
+          {/* Project Name with distinct background & optional Draft badge */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span
+              onClick={() => navigate(`/sales/master/pms-template/details/${row.id}`)}
+              title={row.projectName}
+              className="inline-block max-w-[240px] truncate bg-slate-100 hover:bg-slate-200 text-slate-900 font-bold text-xs px-2.5 py-1 rounded border border-slate-200 cursor-pointer transition-colors"
+            >
+              {row.projectName}
+            </span>
+            {(row.status === "Draft" || row.isDraft) && (
+              <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-800 text-[10px] font-bold px-1.5 py-0.5 rounded border border-amber-300">
+                <FaFileAlt className="w-2.5 h-2.5 text-amber-600" />
+                Draft
+              </span>
+            )}
+          </div>
 
           {/* Work Type with distinct background */}
           <span className="inline-block bg-sky-50 text-sky-800 font-semibold text-[11px] px-2 py-0.5 rounded border border-sky-200">

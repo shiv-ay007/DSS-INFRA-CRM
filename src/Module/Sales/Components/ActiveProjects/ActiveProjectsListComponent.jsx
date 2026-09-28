@@ -330,13 +330,14 @@ const ActiveProjectsListComponent = () => {
                   type="button"
                   onClick={(e) => {
                     e.stopPropagation();
-                    const cParam = encodeURIComponent(row.clientName || "");
-                    const pParam = encodeURIComponent(row.projectName || row.workType || "");
-                    const projIdParam = encodeURIComponent(row.projectId || row.id || "");
-                    const leadIdParam = encodeURIComponent(row.leadId || "");
-                    navigate(
-                      `/sales/master/pms-template/create?projectId=${projIdParam}&leadId=${leadIdParam}&clientName=${cParam}&projectName=${pParam}`
-                    );
+                    navigate("/sales/master/pms-template/create", {
+                      state: {
+                        projectId: row.projectId || row.id || "",
+                        leadId: row.leadId || "",
+                        clientName: row.clientName || "",
+                        projectName: row.projectName || row.workType || ""
+                      }
+                    });
                   }}
                   title="PMS Masterdata not created yet. Click to configure PMS template"
                   className="px-2 py-1 rounded text-[10px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 transition-all flex items-center gap-1 shadow-2xs hover:scale-105 whitespace-nowrap cursor-pointer"

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams, useLocation } from "react-router-dom";
 import { toast } from "react-toastify";
 import {
   FaArrowLeft,
@@ -15,7 +15,8 @@ import {
   FaBuilding,
   FaArrowRight,
   FaCheckCircle,
-  FaExclamationCircle
+  FaExclamationCircle,
+  FaFileAlt
 } from "react-icons/fa";
 import { HiSparkles } from "react-icons/hi2";
 import { materialService } from "../../../services/materialService";
@@ -198,6 +199,7 @@ export const CreatePmsTemplateComponent = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const isEdit = Boolean(id);
   const { role, isObserver, user } = useAuth();
   const currentRole = role || user?.role || localStorage.getItem("role") || "";
@@ -1475,14 +1477,20 @@ export const CreatePmsTemplateComponent = () => {
     setIsProjectOpen(false);
   };
 
-  // Auto-fill client & project from URL search parameters (e.g. from Active Projects "+ Add PMS" button)
+  // Auto-fill client & project from route state or URL search parameters (Clean URL support)
   useEffect(() => {
     if (isEdit || presalesList.length === 0) return;
-    const qClientName = searchParams.get("clientName");
-    const qProjectId = searchParams.get("projectId");
-    const qProjectName = searchParams.get("projectName");
+    const routeState = location.state || {};
+    const qClientName = routeState.clientName || searchParams.get("clientName");
+    const qProjectId = routeState.projectId || searchParams.get("projectId");
+    const qProjectName = routeState.projectName || searchParams.get("projectName");
 
     if (!qClientName && !qProjectId) return;
+
+    // Clean address bar so user sees only clean path without ugly query string
+    if (searchParams.toString()) {
+      window.history.replaceState({}, "", window.location.pathname);
+    }
 
     const matchedClient = presalesList.find((c) => {
       if (qClientName && c.clientName?.toLowerCase().trim() === qClientName.toLowerCase().trim()) return true;
@@ -1622,17 +1630,27 @@ export const CreatePmsTemplateComponent = () => {
     return true;
   };
 
-  // Save / Update Task Submit Handler
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  // Save / Update Task Submit Handler (Supports Draft Mode)
+  const handleSubmit = async (e, isDraft = false) => {
+    if (e && e.preventDefault) e.preventDefault();
 
     if (isUserObserver) {
       toast.info("Observer Mode: Action is disabled.");
       return;
     }
 
-    if (!validateForm()) {
-      return;
+    if (isDraft) {
+      // In Draft mode, allow partial data, but require at least client & project
+      const hasClient = formData.clientId || formData.clientName;
+      const hasProj = formData.projectId || formData.projectName;
+      if (!hasClient && !hasProj) {
+        toast.error("Please select at least a Client or Project to save as Draft");
+        return;
+      }
+    } else {
+      if (!validateForm()) {
+        return;
+      }
     }
 
     setLoading(true);
@@ -1671,8 +1689,8 @@ export const CreatePmsTemplateComponent = () => {
         foundClient;
       const resolvedProjectId = formData.projectId || selectedProj?._id || selectedProj?.id || null;
 
-      // Duplicate project validation check
-      if (resolvedProjectId && existingProjectIds.has(String(resolvedProjectId)) && !isEdit) {
+      // Duplicate project validation check (ignore duplicate if saving/updating draft)
+      if (resolvedProjectId && existingProjectIds.has(String(resolvedProjectId)) && !isEdit && !isDraft) {
         toast.error("A PMS Template already exists for this project. Duplicate templates cannot be created.");
         setLoading(false);
         return;
@@ -1827,7 +1845,8 @@ export const CreatePmsTemplateComponent = () => {
         projectId: resolvedProjectId,
         projectStatus: mappedProjectStatus,
         stages: dbStages,
-        status: "Active"
+        status: isDraft ? "Draft" : "Active",
+        isDraft: isDraft
       };
 
       // 5. Send to Database via Backend API
@@ -1840,7 +1859,11 @@ export const CreatePmsTemplateComponent = () => {
           const res = await pmsTemplateService.createTemplate(backendPayload);
           apiSavedData = res?.data?.data || res?.data;
         }
-        toast.success(`PMS Task "${primaryTaskCode}" saved to database successfully!`);
+        if (isDraft) {
+          toast.success(`PMS Task "${primaryTaskCode}" saved as Draft successfully 📝`);
+        } else {
+          toast.success(`PMS Task "${primaryTaskCode}" saved to database successfully!`);
+        }
       } catch (apiErr) {
         console.error("Backend API save error:", apiErr);
         const errMsg = apiErr?.response?.data?.message || apiErr?.message || "Failed to save PMS Task";
@@ -2969,6 +2992,21 @@ export const CreatePmsTemplateComponent = () => {
             className="px-5 py-2.5 border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer"
           >
             Cancel
+          </button>
+          {/* Save as Draft Button */}
+          <button
+            type="button"
+            onClick={(e) => handleSubmit(e, true)}
+            disabled={loading || fetching || isUserObserver}
+            className={`px-4 sm:px-5 py-2.5 rounded-lg text-sm font-semibold transition-all flex items-center gap-1.5 ${
+              isUserObserver
+                ? "bg-slate-100 text-slate-400 cursor-not-allowed border border-slate-200"
+                : "bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 hover:border-amber-400 shadow-xs cursor-pointer active:scale-95"
+            }`}
+            title={isUserObserver ? "Disabled for Observer" : "Save partially filled form as Draft"}
+          >
+            <FaFileAlt className="w-3.5 h-3.5 text-amber-600" />
+            <span>Save as Draft</span>
           </button>
           <button
             type="submit"

@@ -49,6 +49,7 @@ const SalesRoutes = () => {
           <Route path="leads/deleted" element={<DeletedLeads />} />
           <Route path="leads/details" element={<LeadDetails />} />
           <Route path="leads/details/:id" element={<LeadDetails />} />
+          <Route path="lead-details/:id" element={<LeadDetails />} />
           <Route path="leads/sales-form" element={<SalesLeadForm />} />
           <Route path="leads/sales-form/:id" element={<SalesLeadForm />} />
           <Route path="management-sheet" element={<SalseManagment />} />

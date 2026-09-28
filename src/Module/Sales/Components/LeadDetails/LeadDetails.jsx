@@ -22,7 +22,6 @@ const LeadDetails = () => {
 
   const [lead, setLead] = useState(null);
   const [showFollowupModal, setShowFollowupModal] = useState(false);
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
 
   const [fromSource, setFromSource] = useState(() => {
     return location.state?.from || (id ? sessionStorage.getItem(`lead_from_${id}`) : "") || "";
