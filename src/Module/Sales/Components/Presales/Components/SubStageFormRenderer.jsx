@@ -71,6 +71,29 @@ const AcceptanceStatusSelect = ({ value, onChange, disabled }) => {
   );
 };
 
+export const toDateTimeLocalValue = (val) => {
+  if (!val) return "";
+  try {
+    const s = String(val).trim();
+    if (!s) return "";
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(s)) return s;
+    if (s.includes("T")) return s.slice(0, 16);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, "0");
+      return `${s}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    }
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) {
+      const pad = (n) => String(n).padStart(2, "0");
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+    return "";
+  } catch (_) {
+    return "";
+  }
+};
+
 const SubStageFormRenderer = ({
   stageId = 1,
   stageData = {},
@@ -83,9 +106,23 @@ const SubStageFormRenderer = ({
 
   const updateField = (field, value) => {
     if (readOnly) return;
+    let timeStr = "";
+    if (value && typeof value === "string" && value.includes("T")) {
+      const [_, t] = value.split("T");
+      if (t) {
+        const [h, m] = t.split(":").map(Number);
+        const d = new Date();
+        d.setHours(h || 0, m || 0, 0, 0);
+        timeStr = d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+      }
+    } else {
+      timeStr = new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+    }
+    const isDateField = String(field).toLowerCase().includes("date");
     onChange?.({
       ...stageData,
-      [field]: value
+      [field]: value,
+      ...(isDateField && timeStr ? { [`${field}Time`]: timeStr } : {})
     });
   };
 
@@ -124,24 +161,24 @@ const SubStageFormRenderer = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                Request Received Date
+                Request Received Date & Time
               </label>
               <input
-                type="date"
+                type="datetime-local"
                 disabled={readOnly}
-                value={stageData.requestDate || ""}
+                value={toDateTimeLocalValue(stageData.requestDate)}
                 onChange={(e) => updateField("requestDate", e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100 disabled:text-slate-500"
               />
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                Visit Completed Date
+                Visit Completed Date & Time
               </label>
               <input
-                type="date"
+                type="datetime-local"
                 disabled={readOnly}
-                value={stageData.visitCompletedDate || ""}
+                value={toDateTimeLocalValue(stageData.visitCompletedDate)}
                 onChange={(e) => updateField("visitCompletedDate", e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100 disabled:text-slate-500"
               />
@@ -158,24 +195,24 @@ const SubStageFormRenderer = ({
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
-              Request Initiated Date
+              Request Initiated Date & Time
             </label>
             <input
-              type="date"
+              type="datetime-local"
               disabled={readOnly}
-              value={stageData.requestInitiatedDate || ""}
+              value={toDateTimeLocalValue(stageData.requestInitiatedDate)}
               onChange={(e) => updateField("requestInitiatedDate", e.target.value)}
               className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100 disabled:text-slate-500"
             />
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
-              Completion Date
+              Completion Date & Time
             </label>
             <input
-              type="date"
+              type="datetime-local"
               disabled={readOnly}
-              value={stageData.completionDate || ""}
+              value={toDateTimeLocalValue(stageData.completionDate)}
               onChange={(e) => updateField("completionDate", e.target.value)}
               className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100 disabled:text-slate-500"
             />
@@ -191,36 +228,36 @@ const SubStageFormRenderer = ({
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
-              Request Receiving Date
+              Request Receiving Date & Time
             </label>
             <input
-              type="date"
+              type="datetime-local"
               disabled={readOnly}
-              value={stageData.requestReceivingDate || ""}
+              value={toDateTimeLocalValue(stageData.requestReceivingDate)}
               onChange={(e) => updateField("requestReceivingDate", e.target.value)}
               className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100 disabled:text-slate-500"
             />
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
-              Work Start Date
+              Work Start Date & Time
             </label>
             <input
-              type="date"
+              type="datetime-local"
               disabled={readOnly}
-              value={stageData.workStartDate || ""}
+              value={toDateTimeLocalValue(stageData.workStartDate)}
               onChange={(e) => updateField("workStartDate", e.target.value)}
               className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100 disabled:text-slate-500"
             />
           </div>
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1">
-              Completion & Sent-to-Client Date
+              Completion & Sent Date & Time
             </label>
             <input
-              type="date"
+              type="datetime-local"
               disabled={readOnly}
-              value={stageData.completionDate || ""}
+              value={toDateTimeLocalValue(stageData.completionDate)}
               onChange={(e) => updateField("completionDate", e.target.value)}
               className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100 disabled:text-slate-500"
             />
@@ -271,12 +308,12 @@ const SubStageFormRenderer = ({
 
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                Last Modification / Negotiation Date
+                Last Modification / Negotiation Date & Time
               </label>
               <input
-                type="date"
+                type="datetime-local"
                 disabled={readOnly}
-                value={stageData.lastNegotiationDate || ""}
+                value={toDateTimeLocalValue(stageData.lastNegotiationDate)}
                 onChange={(e) => updateField("lastNegotiationDate", e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100 disabled:text-slate-500"
               />
@@ -284,7 +321,7 @@ const SubStageFormRenderer = ({
 
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
-                <span>Tentative Quotation Finalisation Date</span>
+                <span>Tentative Quotation Finalisation Date & Time</span>
                 {daysInMod && (
                   <span className="text-[10px] text-blue-600 font-semibold font-mono">
                     ({daysInMod} in negotiation)
@@ -292,9 +329,9 @@ const SubStageFormRenderer = ({
                 )}
               </label>
               <input
-                type="date"
+                type="datetime-local"
                 disabled={readOnly}
-                value={stageData.finalisationDate || ""}
+                value={toDateTimeLocalValue(stageData.finalisationDate)}
                 onChange={(e) => updateField("finalisationDate", e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100 disabled:text-slate-500"
               />
@@ -366,12 +403,12 @@ const SubStageFormRenderer = ({
           {wantsBank ? (
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                Given-to-Client Date
+                Given-to-Client Date & Time
               </label>
               <input
-                type="date"
+                type="datetime-local"
                 disabled={readOnly}
-                value={stageData.givenToClientDate || ""}
+                value={toDateTimeLocalValue(stageData.givenToClientDate)}
                 onChange={(e) => updateField("givenToClientDate", e.target.value)}
                 className="w-full sm:w-1/2 px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100 disabled:text-slate-500"
               />
@@ -436,36 +473,36 @@ const SubStageFormRenderer = ({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Request Receiving Date
+                  Request Receiving Date & Time
                 </label>
                 <input
-                  type="date"
+                  type="datetime-local"
                   disabled={readOnly}
-                  value={stageData.requestReceivingDate || ""}
+                  value={toDateTimeLocalValue(stageData.requestReceivingDate)}
                   onChange={(e) => updateField("requestReceivingDate", e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100 disabled:text-slate-500"
                 />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Work Start Date
+                  Work Start Date & Time
                 </label>
                 <input
-                  type="date"
+                  type="datetime-local"
                   disabled={readOnly}
-                  value={stageData.workStartDate || ""}
+                  value={toDateTimeLocalValue(stageData.workStartDate)}
                   onChange={(e) => updateField("workStartDate", e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100 disabled:text-slate-500"
                 />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Work Completion Date
+                  Work Completion Date & Time
                 </label>
                 <input
-                  type="date"
+                  type="datetime-local"
                   disabled={readOnly}
-                  value={stageData.workCompletionDate || ""}
+                  value={toDateTimeLocalValue(stageData.workCompletionDate)}
                   onChange={(e) => updateField("workCompletionDate", e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100 disabled:text-slate-500"
                 />
@@ -548,36 +585,36 @@ const SubStageFormRenderer = ({
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Request Receiving Date
+                  Request Receiving Date & Time
                 </label>
                 <input
-                  type="date"
+                  type="datetime-local"
                   disabled={readOnly}
-                  value={stageData.requestReceivingDate || ""}
+                  value={toDateTimeLocalValue(stageData.requestReceivingDate)}
                   onChange={(e) => updateField("requestReceivingDate", e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100 disabled:text-slate-500"
                 />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Work Start Date
+                  Work Start Date & Time
                 </label>
                 <input
-                  type="date"
+                  type="datetime-local"
                   disabled={readOnly}
-                  value={stageData.workStartDate || ""}
+                  value={toDateTimeLocalValue(stageData.workStartDate)}
                   onChange={(e) => updateField("workStartDate", e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100 disabled:text-slate-500"
                 />
               </div>
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Work Completion & Send to Client Date
+                  Work Completion & Send Date & Time
                 </label>
                 <input
-                  type="date"
+                  type="datetime-local"
                   disabled={readOnly}
-                  value={stageData.completionDate || ""}
+                  value={toDateTimeLocalValue(stageData.completionDate)}
                   onChange={(e) => updateField("completionDate", e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100 disabled:text-slate-500"
                 />
@@ -621,12 +658,12 @@ const SubStageFormRenderer = ({
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Last Modification / Negotiation Date
+                  Last Modification / Negotiation Date & Time
                 </label>
                 <input
-                  type="date"
+                  type="datetime-local"
                   disabled={readOnly}
-                  value={stageData.lastNegotiationDate || ""}
+                  value={toDateTimeLocalValue(stageData.lastNegotiationDate)}
                   onChange={(e) => updateField("lastNegotiationDate", e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100 disabled:text-slate-500"
                 />
@@ -634,7 +671,7 @@ const SubStageFormRenderer = ({
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
-                  <span>Final Quotation Finalisation Date</span>
+                  <span>Final Quotation Finalisation Date & Time</span>
                   {daysInMod && (
                     <span className="text-[10px] text-blue-600 font-semibold font-mono">
                       ({daysInMod} in negotiation)
@@ -642,9 +679,9 @@ const SubStageFormRenderer = ({
                   )}
                 </label>
                 <input
-                  type="date"
+                  type="datetime-local"
                   disabled={readOnly}
-                  value={stageData.finalisationDate || ""}
+                  value={toDateTimeLocalValue(stageData.finalisationDate)}
                   onChange={(e) => updateField("finalisationDate", e.target.value)}
                   className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100 disabled:text-slate-500"
                 />
@@ -664,12 +701,12 @@ const SubStageFormRenderer = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                Request Receiving Date
+                Request Receiving Date & Time
               </label>
               <input
-                type="date"
+                type="datetime-local"
                 disabled={readOnly}
-                value={stageData.requestReceivingDate || ""}
+                value={toDateTimeLocalValue(stageData.requestReceivingDate)}
                 onChange={(e) => updateField("requestReceivingDate", e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100 disabled:text-slate-500"
               />
@@ -677,12 +714,12 @@ const SubStageFormRenderer = ({
 
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                1st Modification Request Date
+                1st Modification Request Date & Time
               </label>
               <input
-                type="date"
+                type="datetime-local"
                 disabled={readOnly}
-                value={stageData.modDate || ""}
+                value={toDateTimeLocalValue(stageData.modDate)}
                 onChange={(e) => updateField("modDate", e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100 disabled:text-slate-500"
               />
@@ -705,13 +742,13 @@ const SubStageFormRenderer = ({
 
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
-                <span>Final Contract Sign Date</span>
+                <span>Final Contract Sign Date & Time</span>
                 <span className="text-rose-500 text-xs">* Required for Active Project</span>
               </label>
               <input
-                type="date"
+                type="datetime-local"
                 disabled={readOnly}
-                value={stageData.finalContractSignDate || ""}
+                value={toDateTimeLocalValue(stageData.finalContractSignDate)}
                 onChange={(e) => updateField("finalContractSignDate", e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100 disabled:text-slate-500 ring-1 ring-emerald-300"
               />

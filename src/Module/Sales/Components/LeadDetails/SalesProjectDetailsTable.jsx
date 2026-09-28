@@ -73,9 +73,6 @@ const SalesProjectDetailsTable = ({ lead, projects = [], onAddProjectClick }) =>
                 {projects.length} {projects.length === 1 ? "Record" : "Records"}
               </span>
             </div>
-            <p className="text-xs text-slate-500 font-medium">
-              Data retrieved directly from MongoDB <span className="font-mono font-bold text-slate-700">leadsproject</span> collection
-            </p>
           </div>
         </div>
 
@@ -86,7 +83,7 @@ const SalesProjectDetailsTable = ({ lead, projects = [], onAddProjectClick }) =>
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-bold transition-all shadow-xs cursor-pointer"
           >
             <FaPlus className="text-xs" />
-            <span>Add / Update Project</span>
+            <span>Add Project</span>
           </button>
         )}
       </div>
@@ -104,6 +101,12 @@ const SalesProjectDetailsTable = ({ lead, projects = [], onAddProjectClick }) =>
               <th className="py-3 px-3 text-center w-24 border-r border-slate-800 whitespace-nowrap">
                 ACTIONS
               </th>
+              <th className="py-3 px-3 text-left border-r border-slate-800 whitespace-nowrap">
+                PROJECT NAME
+              </th>
+              <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">
+                PROJECT COORDINATOR
+              </th>
               <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">
                 AMOUNT
               </th>
@@ -114,19 +117,16 @@ const SalesProjectDetailsTable = ({ lead, projects = [], onAddProjectClick }) =>
                 WORK TYPE
               </th>
               <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">
-                COMPANY
+                WORK CATEGORY
               </th>
               <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">
-                BUSINESS TYPE
+                COMPANY
               </th>
               <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">
                 JOB TYPE
               </th>
               <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">
                 PRIORITY
-              </th>
-              <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">
-                PROJECT COORDINATOR
               </th>
               <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">
                 LOCATION
@@ -145,12 +145,12 @@ const SalesProjectDetailsTable = ({ lead, projects = [], onAddProjectClick }) =>
           <tbody className="divide-y divide-slate-100 bg-white">
             {projects.length === 0 ? (
               <tr>
-                <td colSpan={14} className="py-10 text-center text-slate-500 font-medium">
+                <td colSpan={15} className="py-10 text-center text-slate-500 font-medium">
                   <div className="flex flex-col items-center justify-center gap-2">
                     <FaBuilding className="text-3xl text-slate-300" />
                     <p className="text-sm font-bold text-slate-700">No Project Records Found</p>
                     <p className="text-xs text-slate-400">
-                      Click "+ Add / Update Project" above to create a record in the leadsproject collection.
+                      Click "+ Add Project" above to create a record.
                     </p>
                   </div>
                 </td>
@@ -211,6 +211,27 @@ const SalesProjectDetailsTable = ({ lead, projects = [], onAddProjectClick }) =>
                       </div>
                     </td>
 
+                    {/* 2.5 PROJECT NAME */}
+                    <td className="py-2.5 px-3 text-left border-r border-slate-100 whitespace-nowrap">
+                      <span className="font-bold text-slate-900 block max-w-[170px] truncate" title={proj.projectName || "--"}>
+                        {proj.projectName || "--"}
+                      </span>
+                    </td>
+
+                    {/* PROJECT COORDINATOR */}
+                    <td className="py-2.5 px-3 text-center text-slate-700 border-r border-slate-100 whitespace-nowrap">
+                      {(proj.projectCoordinatorName || proj.nextPersonName) ? (
+                        <div>
+                          <div className="font-bold text-slate-800">{proj.projectCoordinatorName || proj.nextPersonName}</div>
+                          {proj.designation && (
+                            <div className="text-[10px] text-slate-400">({proj.designation})</div>
+                          )}
+                        </div>
+                      ) : (
+                        "--"
+                      )}
+                    </td>
+
                     {/* 3. AMOUNT */}
                     <td className="py-2.5 px-3 text-center border-r border-slate-100 whitespace-nowrap">
                       <span className="inline-block px-2.5 py-1 rounded-md text-emerald-800 bg-emerald-50 border border-emerald-300 font-mono font-bold text-xs">
@@ -238,14 +259,20 @@ const SalesProjectDetailsTable = ({ lead, projects = [], onAddProjectClick }) =>
                       )}
                     </td>
 
+                    {/* WORK CATEGORY */}
+                    <td className="py-2.5 px-3 text-center border-r border-slate-100 whitespace-nowrap">
+                      {proj.workCategory || proj.businessType ? (
+                        <span className="inline-block px-2.5 py-1 rounded-md text-slate-800 bg-slate-50 border border-slate-200 font-semibold text-xs max-w-[150px] truncate" title={Array.isArray(proj.workCategory) ? proj.workCategory.join(", ") : (proj.workCategory || proj.businessType)}>
+                          {Array.isArray(proj.workCategory) ? proj.workCategory.join(", ") : (proj.workCategory || proj.businessType)}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 font-medium">--</span>
+                      )}
+                    </td>
+
                     {/* 6. COMPANY NAME */}
                     <td className="py-2.5 px-3 text-center font-medium text-slate-800 border-r border-slate-100 whitespace-nowrap">
                       {proj.companyName || "--"}
-                    </td>
-
-                    {/* 7. BUSINESS TYPE */}
-                    <td className="py-2.5 px-3 text-center font-medium text-slate-700 border-r border-slate-100 whitespace-nowrap">
-                      {proj.businessType || "--"}
                     </td>
 
                     {/* 8. JOB TYPE */}
@@ -268,20 +295,6 @@ const SalesProjectDetailsTable = ({ lead, projects = [], onAddProjectClick }) =>
                       >
                         {isHigh ? "🔴 High" : isMedium ? "🟡 Medium" : "🟢 Low"}
                       </span>
-                    </td>
-
-                    {/* 10. PROJECT COORDINATOR */}
-                    <td className="py-2.5 px-3 text-center text-slate-700 border-r border-slate-100 whitespace-nowrap">
-                      {(proj.projectCoordinatorName || proj.nextPersonName) ? (
-                        <div>
-                          <div className="font-bold text-slate-800">{proj.projectCoordinatorName || proj.nextPersonName}</div>
-                          {proj.designation && (
-                            <div className="text-[10px] text-slate-400">({proj.designation})</div>
-                          )}
-                        </div>
-                      ) : (
-                        "--"
-                      )}
                     </td>
 
                     {/* 12. LOCATION */}

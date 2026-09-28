@@ -1,5 +1,6 @@
 import React, { useMemo } from "react";
 import { FaLock, FaCheckCircle, FaBan, FaCalendarAlt } from "react-icons/fa";
+import { toDateTimeLocalValue } from "./SubStageFormRenderer";
 
 /**
  * Reusable Entry Block for Presale Negotiation Cycle
@@ -33,9 +34,27 @@ const NegotiationCycleBlock = ({
 
   const updateField = (field, value) => {
     if (readOnly) return;
+    let timeStr = "";
+    if (value && typeof value === "string" && value.includes("T")) {
+      const [_, t] = value.split("T");
+      if (t) {
+        const [h, m] = t.split(":").map(Number);
+        const d = new Date();
+        d.setHours(h || 0, m || 0, 0, 0);
+        timeStr = d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+      }
+    } else {
+      timeStr = new Date().toLocaleTimeString("en-IN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true
+      });
+    }
+    const isDateField = String(field).toLowerCase().includes("date");
     onChange?.({
       ...data,
-      [field]: value
+      [field]: value,
+      ...(isDateField && timeStr ? { [`${field}Time`]: timeStr } : {})
     });
   };
 
@@ -90,12 +109,12 @@ const NegotiationCycleBlock = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                Request Receiving Date
+                Request Receiving Date & Time
               </label>
               <input
-                type="date"
+                type="datetime-local"
                 disabled={readOnly}
-                value={data.requestDate || ""}
+                value={toDateTimeLocalValue(data.requestDate, data.requestDateTime || data.requestTime)}
                 onChange={(e) => updateField("requestDate", e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100 disabled:text-slate-500"
               />
@@ -103,12 +122,12 @@ const NegotiationCycleBlock = ({
 
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                1st Option Given Date
+                1st Option Given Date & Time
               </label>
               <input
-                type="date"
+                type="datetime-local"
                 disabled={readOnly}
-                value={data.optionDate || ""}
+                value={toDateTimeLocalValue(data.optionDate, data.optionDateTime || data.optionTime)}
                 onChange={(e) => updateField("optionDate", e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100 disabled:text-slate-500"
               />
@@ -135,12 +154,12 @@ const NegotiationCycleBlock = ({
 
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                Option Finalisation Date
+                Option Finalisation Date & Time
               </label>
               <input
-                type="date"
+                type="datetime-local"
                 disabled={readOnly}
-                value={data.finalOptionDate || ""}
+                value={toDateTimeLocalValue(data.finalOptionDate, data.finalOptionDateTime || data.finalOptionTime)}
                 onChange={(e) => updateField("finalOptionDate", e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100 disabled:text-slate-500"
               />
@@ -151,12 +170,12 @@ const NegotiationCycleBlock = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                1st Modification Request Date
+                1st Modification Request Date & Time
               </label>
               <input
-                type="date"
+                type="datetime-local"
                 disabled={readOnly}
-                value={data.modDate || ""}
+                value={toDateTimeLocalValue(data.modDate, data.modDateTime || data.modTime)}
                 onChange={(e) => updateField("modDate", e.target.value)}
                 className="w-full px-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white disabled:bg-slate-100 disabled:text-slate-500"
               />
@@ -180,12 +199,15 @@ const NegotiationCycleBlock = ({
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                {finalDateLabel}
+                {finalDateLabel.includes("Time") ? finalDateLabel : `${finalDateLabel} & Time`}
               </label>
               <input
-                type="date"
+                type="datetime-local"
                 disabled={readOnly}
-                value={data.finalDrawingDate || data.materialFinalisationDate || ""}
+                value={toDateTimeLocalValue(
+                  data.finalDrawingDate || data.materialFinalisationDate,
+                  data.finalDrawingDateTime || data.finalDrawingTime || data.materialFinalisationDateTime || data.materialFinalisationTime
+                )}
                 onChange={(e) => {
                   updateField("finalDrawingDate", e.target.value);
                   updateField("materialFinalisationDate", e.target.value);

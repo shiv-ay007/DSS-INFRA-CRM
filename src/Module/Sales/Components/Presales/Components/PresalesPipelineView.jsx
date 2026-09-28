@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   FaTimes,
   FaSave,
@@ -15,7 +16,8 @@ import {
   FaArrowLeft,
   FaTable,
   FaBoxes,
-  FaLock
+  FaLock,
+  FaRocket
 } from "react-icons/fa";
 import { toast } from "react-toastify";
 import PageHeader from "../../../../../Common/Components/PageHeader";
@@ -100,6 +102,8 @@ const PresalesPipelineView = ({
 }) => {
   if (!presale) return null;
 
+  const navigate = useNavigate();
+
   // Resolve all projects associated with this client
   const allProjects = useMemo(() => {
     if (Array.isArray(passedAllProjects) && passedAllProjects.length > 0) return passedAllProjects;
@@ -171,6 +175,10 @@ const PresalesPipelineView = ({
   const [closeRemarkText, setCloseRemarkText] = useState("");
   const [closeAttachments, setCloseAttachments] = useState([]);
   const [isSubmittingClose, setIsSubmittingClose] = useState(false);
+
+  // Move to Active Project Confirmation Modal State
+  const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
+  const [isSubmittingMove, setIsSubmittingMove] = useState(false);
 
   // Project-specific stage data map, status map and remarks from Presales collection
   const [stagesDataMap, setStagesDataMap] = useState({});
@@ -262,11 +270,7 @@ const PresalesPipelineView = ({
     };
   }, [currentProject?._id, currentProject?.id]);
 
-  // Keep stage form data in sync whenever stage or stagesDataMap changes
-  useEffect(() => {
-    const saved = stagesDataMap?.[activeStageId] || currentProject.stagesData?.[activeStageId] || {};
-    setStageFormData(saved);
-  }, [activeStageId, stagesDataMap, currentProject]);
+
 
   // Keep top-level fields synced with incoming currentProject
   useEffect(() => {
@@ -333,18 +337,35 @@ const PresalesPipelineView = ({
     setStageFormData({ ...existing });
   }, [activeStageId, stagesDataMap, currentProject.stagesData]);
 
+  // Helper: Check if a specific stage has completed data
+  const isStageCompletedCheck = (stageNum) => {
+    if (stagesStatusMap?.[stageNum] === "completed" || stagesStatusMap?.[stageNum] === "skipped") return true;
+    const saved = stagesDataMap?.[stageNum] || currentProject.stagesData?.[stageNum];
+    if (!saved) return false;
+    return Object.entries(saved).some(([k, v]) => {
+      if (k === "_id" || k === "id" || k === "savedAt" || k === "savedTime" || k.endsWith("Time")) return false;
+      if (Array.isArray(v)) return v.length > 0;
+      return v !== null && v !== undefined && String(v).trim() !== "";
+    });
+  };
+
+  // Check if ALL previous applicable stages have been completed
+  const arePreviousStagesCompleted = useMemo(() => {
+    if (activeStageId <= 1) return true;
+    for (let prevId = 1; prevId < activeStageId; prevId++) {
+      if (!isStageApplicable(prevId, engagementScope)) continue;
+      if (!isStageCompletedCheck(prevId)) {
+        return false;
+      }
+    }
+    return true;
+  }, [activeStageId, stagesStatusMap, stagesDataMap, currentProject.stagesData, engagementScope]);
+
   // --------------------------------------------------------------------------
   // Check if Active Stage is Saved / Completed (Locks re-filling and shows view below)
   // --------------------------------------------------------------------------
   const isCurrentStageSaved = useMemo(() => {
-    if (stagesStatusMap?.[activeStageId] === "completed") return true;
-    const saved = stagesDataMap?.[activeStageId] || currentProject.stagesData?.[activeStageId];
-    if (!saved) return false;
-    return Object.entries(saved).some(([k, v]) => {
-      if (k === "_id" || k === "id") return false;
-      if (Array.isArray(v)) return v.length > 0;
-      return v !== null && v !== undefined && String(v).trim() !== "";
-    });
+    return isStageCompletedCheck(activeStageId);
   }, [stagesStatusMap, stagesDataMap, activeStageId, currentProject.stagesData]);
 
   const isProjectClosed = useMemo(() => {
@@ -373,8 +394,8 @@ const PresalesPipelineView = ({
     }
   }, [isProjectClosed, effectiveClosedAtStage, activeStageId]);
 
-  // Lock inputs if global readOnly, project is closed, or current stage is already saved
-  const isStageLocked = readOnly || isProjectClosed || isCurrentStageSaved;
+  // Lock inputs if global readOnly, project is closed, current stage is already saved, or previous stages are incomplete
+  const isStageLocked = readOnly || isProjectClosed || isCurrentStageSaved || !arePreviousStagesCompleted;
 
   // --------------------------------------------------------------------------
   // Rule Check: Move to Active Project
@@ -502,25 +523,57 @@ const PresalesPipelineView = ({
       return;
     }
 
+    if (!arePreviousStagesCompleted) {
+      toast.warning(`Please complete previous stages first before saving Stage ${activeStageId}!`);
+      return false;
+    }
+
     setIsSavingStage(true);
 
     try {
       let finalStageData = { ...stageFormData };
 
-      // 1. If any media files or completion notes are attached in the stage form, upload to Cloudinary & sync to discussion
+      // Ensure exact date and time stamps are attached to stage data
+      const now = new Date();
+      const currentTimeStr = now.toLocaleTimeString("en-IN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true
+      });
+      const pad = (n) => String(n).padStart(2, "0");
+      const currentLocalIso = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+      finalStageData.savedAt = currentLocalIso;
+      finalStageData.savedTime = currentTimeStr;
+      finalStageData.submittedAt = currentLocalIso;
+      finalStageData.submittedTime = currentTimeStr;
+
+      // Auto-tag any date fields with accompanying time if missing
+      Object.keys(finalStageData).forEach((k) => {
+        if (
+          k.toLowerCase().includes("date") &&
+          !k.endsWith("Time") &&
+          finalStageData[k] &&
+          !finalStageData[`${k}Time`]
+        ) {
+          finalStageData[`${k}Time`] = currentTimeStr;
+        }
+      });
+
+      // 1. If any new raw media files are attached in the stage form, upload to Cloudinary & sync to discussion
       const rawFiles = Array.isArray(stageFormData.attachments)
         ? stageFormData.attachments.filter((a) => a.file)
         : [];
       const stageNotes = stageFormData.notes || stageFormData.visitRemarks || "";
 
-      if (rawFiles.length > 0 || (stageNotes && stageNotes.trim() !== "")) {
+      if (rawFiles.length > 0) {
         try {
           const formPayload = new FormData();
           formPayload.append(
             "text",
             stageNotes.trim()
               ? `[Stage ${activeStageId} ${activeStageConfig.name} Completed] ${stageNotes.trim()}`
-              : `[Stage ${activeStageId} ${activeStageConfig.name}] Completed & saved.`
+              : `[Stage ${activeStageId} ${activeStageConfig.name}] Attached files saved.`
           );
           formPayload.append("author", currentUser || activePerson || "Admin");
           formPayload.append("stageId", activeStageId);
@@ -643,21 +696,25 @@ const PresalesPipelineView = ({
     onUpdatePresale?.(updatedPresale);
   };
 
-  // Handle Move to Active Project Action
-  const handleMoveToActive = async () => {
+  // Handle Move to Active Project Action (Opens custom React modal)
+  const handleMoveToActive = () => {
     if (!isMoveToActiveEnabled) {
       toast.warning(
         "Move to Active Project requires Scope = 'Design + Construction' and Stage 11 Contract Signed Date!"
       );
       return;
     }
+    setIsMoveModalOpen(true);
+  };
 
-    if (
-      window.confirm(
-        `Are you sure you want to promote ${currentProject.projectName || currentProject.clientName} to Active Project (Construction Phase)?`
-      )
-    ) {
-      const targetId = currentProject._id || currentProject.id;
+  // Handle Confirm Move to Active Project Action
+  const handleConfirmMoveToActive = async () => {
+    const targetId = currentProject._id || currentProject.id;
+    if (!targetId || isSubmittingMove) return;
+
+    setIsSubmittingMove(true);
+
+    try {
       const updatedPresale = {
         ...currentProject,
         status: "ACTIVE_PROJECT",
@@ -666,19 +723,19 @@ const PresalesPipelineView = ({
       setClosureStatus("Converted to Construction");
       onUpdatePresale?.(updatedPresale);
 
-      try {
-        if (targetId) {
-          await updateLeadProjectApi(targetId, {
-            status: "ACTIVE_PROJECT",
-            closureStatus: "Converted to Construction"
-          });
-        }
-        toast.success(`🎉 ${currentProject.projectName || currentProject.clientName} successfully moved to Active Project!`);
-        onClose?.();
-      } catch (err) {
-        console.error("Error moving to active project:", err);
-        toast.error("Failed to promote to Active Project on server");
-      }
+      await updateLeadProjectApi(targetId, {
+        status: "CONVERTED"
+      });
+
+      toast.success(`🎉 ${currentProject.projectName || currentProject.clientName} successfully moved to Active Project!`);
+      setIsMoveModalOpen(false);
+      onClose?.();
+      navigate("/sales/active-projects");
+    } catch (err) {
+      console.error("Error moving to active project:", err);
+      toast.error("Failed to promote to Active Project on server");
+    } finally {
+      setIsSubmittingMove(false);
     }
   };
 
@@ -1095,9 +1152,13 @@ const PresalesPipelineView = ({
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-300">
                 <FaTimesCircle className="text-[10px]" /> Pipeline Closed at this Stage
               </span>
-            ) : isCurrentStageSaved && (
+            ) : isCurrentStageSaved ? (
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
                 <FaCheckCircle className="text-[10px]" /> Completed
+              </span>
+            ) : !arePreviousStagesCompleted && (
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                <FaLock className="text-[10px]" /> Locked (Complete Previous Stages First)
               </span>
             )}
           </div>
@@ -1120,6 +1181,15 @@ const PresalesPipelineView = ({
             </div>
           )}
         </div>
+
+        {!isProjectClosed && !arePreviousStagesCompleted && (
+          <div className="p-3 mb-3 rounded-xl bg-amber-50/90 border border-amber-200 text-amber-900 text-xs font-semibold flex items-center gap-2.5 shadow-2xs">
+            <FaLock className="text-amber-600 text-sm shrink-0" />
+            <span>
+              This stage is view-only. You must complete the previous stages first before filling Stage {activeStageId}.
+            </span>
+          </div>
+        )}
 
         <div>
           <SubStageFormRenderer
@@ -1159,6 +1229,7 @@ const PresalesPipelineView = ({
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Left: Discussion Log / Remarks (Specific to Active Stage) */}
         <PresalesDiscussionLog
+          key={`discussion-stage-${activeStageId}`}
           projectId={currentProject._id || currentProject.id}
           activeStageId={activeStageId}
           activeStageName={activeStageConfig.name}
@@ -1170,7 +1241,8 @@ const PresalesPipelineView = ({
               setActiveStageId((prev) => prev + 1);
             }
           }}
-          readOnly={readOnly || isProjectClosed}
+          readOnly={isStageLocked}
+          isCompleted={isCurrentStageSaved}
           currentUser={currentUser}
         />
 
@@ -1357,6 +1429,99 @@ const PresalesPipelineView = ({
                   <>
                     <FaTimesCircle className="text-xs" />
                     <span>Confirm & Mark as Closed</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================================================================= */}
+      {/* MODAL: MOVE TO ACTIVE PROJECT (Construction Phase Promotion) */}
+      {/* ================================================================= */}
+      {isMoveModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
+          <div className="bg-white border border-slate-200 rounded-2xl max-w-md w-full p-5 sm:p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150 my-8">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-500 text-white flex items-center justify-center shadow-xs">
+                  <FaRocket className="text-base" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 leading-tight">
+                    Promote to Active Project
+                  </h3>
+                  <p className="text-[11px] text-slate-500">
+                    Construction Phase Handoff
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={isSubmittingMove}
+                onClick={() => setIsMoveModalOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center cursor-pointer transition-all disabled:opacity-50"
+              >
+                <FaTimes className="text-xs" />
+              </button>
+            </div>
+
+            {/* Project Details Snapshot Box */}
+            <div className="p-3.5 rounded-xl bg-gradient-to-br from-slate-50 to-emerald-50/50 border border-emerald-100 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                  Target Project
+                </span>
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  ✓ Contract Signed
+                </span>
+              </div>
+              <p className="text-sm font-extrabold text-slate-900 truncate">
+                {currentProject.projectName || currentProject.clientName}
+              </p>
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/60 text-xs text-slate-600">
+                <span className="text-slate-500">Client: <strong className="text-slate-800 font-semibold">{currentProject.clientName}</strong></span>
+                <span className="px-2 py-0.5 rounded-md bg-white border border-slate-300 font-bold text-slate-700 text-[11px]">
+                  {engagementScope}
+                </span>
+              </div>
+            </div>
+
+            {/* Confirmation Description */}
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              Are you sure you want to promote <strong className="text-slate-900 font-bold">{currentProject.projectName || currentProject.clientName}</strong> to an <strong className="text-emerald-700 font-bold">Active Project (Construction Phase)</strong>?
+              <span className="block text-xs text-slate-500 mt-1.5">
+                This project will be moved to the Active Project pipeline with all presale milestones, negotiation rates, and contract files preserved.
+              </span>
+            </p>
+
+            {/* Modal Actions */}
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-slate-100">
+              <button
+                type="button"
+                disabled={isSubmittingMove}
+                onClick={() => setIsMoveModalOpen(false)}
+                className="px-4 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold cursor-pointer disabled:opacity-50 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isSubmittingMove}
+                onClick={handleConfirmMoveToActive}
+                className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs sm:text-sm font-bold shadow-md cursor-pointer transition-all flex items-center gap-2 disabled:opacity-50"
+              >
+                {isSubmittingMove ? (
+                  <>
+                    <FaSpinner className="animate-spin text-xs" />
+                    <span>Promoting Project...</span>
+                  </>
+                ) : (
+                  <>
+                    <FaRocket className="text-xs" />
+                    <span>Confirm & Move to Active</span>
                   </>
                 )}
               </button>

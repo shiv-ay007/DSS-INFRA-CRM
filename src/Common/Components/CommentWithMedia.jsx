@@ -27,6 +27,7 @@ const CommentWithMedia = ({
   onFilesChange,
   allowMedia = true,
   iconView = false,
+  disabled = false,
 }) => {
   const [activeMediaModal, setActiveMediaModal] = useState(null);
   const [isIconView, setIsIconView] = useState(iconView);
@@ -450,20 +451,23 @@ const CommentWithMedia = ({
       <div className="p-3.5 relative">
         <div className="flex items-start gap-2 border border-gray-200 rounded-lg bg-gray-50/50 px-3 py-2">
           <textarea
+            disabled={disabled}
             value={value}
             onChange={(e) => {
+              if (disabled) return;
               onChange?.(e.target.value);
             }}
             placeholder={placeholder}
-            className="flex-1 bg-transparent outline-none text-xs sm:text-sm text-slate-800 min-h-[70px] py-1 resize-none scrollbar-thin placeholder:text-slate-400"
+            className="flex-1 bg-transparent outline-none text-xs sm:text-sm text-slate-800 min-h-[70px] py-1 resize-none scrollbar-thin placeholder:text-slate-400 disabled:cursor-not-allowed disabled:text-slate-400"
           />
 
           {allowMedia && (
             <button
               type="button"
-              onClick={() => setShowOptions((p) => !p)}
-              title="Upload Media"
-              className="p-2 rounded-full bg-gray-200 hover:bg-gray-300 text-gray-700 transition-all cursor-pointer mt-1"
+              disabled={disabled}
+              onClick={() => !disabled && setShowOptions((p) => !p)}
+              title={disabled ? "Media upload disabled" : "Upload Media"}
+              className="p-2 rounded-full bg-gray-200 hover:bg-gray-300 text-gray-700 transition-all cursor-pointer mt-1 disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <Plus className="w-4 h-4" />
             </button>
@@ -472,9 +476,10 @@ const CommentWithMedia = ({
           {!isRecording ? (
             <button
               type="button"
-              onClick={startRecording}
-              title="Voice Recording"
-              className="p-2 rounded-full bg-green-500 hover:bg-green-600 text-white transition-all cursor-pointer mt-1"
+              disabled={disabled}
+              onClick={() => !disabled && startRecording()}
+              title={disabled ? "Voice recording disabled" : "Voice Recording"}
+              className="p-2 rounded-full bg-green-500 hover:bg-green-600 text-white transition-all cursor-pointer mt-1 disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
               <Mic className="w-4 h-4" />
             </button>

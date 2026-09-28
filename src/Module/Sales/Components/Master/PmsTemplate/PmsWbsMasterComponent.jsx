@@ -1157,22 +1157,22 @@ const PmsWbsMasterComponent = () => {
                 <div>
                   {entryType === "status" && (
                     <p className="text-slate-600">
-                      <strong className="text-amber-700">Project Status Master:</strong> Dynamic project execution statuses configure karein (jaise On Track, Delayed, In Progress, On Hold, Completed).
+                      <strong className="text-amber-700">Project Status Master:</strong> Configure dynamic project execution statuses (e.g. On Track, Delayed, In Progress, On Hold, Completed).
                     </p>
                   )}
                   {entryType === "stage" && (
                     <p className="text-slate-600">
-                      <strong className="text-indigo-700">Stage Master:</strong> Construction ke main stages define karein (jaise S1: Site Preparation, S9: Slab Casting wagera).
+                      <strong className="text-indigo-700">Stage Master:</strong> Define major construction milestones and stages (e.g. S1: Site Preparation, S9: Slab Casting, etc.).
                     </p>
                   )}
                   {entryType === "work" && (
                     <p className="text-slate-600">
-                      <strong className="text-blue-700">Work Master:</strong> Independent Work item add karein (jaise W1: REINFORCEMENT / BAR BINDING, W2: BRICK WORK wagera).
+                      <strong className="text-blue-700">Work Master:</strong> Add independent work categories (e.g. W1: REINFORCEMENT / BAR BINDING, W2: BRICK WORK, etc.).
                     </p>
                   )}
                   {entryType === "task" && (
                     <p className="text-slate-600">
-                      <strong className="text-emerald-700">Task Master:</strong> Independent Task / Activity item add karein (jaise T1: MANUAL EXCAVATION, T2: CLEANING wagera).
+                      <strong className="text-emerald-700">Task Master:</strong> Add independent activity and task items (e.g. T1: MANUAL EXCAVATION, T2: CLEANING, etc.).
                     </p>
                   )}
                 </div>

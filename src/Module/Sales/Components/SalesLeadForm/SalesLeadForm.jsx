@@ -45,9 +45,10 @@ const SalesLeadForm = () => {
     companyName: "",
     projectName: "",
     workType: "",
-    businessType: "Design",
+    businessType: "",
+    workCategory: "",
     clientDesignation: "Managing Director",
-    expectedBusiness: 50000,
+    expectedBusiness: "",
     priority: "high",
     jobType: "NEW",
     city: "",
@@ -64,92 +65,42 @@ const SalesLeadForm = () => {
     designation: ""
   });
 
-  // Populate form data whenever lead is resolved
+  // Populate form data whenever lead is resolved: ONLY Client details are fetched, project details are blank
   const populateFormData = (leadData, initialRemark = "") => {
     if (!leadData) return;
 
-    const normalizeAttachmentList = (list) => {
-      if (!Array.isArray(list)) return [];
-      return list.map((f, idx) => {
-        const url = f?.url || f?.fileUrl || f?.preview || (typeof f === "string" ? f : "");
-        const name = f?.name || f?.filename || `Attachment-${idx + 1}`;
-        let type = f?.type || f?.fileType;
-        if (!type) {
-          if (name.match(/\.(jpg|jpeg|png|webp|gif|svg)$/i) || url.match(/\.(jpg|jpeg|png|webp|gif|svg)($|\?)/i)) {
-            type = "image";
-          } else if (
-            name.match(/\.(mp3|wav|ogg|m4a|webm|aac)$/i) ||
-            url.match(/\.(mp3|wav|ogg|m4a|webm|aac)($|\?)/i) ||
-            name.toLowerCase().includes("recording") ||
-            name.toLowerCase().includes("audio")
-          ) {
-            type = "audio";
-          } else if (name.match(/\.(mp4|webm|mov|mkv)$/i) || url.match(/\.(mp4|webm|mov|mkv)($|\?)/i)) {
-            type = "video";
-          } else {
-            type = "document";
-          }
-        }
-        return {
-          ...f,
-          id: f?.id || idx,
-          name,
-          type,
-          url,
-          preview: f?.preview || url
-        };
-      });
-    };
-
-    const existingRemarkAtts = normalizeAttachmentList(
-      Array.isArray(leadData.remarkAttachments) && leadData.remarkAttachments.length > 0
-        ? leadData.remarkAttachments
-        : (Array.isArray(leadData.remarksFiles) && leadData.remarksFiles.length > 0
-            ? leadData.remarksFiles
-            : (Array.isArray(leadData.attachments) && leadData.attachments.length > 0
-                ? leadData.attachments
-                : []))
-    );
-
-    const existingReqAtts = normalizeAttachmentList(
-      Array.isArray(leadData.requirementAttachments) && leadData.requirementAttachments.length > 0
-        ? leadData.requirementAttachments
-        : []
-    );
-
     setFormData({
+      // ONLY Client Details fetched from lead
       clientName: leadData.concernPersonName || leadData.clientName || "",
       phoneNumber: leadData.phoneNumber || leadData.contact || leadData.phone || "",
       alternateNumber: leadData.alternateNumber || "",
       whatsappNumber: leadData.whatsappNumber || leadData.phoneNumber || leadData.phone || "",
       emailAddress: leadData.emailAddress || leadData.email || "",
-      companyName: leadData.companyName || leadData.company || "",
-      workType: Array.isArray(leadData.workType)
-        ? leadData.workType.join(", ")
-        : (leadData.workType || ""),
-      businessType: Array.isArray(leadData.workCategory)
-        ? leadData.workCategory.filter(Boolean).join(", ")
-        : (leadData.businessType || leadData.workCategory || "Design"),
       clientDesignation: leadData.clientDesignation || "Managing Director",
-      expectedBusiness: Number(leadData.expectedBusiness || leadData.amount || leadData.budget || 50000),
-      priority: (leadData.leadLabel || leadData.priority || "").toUpperCase() === "HOT" || (leadData.leadLabel || leadData.priority || "").toLowerCase() === "high"
-        ? "high"
-        : (leadData.leadLabel || leadData.priority || "").toUpperCase() === "WARM" || (leadData.leadLabel || leadData.priority || "").toLowerCase() === "medium"
-        ? "medium"
-        : "low",
-      jobType: leadData.jobType || "NEW",
+      clientRating: Number(leadData.clientRating || 4.5),
+
+      // Client Address
       city: leadData.city || "",
       state: leadData.state || "",
       pincode: leadData.pincode || "",
       address: leadData.address || leadData.siteAddress || "",
-      requirement: leadData.requirement || "",
-      requirementAttachments: existingReqAtts,
-      transferRemark: initialRemark || leadData.remark || leadData.transferRemark || "",
-      transferRemarkAttachments: existingRemarkAtts,
-      clientRating: Number(leadData.clientRating || 4.5),
-      projectCoordinatorName: leadData.projectCoordinatorName || leadData.nextPersonName || leadData.nextConcernPerson || "",
-      nextPersonName: leadData.projectCoordinatorName || leadData.nextPersonName || leadData.nextConcernPerson || "",
-      designation: leadData.designation || leadData.nextPersonDesignation || ""
+
+      // All project specific details are kept BLANK for fresh input
+      companyName: "",
+      projectName: "",
+      workType: "",
+      businessType: "",
+      workCategory: "",
+      expectedBusiness: "",
+      priority: "high",
+      jobType: "NEW",
+      projectCoordinatorName: "",
+      nextPersonName: "",
+      designation: "",
+      requirement: "",
+      requirementAttachments: [],
+      transferRemark: "",
+      transferRemarkAttachments: []
     });
   };
 
@@ -259,6 +210,10 @@ const SalesLeadForm = () => {
 
     if (formData.emailAddress && formData.emailAddress.trim() && !/\S+@\S+\.\S+/.test(formData.emailAddress.trim())) {
       newErrors.emailAddress = "Please enter a valid email address";
+    }
+
+    if (!formData.projectName || !formData.projectName.trim()) {
+      newErrors.projectName = "Project Name is required";
     }
 
     if (formData.expectedBusiness === "" || Number(formData.expectedBusiness) < 0) {
@@ -553,20 +508,6 @@ const SalesLeadForm = () => {
                 <FaTable className="text-slate-500 text-xs" />
                 <span>Go to Sales Sheet</span>
               </button>
-              <button
-                type="button"
-                onClick={isUserObserver ? () => toast.info("Observer Mode: Action is disabled.") : handleSubmit}
-                disabled={submitting || isUserObserver}
-                className={`px-4 py-1.5 rounded-lg text-xs sm:text-sm font-bold shadow-xs transition-all flex items-center gap-1.5 ${
-                  isUserObserver
-                    ? "bg-slate-200 text-slate-400 cursor-not-allowed opacity-60"
-                    : "bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer disabled:opacity-50"
-                }`}
-                title={isUserObserver ? "Disabled for Observer" : "Save & Proceed"}
-              >
-                {submitting ? <FaSpinner className="animate-spin text-xs" /> : <FaSave className="text-xs" />}
-                <span>Save & Proceed</span>
-              </button>
             </div>
           }
         />
@@ -700,11 +641,21 @@ const SalesLeadForm = () => {
             </label>
             <input
               type="text"
+              list="workTypeDatalist"
               value={formData.workType}
               onChange={(e) => handleInputChange("workType", e.target.value)}
               placeholder="e.g. Concept Drawing, Elevation Drawing"
               className="w-full px-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400"
             />
+            <datalist id="workTypeDatalist">
+              <option value="Concept Drawing" />
+              <option value="Approval Drawing" />
+              <option value="Structure Drawing" />
+              <option value="Interior Drawing" />
+              <option value="Working Drawing" />
+              <option value="3D Elevation" />
+              <option value="Site Supervision" />
+            </datalist>
           </div>
 
           <div>
@@ -713,10 +664,23 @@ const SalesLeadForm = () => {
             </label>
             <input
               type="text"
-              readOnly
-              value={formData.businessType || (Array.isArray(formData.workCategory) ? formData.workCategory.filter(Boolean).join(", ") : formData.workCategory) || "Design"}
-              className="w-full px-3 py-2 rounded-lg border border-black/20 bg-slate-50 text-slate-800 text-xs sm:text-sm font-medium focus:outline-none cursor-not-allowed"
+              list="workCategoryDatalist"
+              value={formData.businessType || (Array.isArray(formData.workCategory) ? formData.workCategory.filter(Boolean).join(", ") : formData.workCategory) || ""}
+              onChange={(e) => {
+                handleInputChange("businessType", e.target.value);
+                handleInputChange("workCategory", e.target.value);
+              }}
+              placeholder="Select or enter Work Category"
+              className="w-full px-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400"
             />
+            <datalist id="workCategoryDatalist">
+              <option value="Design" />
+              <option value="Construction" />
+              <option value="Interior" />
+              <option value="Full Furnished" />
+              <option value="Fabrication" />
+              <option value="Other" />
+            </datalist>
           </div>
         </div>
 
@@ -811,6 +775,28 @@ const SalesLeadForm = () => {
           </div>
         </div>
 
+        {/* Project Name (Full Width Input ABOVE Pincode | City | State, Mandatory) */}
+        <div id="field-projectName" className="pt-0.5">
+          <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
+            Project Name <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="text"
+            required
+            value={formData.projectName}
+            onChange={(e) => handleInputChange("projectName", e.target.value)}
+            placeholder="Enter Project Name"
+            className={`w-full px-3 py-2 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400 ${
+              errors.projectName
+                ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500"
+                : "border-black/20 focus:border-black/50"
+            }`}
+          />
+          {errors.projectName && (
+            <p className="text-xs text-red-500 font-medium mt-1">{errors.projectName}</p>
+          )}
+        </div>
+
         {/* ROW 6: Pincode | City | State */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-x-3 sm:gap-x-4 gap-y-3 pt-0.5">
           <div id="field-pincode">
@@ -866,20 +852,6 @@ const SalesLeadForm = () => {
             />
             {errors.state && <p className="text-xs text-red-500 font-medium mt-1">{errors.state}</p>}
           </div>
-        </div>
-
-        {/* ROW: Project Name (Full Width Input above Site / Office Address) */}
-        <div id="field-projectName" className="pt-0.5">
-          <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-            Project Name
-          </label>
-          <input
-            type="text"
-            value={formData.projectName}
-            onChange={(e) => handleInputChange("projectName", e.target.value)}
-            placeholder="Enter Project Name"
-            className="w-full px-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400"
-          />
         </div>
 
         {/* ROW: Complete Site / Office Address */}
@@ -946,15 +918,15 @@ const SalesLeadForm = () => {
             <button
               type="submit"
               disabled={submitting || isUserObserver}
-              className={`px-5 py-2 rounded-lg text-xs sm:text-sm font-bold shadow-xs transition-all flex items-center justify-center gap-2 ${
+              className={`px-6 py-2 rounded-lg text-xs sm:text-sm font-bold shadow-xs transition-all flex items-center justify-center gap-2 ${
                 isUserObserver
                   ? "bg-slate-200 text-slate-400 cursor-not-allowed opacity-60"
                   : "bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer disabled:opacity-50"
               }`}
-              title={isUserObserver ? "Disabled for Observer" : "Save & View in Sales Management Sheet"}
+              title={isUserObserver ? "Disabled for Observer" : "Save & Proceed"}
             >
               {submitting ? <FaSpinner className="animate-spin text-xs" /> : <FaCheck className="text-xs" />}
-              <span>Save & View in Sales Management Sheet</span>
+              <span>Save & Proceed</span>
             </button>
           </div>
         </div>

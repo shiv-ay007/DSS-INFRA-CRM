@@ -959,6 +959,18 @@ export const activeProjectService = {
         const projId = String(bp._id || bp.id || leadObj._id || bp.leadId || "");
         if (!projId) return;
 
+        // Only include projects that have been promoted to ACTIVE_PROJECT
+        const projStatus = String(bp.status || leadObj.status || "").toUpperCase();
+        const closureStatus = String(bp.closureStatus || leadObj.closureStatus || "").toLowerCase();
+        const presaleStatus = String(bp.presaleStatus || leadObj.presaleStatus || "").toLowerCase();
+
+        const isPromotedToActive =
+          projStatus === "ACTIVE_PROJECT" ||
+          projStatus === "ACTIVE" ||
+          projStatus === "CONVERTED" ||
+          closureStatus.includes("converted") ||
+          presaleStatus.includes("converted");
+
         // Find PMS template if available
         let matchedTmpl = null;
         if (pmsMap.has(projId)) matchedTmpl = pmsMap.get(projId);
@@ -1005,6 +1017,15 @@ export const activeProjectService = {
           }
           return false;
         });
+
+        // If not promoted to active project, do NOT show in Active Projects
+        if (!isPromotedToActive) {
+          if (existingIdx !== -1) {
+            list.splice(existingIdx, 1);
+            changed = true;
+          }
+          return;
+        }
 
         if (existingIdx !== -1) {
           // Existing active project: keep user-modified stages, but update any blank metadata & populate fields

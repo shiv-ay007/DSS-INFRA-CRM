@@ -13,6 +13,8 @@ import WhatsAppAudioPlayer from "../../../../../Common/Components/WhatsAppAudioP
 import { PIPELINE_ACCEPTANCE_STATUSES } from "./SubStageFormRenderer";
 
 const FIELD_LABELS = {
+  submittedAt: "Stage Submitted Date & Time",
+  savedAt: "Stage Submitted Date & Time",
   requestDate: "Request Received Date",
   visitCompletedDate: "Visit Completed Date",
   requestInitiatedDate: "Request Initiated Date",
@@ -47,16 +49,89 @@ const formatKey = (key) => {
     .trim();
 };
 
-const formatDateVal = (val) => {
+const formatDateTimeVal = (val, fallbackTime = null) => {
   if (!val) return "--";
-  const d = new Date(val);
-  if (isNaN(d.getTime())) return String(val);
-  return d.toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric"
-  });
+  try {
+    const strVal = String(val).trim();
+
+    // Check if it's a strict datetime-local string like "YYYY-MM-DDTHH:mm" (local time without timezone offset/Z)
+    if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(strVal)) {
+      const [datePartStr, timePartStr] = strVal.split("T");
+      const [year, month, day] = datePartStr.split("-").map(Number);
+      const d = new Date(year, month - 1, day);
+      const datePart = d.toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric"
+      });
+      const [h, m] = timePartStr.slice(0, 5).split(":").map(Number);
+      const tempD = new Date();
+      tempD.setHours(h, m, 0, 0);
+      const timePart =
+        (fallbackTime && String(fallbackTime).trim() !== "")
+          ? String(fallbackTime).trim()
+          : tempD.toLocaleTimeString("en-IN", {
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: true
+            });
+      return `${datePart}, ${timePart}`;
+    }
+
+    // Check if it's a date-only string like "YYYY-MM-DD"
+    if (/^\d{4}-\d{2}-\d{2}$/.test(strVal)) {
+      const [year, month, day] = strVal.split("-").map(Number);
+      const d = new Date(year, month - 1, day);
+      const datePart = d.toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric"
+      });
+
+      if (fallbackTime && String(fallbackTime).trim() !== "") {
+        return `${datePart}, ${String(fallbackTime).trim()}`;
+      }
+      return datePart;
+    }
+
+    // If it's a full Date or ISO timestamp string (with Z or timezone offset)
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) {
+      const datePart = d.toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric"
+      });
+
+      const rawTime =
+        (fallbackTime && String(fallbackTime).trim() !== "")
+          ? String(fallbackTime).trim()
+          : d.toLocaleTimeString("en-IN", {
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: true
+            });
+
+      if (
+        rawTime &&
+        rawTime !== "12:00 am" &&
+        rawTime !== "12:00 AM" &&
+        rawTime !== "00:00"
+      ) {
+        return `${datePart}, ${rawTime}`;
+      } else if (fallbackTime) {
+        return `${datePart}, ${fallbackTime}`;
+      }
+      return datePart;
+    }
+
+    return strVal;
+  } catch (_) {
+    return String(val);
+  }
 };
+
+const formatDateVal = (val, fallbackTime = null) => formatDateTimeVal(val, fallbackTime);
 
 const isDateString = (val) => {
   if (typeof val !== "string") return false;
@@ -72,10 +147,21 @@ const SavedStageSummaryCard = ({
 }) => {
   if (!stageData || Object.keys(stageData).length === 0) return null;
 
-  // Filter out internal metadata or empty fields
+  // Filter out internal metadata, companion time fields or empty fields
+  // NOTE: submittedAt & savedAt only appear in the heading banner, NOT in the grid cards
   const entries = Object.entries(stageData).filter(([key, val]) => {
     if (key === "negotiationCycle" || key === "_id" || key === "id") return false;
     if (key === "notes" || key === "visitRemarks" || key === "attachments") return false;
+    if (
+      key === "savedAt" ||
+      key === "savedTime" ||
+      key === "submittedAt" ||
+      key === "submittedTime" ||
+      key === "completedAt" ||
+      key.endsWith("Time")
+    ) {
+      return false;
+    }
     if (Array.isArray(val)) return false;
     return val !== null && val !== undefined && String(val).trim() !== "";
   });
@@ -99,9 +185,12 @@ const SavedStageSummaryCard = ({
                 <FaCheckCircle className="text-[9px]" /> Completed
               </span>
             </h4>
-            <p className="text-xs text-slate-500 font-medium">
-              Yeh stage successfully complete ho chuki hai aur data safe hai.
-            </p>
+            {(stageData.submittedAt || stageData.savedAt) && (
+              <p className="text-xs text-slate-600 font-medium flex items-center gap-1.5 mt-0.5">
+                <FaCalendarAlt className="text-emerald-600 text-[11px]" />
+                <span>Submitted Date & Time: <strong className="text-slate-800 font-bold">{formatDateTimeVal(stageData.submittedAt || stageData.savedAt, stageData.submittedTime || stageData.savedTime)}</strong></span>
+              </p>
+            )}
           </div>
         </div>
 
@@ -203,6 +292,7 @@ const SavedStageSummaryCard = ({
 
           // Date fields
           if (isDateString(val) || key.toLowerCase().includes("date")) {
+            const accompanyingTime = stageData[`${key}Time`] || stageData.savedTime;
             return (
               <div
                 key={key}
@@ -213,7 +303,7 @@ const SavedStageSummaryCard = ({
                 </span>
                 <p className="text-xs sm:text-sm font-semibold text-slate-800 flex items-center gap-1.5">
                   <FaCalendarAlt className="text-blue-500 text-xs shrink-0" />
-                  <span>{formatDateVal(val)}</span>
+                  <span>{formatDateTimeVal(val, accompanyingTime)}</span>
                 </p>
               </div>
             );
@@ -332,7 +422,7 @@ const SavedStageSummaryCard = ({
               >
                 <span className="font-bold text-blue-800">Cycle {idx + 1}</span>
                 <span className="text-slate-600">
-                  Date: {formatDateVal(cycle.date || cycle.cycleDate)}
+                  Date: {formatDateTimeVal(cycle.date || cycle.cycleDate, cycle.time || cycle.cycleTime || stageData.savedTime)}
                 </span>
                 {cycle.rate && (
                   <span className="font-semibold text-emerald-700">

@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from "react";
-import { FaCommentDots, FaPaperPlane, FaSpinner, FaArrowRight, FaCheck } from "react-icons/fa";
+import React, { useState, useMemo, useEffect } from "react";
+import { FaCommentDots, FaPaperPlane, FaSpinner, FaArrowRight, FaCheck, FaLock } from "react-icons/fa";
 import { toast } from "react-toastify";
 import CommentWithMedia from "../../../../../Common/Components/CommentWithMedia";
 import WhatsAppAudioPlayer from "../../../../../Common/Components/WhatsAppAudioPlayer";
@@ -32,16 +32,29 @@ const PresalesDiscussionLog = ({
   onNextStage,
   onSaveCurrentStage,
   readOnly = false,
+  isCompleted = false,
   currentUser = "Admin"
 }) => {
   const [remarkText, setRemarkText] = useState("");
   const [remarkAttachments, setRemarkAttachments] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Filter remarks specifically for the CURRENT ACTIVE STAGE
+  // Automatically reset remark inputs and attachments whenever the active stage changes
+  // Ensures remarks never bleed or auto-fill across stages
+  useEffect(() => {
+    setRemarkText("");
+    setRemarkAttachments([]);
+  }, [activeStageId]);
+
+  // Filter remarks strictly and exclusively for the CURRENT ACTIVE STAGE
   const stageRemarks = useMemo(() => {
     if (!Array.isArray(remarks)) return [];
-    return remarks.filter((r) => (Number(r.stageId) || 1) === Number(activeStageId || 1));
+    return remarks.filter((r) => {
+      if (!r || r.stageId === undefined || r.stageId === null) return false;
+      const rStage = Number(r.stageId);
+      const currStage = Number(activeStageId);
+      return !isNaN(rStage) && !isNaN(currStage) && rStage === currStage;
+    });
   }, [remarks, activeStageId]);
 
   const handleSubmit = async (e) => {
@@ -103,10 +116,10 @@ const PresalesDiscussionLog = ({
           };
           onAddRemark?.(newEntry);
         }
-
-        setRemarkText("");
-        setRemarkAttachments([]);
       }
+
+      setRemarkText("");
+      setRemarkAttachments([]);
 
       // 3. Move to next stage
       if (typeof onNextStage === "function") {
@@ -212,45 +225,63 @@ const PresalesDiscussionLog = ({
         </div>
       </div>
 
-      {/* New Remark Input Box */}
-      {!readOnly ? (
-        <div className="space-y-2.5 pt-3 border-t border-slate-100">
+      {/* Discussion Note / Audio Box (Active or Dummy when Completed) */}
+      <div className="space-y-2.5 pt-3 border-t border-slate-100">
+        <div className={isCompleted || readOnly ? "opacity-75 pointer-events-none select-none cursor-not-allowed" : ""}>
           <CommentWithMedia
             title={`Add Stage ${activeStageId} Discussion Note / Audio`}
-            placeholder={`Record Stage ${activeStageId} negotiation update or audio note...`}
+            placeholder={
+              isCompleted
+                ? `Stage ${activeStageId} discussion notes recorded & completed.`
+                : readOnly
+                ? `Stage ${activeStageId} is locked. Complete previous stages first.`
+                : `Record Stage ${activeStageId} negotiation update or audio note...`
+            }
             value={remarkText}
             onChange={(val) => setRemarkText(val)}
             files={remarkAttachments}
             onFilesChange={(newFiles) => setRemarkAttachments(newFiles)}
+            allowMedia={!isCompleted && !readOnly}
+            disabled={isCompleted || readOnly}
           />
+        </div>
 
-          <div className="pt-1">
-            <button
-              type="button"
-              disabled={isSubmitting}
-              onClick={handleSubmit}
-              className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white text-xs sm:text-sm font-bold transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-            >
-              {isSubmitting ? (
-                <>
-                  <FaSpinner className="animate-spin text-sm" />
-                  <span>Saving Stage & Moving to Next...</span>
-                </>
-              ) : (
-                <>
-                  <FaCheck className="text-xs" />
-                  <span>{activeStageId < 11 ? "Save & Next Stage" : "Save & Complete Stage"}</span>
-                  {activeStageId < 11 && <FaArrowRight className="text-xs ml-0.5" />}
-                </>
-              )}
-            </button>
-          </div>
+        <div className="pt-1">
+          <button
+            type="button"
+            disabled={isCompleted || readOnly || isSubmitting}
+            onClick={handleSubmit}
+            className={`w-full py-3 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 ${
+              isCompleted || readOnly
+                ? "bg-slate-200 text-slate-500 border border-slate-300 cursor-not-allowed shadow-none"
+                : "bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white shadow-sm cursor-pointer"
+            }`}
+          >
+            {isCompleted ? (
+              <>
+                <FaCheck className="text-xs text-emerald-600" />
+                <span>Stage {activeStageId} Completed — Notes Locked</span>
+              </>
+            ) : readOnly ? (
+              <>
+                <FaLock className="text-xs text-slate-400" />
+                <span>Stage {activeStageId} Locked — Complete Previous Stages First</span>
+              </>
+            ) : isSubmitting ? (
+              <>
+                <FaSpinner className="animate-spin text-sm" />
+                <span>Saving Stage & Moving to Next...</span>
+              </>
+            ) : (
+              <>
+                <FaCheck className="text-xs" />
+                <span>{activeStageId < 11 ? "Save & Next Stage" : "Save & Complete Stage"}</span>
+                {activeStageId < 11 && <FaArrowRight className="text-xs ml-0.5" />}
+              </>
+            )}
+          </button>
         </div>
-      ) : (
-        <div className="p-3 bg-slate-100 text-slate-500 rounded-lg text-xs italic text-center">
-          Discussion log is in Read-Only mode for Viewers.
-        </div>
-      )}
+      </div>
     </div>
   );
 };
