@@ -996,8 +996,12 @@ const Addlead = () => {
           autoClose: 3000,
         });
 
-        navigate(`/sales/leads/details/${existingLead?.leadId || targetId}`, {
-          state: { lead: updatedLeadData, from: "totalLeads" }
+        const returnPath = location.state?.from === "totalLeads"
+          ? "/sales/leads/total"
+          : `/sales/leads/details/${existingLead?.leadId || targetId}`;
+
+        navigate(returnPath, {
+          state: { lead: updatedLeadData, from: location.state?.from || "totalLeads" }
         });
         return;
       }
@@ -1100,6 +1104,10 @@ const Addlead = () => {
           description={isEditMode ? "Update complete client credentials, requirements, and assignments in full-page view." : "Register potential client inquiries and project specifications"}
           showBackButton={true}
           onBackClick={() => {
+            if (location.state?.from === "totalLeads") {
+              navigate("/sales/leads/total");
+              return;
+            }
             if (isEditMode) {
               const targetId = existingLead?.leadId || existingLead?._id || id;
               navigate(targetId ? `/sales/leads/details/${targetId}` : "/sales/leads/total");
@@ -1533,6 +1541,10 @@ const Addlead = () => {
             <button
               type="button"
               onClick={() => {
+                if (location.state?.from === "totalLeads") {
+                  navigate("/sales/leads/total");
+                  return;
+                }
                 const targetId = existingLead?.leadId || existingLead?._id || id;
                 navigate(targetId ? `/sales/leads/details/${targetId}` : "/sales/leads/total");
               }}

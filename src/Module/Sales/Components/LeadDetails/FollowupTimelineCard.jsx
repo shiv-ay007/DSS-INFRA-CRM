@@ -2,27 +2,55 @@ import React from "react";
 import { FaClock, FaCalendarAlt, FaUser, FaTag, FaFileAlt } from "react-icons/fa";
 
 const FollowupTimelineCard = ({ lead }) => {
-  // Determine history array safely - support followupHistory, backend statusTimeline, and lead remarks
-  let followupHistory = (Array.isArray(lead?.followupHistory) && lead.followupHistory.length > 0)
-    ? [...lead.followupHistory]
-    : Array.isArray(lead?.statusTimeline) && lead.statusTimeline.length > 0
-    ? lead.statusTimeline.map((item) => ({
-        remark: item.remarks || item.remark || "Lead status updated",
-        status: item.status,
-        author: item.changedBy?.name || item.changedBy || "Sales Rep",
-        date: item.changedAt ? new Date(item.changedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "Today",
-        time: item.changedAt ? new Date(item.changedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true }) : ""
-      }))
-    : [];
+  // Determine history array strictly from actual follow-ups
+  // Initial lead registration / status timeline is NOT a follow-up and must not appear here
+  let followupHistory = [];
 
-  if (followupHistory.length === 0 && (lead?.remarks || lead?.remark)) {
-    followupHistory.push({
-      remark: lead.remarks || lead.remark,
-      status: lead.status || lead.leadStatus || "NEW",
-      author: lead.leadBy?.name || lead.createdByName || "Sales Representative",
-      date: lead.createdDate || "Today",
-      time: lead.createdTime || ""
-    });
+  if (Array.isArray(lead?.followupHistory) && lead.followupHistory.length > 0) {
+    followupHistory = lead.followupHistory
+      .filter((item) => {
+        const remark = item.remark || item.followupRemark || item.discussionWithClient || item.notes || item.comment;
+        const hasAttachments = (item.remarkAttachments && item.remarkAttachments.length > 0) || (item.attachments && item.attachments.length > 0);
+        return Boolean(remark || hasAttachments);
+      })
+      .map((item) => ({
+        remark: item.remark || item.followupRemark || item.discussionWithClient || item.notes || item.comment || "",
+        status: item.status || item.type || "Follow-up",
+        author: item.author || item.rep || (typeof lead?.salesPerson === "object" ? lead?.salesPerson?.name : lead?.salesPerson) || "Sales Representative",
+        date: item.date || item.createdDate || "Today",
+        time: item.time || item.createdTime || "",
+        attachments: item.remarkAttachments || item.attachments || []
+      }));
+  } else if (Array.isArray(lead?.followups) && lead.followups.length > 0) {
+    followupHistory = lead.followups
+      .map((f) => {
+        const dt = f.dateTime ? new Date(f.dateTime) : (f.createdAt ? new Date(f.createdAt) : null);
+        const fDate = dt && !isNaN(dt.getTime())
+          ? dt.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+          : (f.date || "--");
+        const fTime = dt && !isNaN(dt.getTime())
+          ? dt.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: true })
+          : (f.time || "");
+
+        const creatorName = (typeof f.createdBy === "object" ? f.createdBy?.name : null) || f.author || f.rep || lead?.salesPerson || "Sales Representative";
+        const remarkText = f.followupRemark?.remarks || f.currentDiscussion?.discussion || f.remark || f.notes || "";
+        const attachments = [
+          ...(f.followupRemark?.files || []),
+          ...(f.currentDiscussion?.files || []),
+          ...(f.nextDiscussion?.files || []),
+          ...(Array.isArray(f.attachments) ? f.attachments : [])
+        ];
+
+        return {
+          remark: remarkText,
+          status: f.status || f.type || "Call",
+          author: creatorName,
+          date: fDate,
+          time: fTime,
+          attachments
+        };
+      })
+      .filter((item) => Boolean(item.remark || (item.attachments && item.attachments.length > 0)));
   }
 
   const hasNextFollowup = !!(

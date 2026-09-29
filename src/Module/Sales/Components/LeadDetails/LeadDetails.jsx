@@ -122,7 +122,13 @@ const LeadDetails = () => {
               ? backendLead.remarksFiles
               : (backendLead.attachments || backendLead.remarkAttachments || []),
             inSalesManagement: Boolean(backendLead.inSalesManagement || backendLead.isSalesTransferred),
-            isSalesTransferred: Boolean(backendLead.inSalesManagement || backendLead.isSalesTransferred)
+            isSalesTransferred: Boolean(backendLead.inSalesManagement || backendLead.isSalesTransferred),
+            followups: Array.isArray(backendLead.followups) ? backendLead.followups : [],
+            followupHistory: Array.isArray(backendLead.followupHistory) ? backendLead.followupHistory : [],
+            isFollowupScheduled: Boolean(backendLead.isFollowupScheduled || (Array.isArray(backendLead.followups) && backendLead.followups.length > 0)),
+            nextFollowupDate: backendLead.nextFollowupDate || backendLead.nextFollowup || (backendLead.followups?.[0]?.dateTime ? new Date(backendLead.followups[0].dateTime).toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' }) : ""),
+            nextFollowupTime: backendLead.nextFollowupTime || (backendLead.followups?.[0]?.dateTime ? new Date(backendLead.followups[0].dateTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : ""),
+            nextFollowup: backendLead.nextFollowup || backendLead.nextFollowupDate || ""
           });
         }
       } catch (err) {
@@ -154,24 +160,7 @@ const LeadDetails = () => {
     const formattedDate = today.toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
     const formattedTime = today.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-    const existingHistory = Array.isArray(lead.followupHistory) && lead.followupHistory.length > 0
-      ? lead.followupHistory
-      : [
-          {
-            date: lead?.nextFollowup || lead?.nextFollowupDate || lead?.createdDate || formattedDate,
-            time: lead?.nextFollowupTime || "11:00 AM",
-            author: lead?.assignTo || lead?.salesPerson || "Sales Representative",
-            remark: lead?.remark || lead?.notes || `Follow-up discussion scheduled with ${lead?.clientName || lead?.concernPersonName || "client"}. Requirement: ${lead?.requirement || "Sales Inquiry"}.`,
-            status: lead?.status || "INTERESTED"
-          },
-          {
-            date: lead?.createdDate || lead?.date || "16 Aug 2026",
-            time: lead?.createdTime || "10:00 AM",
-            author: lead?.assignTo || lead?.salesPerson || "Sales Representative",
-            remark: `Initial lead inquiry registered in pipeline. Channel: ${lead?.channelType || lead?.channel || "Sales"}.`,
-            status: "NEW"
-          }
-        ];
+    const existingHistory = Array.isArray(lead.followupHistory) ? [...lead.followupHistory] : [];
 
     let formattedNextDate = remarkData.nextDate;
     if (remarkData.nextDate && remarkData.nextDate.includes("-")) {
@@ -221,15 +210,8 @@ const LeadDetails = () => {
         <div className="w-full">
           <LeadHeaderBanner
             lead={lead}
-            allowEdit={allowEdit}
             allowAddProject={allowAddProject}
             onOpenFollowupModal={() => setShowFollowupModal(true)}
-            onOpenEditModal={() => {
-              const targetId = lead?.leadId || lead?._id || lead?.id || id;
-              navigate(`/sales/leads/edit/${targetId}`, {
-                state: { lead, from: "leadDetails" }
-              });
-            }}
           />
         </div>
 

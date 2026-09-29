@@ -5,7 +5,7 @@ import PageHeader from "../../../../Common/Components/PageHeader";
 import Table from "../../../../Common/Components/Table";
 import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
 import { availableWorkTypes, workCategoryList, indianStatesList } from "../../data/addLeadData";
-import { FaUser, FaRegCheckCircle, FaUsers, FaUserCheck, FaImage, FaVideo, FaMicrophone, FaFileAlt, FaPaperclip, FaTimes, FaDownload, FaPlay, FaPause, FaTrashAlt } from "react-icons/fa";
+import { FaUser, FaRegCheckCircle, FaUsers, FaUserCheck, FaImage, FaVideo, FaMicrophone, FaFileAlt, FaPaperclip, FaTimes, FaDownload, FaPlay, FaPause, FaTrashAlt, FaEdit } from "react-icons/fa";
 import { HiOutlineUsers } from "react-icons/hi";
 import LeadKpiSlider from "../LeadManagement/LeadKpiSlider";
 
@@ -543,7 +543,9 @@ const SalseTotalLeads = () => {
       try {
         // 1. Mark as Interested via Dedicated Table API
         if (targetId) {
-          await markInterestedFromTableApi(targetId, true);
+          await markInterestedFromTableApi(targetId, true, {
+            remark: statusRemark || statusModalLead.remark || ""
+          });
         }
 
         // 2. Sync fields to Lead Management & upload any media/audio to Cloudinary
@@ -563,7 +565,8 @@ const SalseTotalLeads = () => {
             isFollowup: false,
             nextFollowupDate: null,
             nextFollowupTime: "",
-            remark: statusRemark || statusModalLead.remark || ""
+            remark: statusRemark || statusModalLead.remark || "",
+            interestedRemark: statusRemark || statusModalLead.interestedRemark || statusModalLead.remark || ""
           },
           rawUploadFiles
         );
@@ -700,61 +703,92 @@ const SalseTotalLeads = () => {
       label: "ACTIONS",
       align: "center",
       render: (val, row) => {
+        const targetId = row.leadId || row._id || row.id;
+
         return (
-          <div className="flex items-center justify-center gap-1.5">
-            {/* View Lead Details Eye Button */}
-            <button
-              type="button"
-              onClick={() => navigate(`/sales/leads/details/${row.id}`, { state: { lead: row, from: "totalLeads", allowEdit: !isUserObserver } })}
-              className="w-7 h-7 rounded-lg border border-orange-200 bg-orange-50/70 text-orange-600 hover:bg-orange-100 hover:border-orange-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
-              title="View Lead Details"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-              </svg>
-            </button>
+          <div className="flex items-center justify-center gap-1.5 w-fit mx-auto">
+            {/* Left Column: View on top, Status / Interested below */}
+            <div className="flex flex-col gap-1.5">
+              {/* 1. View Lead Details */}
+              <button
+                type="button"
+                onClick={() => navigate(`/sales/leads/details/${row.id}`, { state: { lead: row, from: "totalLeads", allowEdit: !isUserObserver } })}
+                className="w-7 h-7 rounded-lg border border-orange-200 bg-orange-50/70 text-orange-600 hover:bg-orange-100 hover:border-orange-300 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
+                title="View Lead Details"
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                </svg>
+              </button>
 
-            {/* Client Status (Interested / Not Interested) Button */}
-            <button
-              type="button"
-              disabled={isUserObserver}
-              onClick={isUserObserver ? () => toast.info("Observer Mode: Status cannot be updated.") : () => {
-                setStatusModalLead(row);
-                setSelectedClientStatus(row.isInterested ? "INTERESTED" : "");
-                setNotInterestedReason("");
-                setCustomNotInterestedReason("");
-                setStatusRemark(row.remark || "");
-                setStatusRemarkAttachments([]);
-              }}
-              className={`w-7 h-7 rounded-lg border flex items-center justify-center transition-all shadow-2xs ${
-                isUserObserver
-                  ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed opacity-50"
-                  : "border-emerald-200 bg-emerald-50/70 text-emerald-600 hover:bg-emerald-100 hover:border-emerald-300 cursor-pointer active:scale-95"
-              }`}
-              title={isUserObserver ? "Disabled for Observer (View Only)" : "Client Status (Interested / Not Interested)"}
-            >
-              <FaRegCheckCircle className="w-3.5 h-3.5" />
-            </button>
+              {/* 2. Client Status (Interested / Not Interested) */}
+              <button
+                type="button"
+                disabled={isUserObserver}
+                onClick={isUserObserver ? () => toast.info("Observer Mode: Status cannot be updated.") : () => {
+                  setStatusModalLead(row);
+                  setSelectedClientStatus(row.isInterested ? "INTERESTED" : "");
+                  setNotInterestedReason("");
+                  setCustomNotInterestedReason("");
+                  setStatusRemark(row.interestedRemark || "");
+                  setStatusRemarkAttachments([]);
+                }}
+                className={`w-7 h-7 rounded-lg border flex items-center justify-center transition-all shadow-2xs ${
+                  isUserObserver
+                    ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed opacity-50"
+                    : "border-emerald-200 bg-emerald-50/70 text-emerald-600 hover:bg-emerald-100 hover:border-emerald-300 cursor-pointer active:scale-95"
+                }`}
+                title={isUserObserver ? "Disabled for Observer (View Only)" : "Client Status (Interested / Not Interested)"}
+              >
+                <FaRegCheckCircle className="w-3.5 h-3.5" />
+              </button>
+            </div>
 
-            {/* Soft Delete Lead Button */}
-            <button
-              type="button"
-              disabled={isUserObserver}
-              onClick={
-                isUserObserver
-                  ? () => toast.info("Observer Mode: Deleting leads is disabled.")
-                  : () => setDeleteModalLead(row)
-              }
-              className={`w-7 h-7 rounded-lg border flex items-center justify-center transition-all shadow-2xs ${
-                isUserObserver
-                  ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed opacity-50"
-                  : "border-rose-200 bg-rose-50/70 text-rose-600 hover:bg-rose-100 hover:border-rose-300 cursor-pointer active:scale-95"
-              }`}
-              title={isUserObserver ? "Disabled for Observer" : "Delete Lead"}
-            >
-              <FaTrashAlt className="w-3 h-3" />
-            </button>
+            {/* Right Column: Edit on top, Delete below */}
+            <div className="flex flex-col gap-1.5">
+              {/* 3. Edit Lead */}
+              <button
+                type="button"
+                disabled={isUserObserver}
+                onClick={
+                  isUserObserver
+                    ? () => toast.info("Observer Mode: Editing leads is disabled.")
+                    : () => {
+                        navigate(`/sales/leads/edit/${targetId}`, {
+                          state: { lead: row, from: "totalLeads" }
+                        });
+                      }
+                }
+                className={`w-7 h-7 rounded-lg border flex items-center justify-center transition-all shadow-2xs ${
+                  isUserObserver
+                    ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed opacity-50"
+                    : "border-blue-200 bg-blue-50/70 text-blue-600 hover:bg-blue-100 hover:border-blue-300 cursor-pointer active:scale-95"
+                }`}
+                title={isUserObserver ? "Disabled for Observer" : "Edit Lead"}
+              >
+                <FaEdit className="w-3.5 h-3.5" />
+              </button>
+
+              {/* 4. Soft Delete Lead */}
+              <button
+                type="button"
+                disabled={isUserObserver}
+                onClick={
+                  isUserObserver
+                    ? () => toast.info("Observer Mode: Deleting leads is disabled.")
+                    : () => setDeleteModalLead(row)
+                }
+                className={`w-7 h-7 rounded-lg border flex items-center justify-center transition-all shadow-2xs ${
+                  isUserObserver
+                    ? "border-slate-200 bg-slate-100 text-slate-400 cursor-not-allowed opacity-50"
+                    : "border-rose-200 bg-rose-50/70 text-rose-600 hover:bg-rose-100 hover:border-rose-300 cursor-pointer active:scale-95"
+                }`}
+                title={isUserObserver ? "Disabled for Observer" : "Delete Lead"}
+              >
+                <FaTrashAlt className="w-3 h-3" />
+              </button>
+            </div>
           </div>
         );
       }

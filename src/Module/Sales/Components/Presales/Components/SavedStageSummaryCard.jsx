@@ -7,7 +7,8 @@ import {
   FaFileAlt,
   FaExternalLinkAlt,
   FaRupeeSign,
-  FaCommentDots
+  FaCommentDots,
+  FaEdit
 } from "react-icons/fa";
 import WhatsAppAudioPlayer from "../../../../../Common/Components/WhatsAppAudioPlayer";
 import { PIPELINE_ACCEPTANCE_STATUSES } from "./SubStageFormRenderer";
@@ -143,7 +144,9 @@ const SavedStageSummaryCard = ({
   stageName,
   stageData = {},
   onNextStage,
-  hasNextStage = true
+  hasNextStage = true,
+  onEditStage,
+  canEdit = true
 }) => {
   if (!stageData || Object.keys(stageData).length === 0) return null;
 
@@ -194,16 +197,29 @@ const SavedStageSummaryCard = ({
           </div>
         </div>
 
-        {hasNextStage && onNextStage && (
-          <button
-            type="button"
-            onClick={onNextStage}
-            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
-          >
-            <span>Proceed to Next Stage</span>
-            <FaArrowRight className="text-xs" />
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {canEdit && onEditStage && (
+            <button
+              type="button"
+              onClick={onEditStage}
+              className="px-3.5 py-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 text-xs font-bold transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer hover:scale-105 active:scale-95"
+            >
+              <FaEdit className="text-xs text-amber-700" />
+              <span>Edit Stage Details</span>
+            </button>
+          )}
+
+          {hasNextStage && onNextStage && (
+            <button
+              type="button"
+              onClick={onNextStage}
+              className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
+            >
+              <span>Proceed to Next Stage</span>
+              <FaArrowRight className="text-xs" />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Grid of Saved Fields */}

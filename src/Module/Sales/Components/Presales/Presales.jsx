@@ -20,7 +20,6 @@ import {
   FaTimesCircle,
   FaBan,
   FaInfoCircle,
-  FaEdit,
   FaEye,
   FaSearch,
   FaFilter,
@@ -1649,25 +1648,6 @@ const Presales = () => {
                             >
                               <FaEye className="text-xs" />
                             </button>
-
-                            {/* EDIT PROJECT IN SALES FORM */}
-                            {!isUserObserver ? (
-                              <button
-                                type="button"
-                                onClick={() => handleEditProject(item)}
-                                className="w-7 h-7 rounded-lg border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
-                                title="Edit Project Details"
-                              >
-                                <FaEdit className="text-xs" />
-                              </button>
-                            ) : (
-                              <span
-                                className="w-7 h-7 rounded-lg border border-slate-200 bg-slate-100 text-slate-400 flex items-center justify-center cursor-not-allowed opacity-60"
-                                title="Edit disabled for Observer"
-                              >
-                                <FaEdit className="text-xs" />
-                              </span>
-                            )}
                           </div>
                         </td>
 
@@ -2018,19 +1998,6 @@ const Presales = () => {
                 >
                   Close
                 </button>
-                {!isUserObserver && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsViewModalOpen(false);
-                      handleEditProject(selectedProject);
-                    }}
-                    className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold shadow-xs cursor-pointer"
-                  >
-                    <FaEdit className="text-xs" />
-                    <span>Edit This Project</span>
-                  </button>
-                )}
               </div>
             </div>
           </div>
@@ -2167,21 +2134,6 @@ const Presales = () => {
                             <FaStream className="text-xs" />
                             <span>Pipeline</span>
                           </button>
-
-                          {!isUserObserver && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setIsProjectsModalOpen(false);
-                                handleEditProject(proj);
-                              }}
-                              className="px-2.5 py-1.5 rounded-lg border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
-                              title="Edit Project in Sales Form"
-                            >
-                              <FaEdit className="text-xs" />
-                              <span>Edit</span>
-                            </button>
-                          )}
                         </div>
                       </div>
                     </div>

@@ -235,7 +235,8 @@ export const markInterestedFromTableApi = async (id, isInterested = true, payloa
     const response = await api.patch(`/leads/${id}/interested`, {
       intrestedFromTableLead: isInterested,
       lossReason: payload.lossReason || payload.reason || "Not Interested",
-      lossRemark: payload.lossRemark || payload.remark || ""
+      lossRemark: payload.lossRemark || payload.remark || payload.remarks || "",
+      remark: payload.remark || payload.remarks || payload.statusRemark || ""
     });
     return response;
   } catch (error) {

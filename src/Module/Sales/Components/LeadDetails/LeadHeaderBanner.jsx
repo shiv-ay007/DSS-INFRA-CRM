@@ -2,14 +2,12 @@ import React from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
-import { FaEdit, FaPhoneAlt, FaWhatsapp, FaFolderPlus } from "react-icons/fa";
+import { FaPhoneAlt, FaWhatsapp, FaFolderPlus } from "react-icons/fa";
 import { useAuth } from "../../../../context/AuthContext";
 
 const LeadHeaderBanner = ({
   lead,
   onOpenFollowupModal,
-  onOpenEditModal,
-  allowEdit = false,
   allowAddProject = false
 }) => {
   const navigate = useNavigate();
@@ -22,17 +20,6 @@ const LeadHeaderBanner = ({
 
   const assignee = lead?.assignTo || lead?.assignedTo || lead?.salesPerson || "";
   const isAssigned = lead?.isAssigned === true || (!!assignee && assignee !== "Unassigned" && assignee !== "--" && assignee !== "");
-
-  const handleEditLead = () => {
-    if (isUserObserver) {
-      toast.info("Observer Mode: Editing is disabled.");
-      return;
-    }
-    const targetId = lead?.leadId || lead?._id || lead?.id;
-    navigate(`/sales/leads/edit/${targetId}`, {
-      state: { lead, from: "leadDetails" }
-    });
-  };
 
   const handleAddProject = () => {
     if (isUserObserver) {
@@ -69,17 +56,6 @@ const LeadHeaderBanner = ({
               >
                 <FaFolderPlus className="w-3.5 h-3.5" />
                 <span>+ Add Project</span>
-              </button>
-            )}
-
-            {allowEdit && (
-              <button
-                type="button"
-                onClick={handleEditLead}
-                className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs sm:text-sm font-extrabold shadow-xs hover:shadow-md transition-all cursor-pointer"
-              >
-                <FaEdit className="w-3.5 h-3.5" />
-                <span>Edit Lead</span>
               </button>
             )}
 

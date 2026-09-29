@@ -17,7 +17,8 @@ import {
   FaTable,
   FaBoxes,
   FaLock,
-  FaRocket
+  FaRocket,
+  FaEdit
 } from "react-icons/fa";
 import { toast } from "react-toastify";
 import PageHeader from "../../../../../Common/Components/PageHeader";
@@ -136,11 +137,18 @@ const PresalesPipelineView = ({
   const [activeStageId, setActiveStageId] = useState(currentProject.currentStageId || 1);
   const [stageFormData, setStageFormData] = useState({});
   const [isSavingStage, setIsSavingStage] = useState(false);
+  const [isEditingCompletedStage, setIsEditingCompletedStage] = useState(false);
 
-  // Sync active stage when switching projects
+  // Sync active stage when switching projects and reset edit mode
   useEffect(() => {
     setActiveStageId(currentProject.currentStageId || 1);
+    setIsEditingCompletedStage(false);
   }, [currentProject?.id, currentProject?._id]);
+
+  // Reset editing mode when navigating to a different stage
+  useEffect(() => {
+    setIsEditingCompletedStage(false);
+  }, [activeStageId]);
 
   // Active Person from project form
   const initialActivePerson =
@@ -394,8 +402,12 @@ const PresalesPipelineView = ({
     }
   }, [isProjectClosed, effectiveClosedAtStage, activeStageId]);
 
-  // Lock inputs if global readOnly, project is closed, current stage is already saved, or previous stages are incomplete
-  const isStageLocked = readOnly || isProjectClosed || isCurrentStageSaved || !arePreviousStagesCompleted;
+  // Lock inputs if global readOnly, project is closed, current stage is already saved (unless editing mode is active), or previous stages are incomplete
+  const isStageLocked =
+    readOnly ||
+    isProjectClosed ||
+    (isCurrentStageSaved && !isEditingCompletedStage) ||
+    !arePreviousStagesCompleted;
 
   // --------------------------------------------------------------------------
   // Rule Check: Move to Active Project
@@ -666,9 +678,13 @@ const PresalesPipelineView = ({
       if (isClosedNow) {
         setClosureStatus(savedPresale.closureReason || "Closed by Client Response");
         toast.warning(`Presale has been CLOSED due to Client Rejection!`);
+      } else if (isEditingCompletedStage) {
+        toast.success(`Stage ${activeStageId} (${activeStageConfig.name}) details updated successfully! ✨`);
       } else {
         toast.success(`Stage ${activeStageId} (${activeStageConfig.name}) saved successfully! 🚀`);
       }
+
+      setIsEditingCompletedStage(false);
 
       onUpdatePresale?.(updatedPresale);
       return true;
@@ -1153,9 +1169,15 @@ const PresalesPipelineView = ({
                 <FaTimesCircle className="text-[10px]" /> Pipeline Closed at this Stage
               </span>
             ) : isCurrentStageSaved ? (
-              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
-                <FaCheckCircle className="text-[10px]" /> Completed
-              </span>
+              isEditingCompletedStage ? (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-900 border border-amber-300">
+                  <FaEdit className="text-[10px]" /> Editing Mode Active
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  <FaCheckCircle className="text-[10px]" /> Completed
+                </span>
+              )
             ) : !arePreviousStagesCompleted && (
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
                 <FaLock className="text-[10px]" /> Locked (Complete Previous Stages First)
@@ -1165,22 +1187,72 @@ const PresalesPipelineView = ({
 
           {!isProjectClosed && isCurrentStageApplicable && isCurrentStageSaved && (
             <div className="flex items-center gap-2">
-              <span className="px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold flex items-center gap-1.5">
-                <FaCheckCircle className="text-xs" /> Data Saved
-              </span>
-              {activeStageId < 11 && (
-                <button
-                  type="button"
-                  onClick={() => setActiveStageId((prev) => prev + 1)}
-                  className="px-4 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs sm:text-sm font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer"
-                >
-                  <span>Next Stage</span>
-                  <FaArrowRight className="text-xs" />
-                </button>
+              {!isEditingCompletedStage ? (
+                <span className="px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold flex items-center gap-1.5">
+                  <FaCheckCircle className="text-xs" /> Data Saved
+                </span>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    disabled={isSavingStage}
+                    onClick={() => {
+                      const existing =
+                        stagesDataMap?.[activeStageId] ||
+                        currentProject.stagesData?.[activeStageId] ||
+                        {};
+                      setStageFormData({ ...existing });
+                      setIsEditingCompletedStage(false);
+                    }}
+                    className="px-3.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 text-xs font-bold shadow-2xs transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <FaTimes className="text-xs text-slate-500" />
+                    <span>Cancel</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isSavingStage}
+                    onClick={handleSaveStage}
+                    className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs sm:text-sm font-bold shadow-xs transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    {isSavingStage ? (
+                      <FaSpinner className="animate-spin text-xs" />
+                    ) : (
+                      <FaSave className="text-xs" />
+                    )}
+                    <span>Update Stage Details</span>
+                  </button>
+                </>
               )}
             </div>
           )}
         </div>
+
+        {/* Editing Mode Notice Banner */}
+        {isEditingCompletedStage && (
+          <div className="p-3 mb-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-semibold flex items-center justify-between gap-2 shadow-2xs">
+            <div className="flex items-center gap-2">
+              <FaEdit className="text-amber-600 text-sm shrink-0" />
+              <span>
+                You are editing completed <strong>Stage {activeStageId} ({activeStageConfig.name})</strong>. Make changes below and click <strong>"Update Stage Details"</strong> to save.
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const existing =
+                  stagesDataMap?.[activeStageId] ||
+                  currentProject.stagesData?.[activeStageId] ||
+                  {};
+                setStageFormData({ ...existing });
+                setIsEditingCompletedStage(false);
+              }}
+              className="px-2.5 py-1 rounded-md bg-white border border-amber-300 text-amber-800 text-[11px] font-bold hover:bg-amber-100 transition-all cursor-pointer"
+            >
+              Cancel Edit
+            </button>
+          </div>
+        )}
 
         {!isProjectClosed && !arePreviousStagesCompleted && (
           <div className="p-3 mb-3 rounded-xl bg-amber-50/90 border border-amber-200 text-amber-900 text-xs font-semibold flex items-center gap-2.5 shadow-2xs">
@@ -1218,6 +1290,8 @@ const PresalesPipelineView = ({
                   setActiveStageId((prev) => prev + 1);
                 }
               }}
+              canEdit={!readOnly && !isProjectClosed}
+              onEditStage={() => setIsEditingCompletedStage(true)}
             />
           </div>
         )}
@@ -1242,7 +1316,16 @@ const PresalesPipelineView = ({
             }
           }}
           readOnly={isStageLocked}
-          isCompleted={isCurrentStageSaved}
+          isCompleted={isCurrentStageSaved && !isEditingCompletedStage}
+          isEditing={isEditingCompletedStage}
+          onCancelEdit={() => {
+            const existing =
+              stagesDataMap?.[activeStageId] ||
+              currentProject.stagesData?.[activeStageId] ||
+              {};
+            setStageFormData({ ...existing });
+            setIsEditingCompletedStage(false);
+          }}
           currentUser={currentUser}
         />
 

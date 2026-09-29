@@ -110,6 +110,9 @@ const SalesProjectDetailsTable = ({ lead, projects = [], onAddProjectClick }) =>
               <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">
                 AMOUNT
               </th>
+              <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">
+                PRIORITY
+              </th>
               <th className="py-3 px-3 text-left border-r border-slate-800 whitespace-nowrap">
                 CLIENT
               </th>
@@ -124,9 +127,6 @@ const SalesProjectDetailsTable = ({ lead, projects = [], onAddProjectClick }) =>
               </th>
               <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">
                 JOB TYPE
-              </th>
-              <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">
-                PRIORITY
               </th>
               <th className="py-3 px-3 text-center border-r border-slate-800 whitespace-nowrap">
                 LOCATION
@@ -239,6 +239,21 @@ const SalesProjectDetailsTable = ({ lead, projects = [], onAddProjectClick }) =>
                       </span>
                     </td>
 
+                    {/* 3.5 PRIORITY */}
+                    <td className="py-2.5 px-3 text-center border-r border-slate-100 whitespace-nowrap">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
+                          isHigh
+                            ? "bg-rose-50 text-rose-700 border-rose-200"
+                            : isMedium
+                            ? "bg-amber-50 text-amber-700 border-amber-200"
+                            : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                        }`}
+                      >
+                        {isHigh ? "🔴 High" : isMedium ? "🟡 Medium" : "🟢 Low"}
+                      </span>
+                    </td>
+
                     {/* 4. CLIENT NAME */}
                     <td className="py-2.5 px-3 text-left border-r border-slate-100">
                       <div className="font-bold text-slate-900">{proj.clientName || "--"}</div>
@@ -279,21 +294,6 @@ const SalesProjectDetailsTable = ({ lead, projects = [], onAddProjectClick }) =>
                     <td className="py-2.5 px-3 text-center border-r border-slate-100 whitespace-nowrap">
                       <span className="px-2 py-0.5 rounded text-[11px] font-bold uppercase bg-purple-50 text-purple-700 border border-purple-200">
                         {proj.jobType || "NEW"}
-                      </span>
-                    </td>
-
-                    {/* 9. PRIORITY */}
-                    <td className="py-2.5 px-3 text-center border-r border-slate-100 whitespace-nowrap">
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase border ${
-                          isHigh
-                            ? "bg-rose-50 text-rose-700 border-rose-200"
-                            : isMedium
-                            ? "bg-amber-50 text-amber-700 border-amber-200"
-                            : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                        }`}
-                      >
-                        {isHigh ? "🔴 High" : isMedium ? "🟡 Medium" : "🟢 Low"}
                       </span>
                     </td>
 

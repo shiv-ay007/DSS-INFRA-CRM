@@ -10,7 +10,7 @@ import {
 import { toast } from "react-toastify";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
-import { indianStatesList } from "../../data/addLeadData";
+import { indianStatesList, workCategoryList, availableWorkTypes } from "../../data/addLeadData";
 import { getLeadByIdApi, updateLeadApi } from "../../services/totalLeads.api";
 import { createLeadProjectApi } from "../../services/leadProject.api";
 import {
@@ -20,6 +20,20 @@ import {
   markLeadAsTransferredToSales
 } from "../../../../context/LeadContext";
 import { useAuth } from "../../../../context/AuthContext";
+import ReactSelectMulti from "../Master/PmsTemplate/ReactSelectMulti";
+
+const parseMultiField = (val) => {
+  if (!val) return [];
+  if (Array.isArray(val)) return [...val].filter(Boolean);
+  if (typeof val === "string") {
+    try {
+      const parsed = JSON.parse(val);
+      if (Array.isArray(parsed)) return parsed.filter(Boolean);
+    } catch (e) {}
+    return val.split(",").map((s) => s.trim()).filter(Boolean);
+  }
+  return [];
+};
 
 const SalesLeadForm = () => {
   const navigate = useNavigate();
@@ -44,9 +58,9 @@ const SalesLeadForm = () => {
     emailAddress: "",
     companyName: "",
     projectName: "",
-    workType: "",
-    businessType: "",
-    workCategory: "",
+    workType: [],
+    businessType: [],
+    workCategory: [],
     clientDesignation: "Managing Director",
     expectedBusiness: "",
     priority: "high",
@@ -65,12 +79,15 @@ const SalesLeadForm = () => {
     designation: ""
   });
 
-  // Populate form data whenever lead is resolved: ONLY Client details are fetched, project details are blank
+  // Populate form data whenever lead is resolved: Client & Work details auto-filled
   const populateFormData = (leadData, initialRemark = "") => {
     if (!leadData) return;
 
+    const parsedWorkType = parseMultiField(leadData.workType);
+    const parsedWorkCategory = parseMultiField(leadData.workCategory || leadData.businessType);
+
     setFormData({
-      // ONLY Client Details fetched from lead
+      // Client Details fetched from lead
       clientName: leadData.concernPersonName || leadData.clientName || "",
       phoneNumber: leadData.phoneNumber || leadData.contact || leadData.phone || "",
       alternateNumber: leadData.alternateNumber || "",
@@ -85,21 +102,21 @@ const SalesLeadForm = () => {
       pincode: leadData.pincode || "",
       address: leadData.address || leadData.siteAddress || "",
 
-      // All project specific details are kept BLANK for fresh input
-      companyName: "",
-      projectName: "",
-      workType: "",
-      businessType: "",
-      workCategory: "",
-      expectedBusiness: "",
-      priority: "high",
-      jobType: "NEW",
-      projectCoordinatorName: "",
-      nextPersonName: "",
-      designation: "",
-      requirement: "",
+      // Work & Project details auto-filled from lead
+      companyName: leadData.companyName || "",
+      projectName: leadData.projectName || "",
+      workType: parsedWorkType.length > 0 ? parsedWorkType : ["Concept Drawing"],
+      workCategory: parsedWorkCategory.length > 0 ? parsedWorkCategory : ["Design"],
+      businessType: parsedWorkCategory.length > 0 ? parsedWorkCategory : ["Design"],
+      expectedBusiness: leadData.expectedBusiness || leadData.budget || "",
+      priority: leadData.priority || "high",
+      jobType: leadData.jobType || "NEW",
+      projectCoordinatorName: leadData.projectCoordinatorName || "",
+      nextPersonName: leadData.nextPersonName || "",
+      designation: leadData.designation || "",
+      requirement: leadData.requirement || leadData.remarks || "",
       requirementAttachments: [],
-      transferRemark: "",
+      transferRemark: initialRemark || "",
       transferRemarkAttachments: []
     });
   };
@@ -252,6 +269,9 @@ const SalesLeadForm = () => {
     // If an existing project was passed for editing
     if (location.state?.project) {
       const proj = location.state.project;
+      const parsedWorkType = parseMultiField(proj.workType || location.state?.lead?.workType);
+      const parsedWorkCategory = parseMultiField(proj.workCategory || proj.businessType || location.state?.lead?.workCategory);
+
       setEditingProjectId(proj._id || proj.id || null);
       setFormData({
         clientName: proj.clientName || "",
@@ -261,10 +281,9 @@ const SalesLeadForm = () => {
         emailAddress: proj.emailAddress || "",
         companyName: proj.companyName || "",
         projectName: proj.projectName || "",
-        workType: Array.isArray(proj.workType)
-          ? proj.workType.join(", ")
-          : (proj.workType || (Array.isArray(location.state?.lead?.workType) ? location.state.lead.workType.join(", ") : location.state?.lead?.workType || "")),
-        businessType: proj.businessType || "Information Technology",
+        workType: parsedWorkType,
+        workCategory: parsedWorkCategory,
+        businessType: parsedWorkCategory,
         clientDesignation: proj.clientDesignation || "Managing Director",
         expectedBusiness: Number(proj.expectedBusiness || 50000),
         priority: proj.priority || "high",
@@ -334,16 +353,16 @@ const SalesLeadForm = () => {
     const formattedDate = new Date().toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
     const formattedTime = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
 
-    const finalWorkType = formData.workType
-      ? (typeof formData.workType === "string" ? formData.workType.split(",").map((s) => s.trim()).filter(Boolean) : formData.workType)
-      : (lead?.workType || []);
+    const finalWorkType = Array.isArray(formData.workType)
+      ? formData.workType
+      : (typeof formData.workType === "string" ? formData.workType.split(",").map((s) => s.trim()).filter(Boolean) : (lead?.workType || []));
 
-    const cleanBusinessType = Array.isArray(formData.businessType)
-      ? formData.businessType.filter(Boolean).join(", ")
-      : (formData.businessType || "Information Technology");
-    const cleanWorkCategory = Array.isArray(formData.workCategory)
-      ? formData.workCategory.filter(Boolean).join(", ")
-      : (cleanBusinessType || "Design");
+    const finalWorkCategory = Array.isArray(formData.workCategory)
+      ? formData.workCategory
+      : (typeof formData.workCategory === "string" ? formData.workCategory.split(",").map((s) => s.trim()).filter(Boolean) : (lead?.workCategory || []));
+
+    const cleanBusinessType = finalWorkCategory.join(", ") || "Information Technology";
+    const cleanWorkCategory = finalWorkCategory.length > 0 ? finalWorkCategory : ["Design"];
 
     const finalLeadData = {
       ...(lead || {}),
@@ -358,7 +377,7 @@ const SalesLeadForm = () => {
       companyName: formData.companyName,
       workType: finalWorkType,
       businessType: cleanBusinessType,
-      workCategory: Array.isArray(lead?.workCategory) && lead.workCategory.length > 0 ? lead.workCategory : [cleanWorkCategory],
+      workCategory: cleanWorkCategory,
       clientDesignation: formData.clientDesignation,
       amount: Number(formData.expectedBusiness) || 0,
       expectedBusiness: Number(formData.expectedBusiness) || 0,
@@ -635,52 +654,44 @@ const SalesLeadForm = () => {
             />
           </div>
 
-          <div>
+          <div id="field-workType">
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-              Work Type
+              Work Type <span className="text-slate-500 font-normal">(Multi-select)</span>
             </label>
-            <input
-              type="text"
-              list="workTypeDatalist"
+            <ReactSelectMulti
+              options={availableWorkTypes}
               value={formData.workType}
-              onChange={(e) => handleInputChange("workType", e.target.value)}
-              placeholder="e.g. Concept Drawing, Elevation Drawing"
-              className="w-full px-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400"
+              onChange={(selected) => {
+                setFormData((prev) => ({ ...prev, workType: selected }));
+                if (errors.workType) setErrors((prev) => ({ ...prev, workType: "" }));
+              }}
+              placeholder="Search & select work types..."
+              themeColor="blue"
+              hasError={Boolean(errors.workType)}
             />
-            <datalist id="workTypeDatalist">
-              <option value="Concept Drawing" />
-              <option value="Approval Drawing" />
-              <option value="Structure Drawing" />
-              <option value="Interior Drawing" />
-              <option value="Working Drawing" />
-              <option value="3D Elevation" />
-              <option value="Site Supervision" />
-            </datalist>
+            {errors.workType && <p className="text-xs text-red-500 font-medium mt-1">{errors.workType}</p>}
           </div>
 
-          <div>
+          <div id="field-workCategory">
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-              Work Category
+              Work Category <span className="text-slate-500 font-normal">(Multi-select)</span>
             </label>
-            <input
-              type="text"
-              list="workCategoryDatalist"
-              value={formData.businessType || (Array.isArray(formData.workCategory) ? formData.workCategory.filter(Boolean).join(", ") : formData.workCategory) || ""}
-              onChange={(e) => {
-                handleInputChange("businessType", e.target.value);
-                handleInputChange("workCategory", e.target.value);
+            <ReactSelectMulti
+              options={workCategoryList}
+              value={formData.workCategory}
+              onChange={(selected) => {
+                setFormData((prev) => ({
+                  ...prev,
+                  workCategory: selected,
+                  businessType: selected
+                }));
+                if (errors.workCategory) setErrors((prev) => ({ ...prev, workCategory: "" }));
               }}
-              placeholder="Select or enter Work Category"
-              className="w-full px-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400"
+              placeholder="Search & select categories..."
+              themeColor="blue"
+              hasError={Boolean(errors.workCategory)}
             />
-            <datalist id="workCategoryDatalist">
-              <option value="Design" />
-              <option value="Construction" />
-              <option value="Interior" />
-              <option value="Full Furnished" />
-              <option value="Fabrication" />
-              <option value="Other" />
-            </datalist>
+            {errors.workCategory && <p className="text-xs text-red-500 font-medium mt-1">{errors.workCategory}</p>}
           </div>
         </div>
 

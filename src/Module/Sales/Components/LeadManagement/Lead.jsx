@@ -258,6 +258,12 @@ const Lead = () => {
               requirement: backendLead.requirement || backendLead.remarks || backendLead.remark || backendLead.notes || "",
               remarksFile: backendLead.remarksFile || "",
               remarksFiles: backendLead.remarksFiles || [],
+              interestedRemark: backendLead.interestedRemark || "",
+              interestedFiles: backendLead.interestedFiles || [],
+              intrestedFromTableLeadAt: backendLead.intrestedFromTableLeadAt || null,
+              intrestedFromTableLeadBy: backendLead.intrestedFromTableLeadBy || null,
+              intrestedFromTableLead: backendLead.intrestedFromTableLead || false,
+              intrestedStatus: backendLead.intrestedStatus || "",
               statusTimeline: backendLead.statusTimeline || [],
               remarkAttachments: (Array.isArray(backendLead.remarksFiles) && backendLead.remarksFiles.length > 0) ? backendLead.remarksFiles : (backendLead.remarkAttachments || []),
               attachments: (Array.isArray(backendLead.remarksFiles) && backendLead.remarksFiles.length > 0) ? backendLead.remarksFiles : (backendLead.attachments || []),
@@ -1870,82 +1876,171 @@ const Lead = () => {
             <div className="p-5 sm:p-6 max-h-[65vh] overflow-y-auto space-y-6">
               {(() => {
                 const arr = [];
-                // 1. Existing followupHistory (from schema or legacy)
-                if (Array.isArray(remarksModalLead.followupHistory) && remarksModalLead.followupHistory.length > 0) {
-                  remarksModalLead.followupHistory.forEach((hist, idx) => {
-                    arr.push({
-                      id: hist._id || hist.id || `hist-${idx}`,
-                      rep: hist.rep || remarksModalLead.salesPerson || "Sales",
-                      status: hist.status || hist.discussionType || "Follow-up",
-                      date: hist.date || "Recently",
-                      time: hist.time || "",
-                      rawDate: hist.rawDate || null,
-                      notes: hist.followupRemark || hist.notes || hist.discussionWithClient || hist.remarks || hist.remark || "",
-                      attachments: hist.attachments?.remarks || hist.attachments?.current || hist.attachments || hist.files || []
-                    });
-                  });
+
+                // 1. Lead Capture / Registration Log
+                const leadCreatorName = (typeof remarksModalLead.leadBy === 'object' ? remarksModalLead.leadBy?.name : null) || remarksModalLead.salesPerson || remarksModalLead.assignTo || "Sales Representative";
+                const leadCreateDate = remarksModalLead.createdDate || remarksModalLead.date || (remarksModalLead.createdAt ? new Date(remarksModalLead.createdAt).toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' }) : "Recently");
+                const leadCreateTime = remarksModalLead.createdTime || (remarksModalLead.createdAt ? new Date(remarksModalLead.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true }) : "");
+                
+                // Read original registration remark from statusTimeline[0] if clean
+                const initialTimelineEntry = Array.isArray(remarksModalLead.statusTimeline) && remarksModalLead.statusTimeline.length > 0
+                  ? remarksModalLead.statusTimeline[0]
+                  : null;
+                const isTimelineInitialClean = initialTimelineEntry?.remarks &&
+                  initialTimelineEntry.remarks !== "Marked as Interested from Table" &&
+                  initialTimelineEntry.remarks !== "Lead marked as Interested." &&
+                  !initialTimelineEntry.remarks.toLowerCase().includes("status changed to");
+
+                const leadCaptureRemark = (isTimelineInitialClean ? initialTimelineEntry.remarks : null) ||
+                  remarksModalLead.projectDetail ||
+                  remarksModalLead.projectDetails ||
+                  remarksModalLead.requirement ||
+                  remarksModalLead.remarks ||
+                  remarksModalLead.remark ||
+                  "Initial lead inquiry registered in pipeline.";
+
+                // 2. Interested Status Log
+                const interestedTimelines = Array.isArray(remarksModalLead.statusTimeline)
+                  ? remarksModalLead.statusTimeline.filter(st => (st.status || "").toLowerCase().includes("interest"))
+                  : [];
+
+                // Find entry that has meaningful remarks entered by user
+                const meaningfulInterestedTl = [...interestedTimelines].reverse().find(st =>
+                  st.remarks &&
+                  st.remarks.trim() !== "" &&
+                  st.remarks !== "Marked as Interested from Table" &&
+                  !st.remarks.toLowerCase().startsWith("status changed to")
+                ) || (interestedTimelines.length > 0 ? interestedTimelines[interestedTimelines.length - 1] : null);
+
+                const interestedDate = meaningfulInterestedTl?.changedAt
+                  ? new Date(meaningfulInterestedTl.changedAt).toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' })
+                  : remarksModalLead.intrestedFromTableLeadAt
+                  ? new Date(remarksModalLead.intrestedFromTableLeadAt).toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' })
+                  : (remarksModalLead.createdDate || "Recently");
+
+                const interestedTime = meaningfulInterestedTl?.changedAt
+                  ? new Date(meaningfulInterestedTl.changedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })
+                  : remarksModalLead.intrestedFromTableLeadAt
+                  ? new Date(remarksModalLead.intrestedFromTableLeadAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })
+                  : "";
+
+                const interestedRep = (typeof meaningfulInterestedTl?.changedBy === 'object' ? meaningfulInterestedTl.changedBy?.name : null) ||
+                  (typeof remarksModalLead.intrestedFromTableLeadBy === 'object' ? remarksModalLead.intrestedFromTableLeadBy?.name : null) ||
+                  remarksModalLead.salesPerson ||
+                  "Sales Representative";
+
+                // Build the remark strictly avoiding "Marked as Interested from Table"
+                let interestedRemark = (remarksModalLead.interestedRemark || "").trim();
+                if (!interestedRemark && meaningfulInterestedTl?.remarks &&
+                    meaningfulInterestedTl.remarks !== "Marked as Interested from Table" &&
+                    !meaningfulInterestedTl.remarks.toLowerCase().startsWith("status changed to")) {
+                  interestedRemark = meaningfulInterestedTl.remarks.trim();
                 }
-
-                // 2. Status timeline history
-                if (Array.isArray(remarksModalLead.statusTimeline) && remarksModalLead.statusTimeline.length > 0) {
-                  remarksModalLead.statusTimeline.forEach((st, sIdx) => {
-                    const dt = st.changedAt ? new Date(st.changedAt) : null;
-                    const fDate = dt && !isNaN(dt.getTime())
-                      ? dt.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' })
-                      : (remarksModalLead.createdDate || "Recently");
-                    const fTime = dt && !isNaN(dt.getTime())
-                      ? dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })
-                      : "";
-                    const repName = (typeof st.changedBy === 'object' ? st.changedBy?.name : null) || remarksModalLead.salesPerson || "Sales";
-                    const isFirst = sIdx === 0;
-                    const isLast = sIdx === remarksModalLead.statusTimeline.length - 1;
-                    const files = (isFirst || isLast)
-                      ? (remarksModalLead.remarksFiles || remarksModalLead.remarkAttachments || remarksModalLead.attachments || [])
-                      : [];
-
-                    arr.push({
-                      id: st._id || `st-${sIdx}`,
-                      rep: repName,
-                      status: st.status ? `${st.status} Status` : "Status Change",
-                      date: fDate,
-                      time: fTime,
-                      rawDate: st.changedAt || null,
-                      notes: st.remarks || st.remark || (isFirst ? (remarksModalLead.remarks || remarksModalLead.remark) : ""),
-                      attachments: files
-                    });
-                  });
-                }
-
-                // 3. Lead base remarks if not yet added
-                if (arr.length === 0 && (remarksModalLead.remarks || remarksModalLead.remark || remarksModalLead.requirement || (Array.isArray(remarksModalLead.remarksFiles) && remarksModalLead.remarksFiles.length > 0))) {
-                  arr.push({
-                    id: "lead-initial",
-                    rep: remarksModalLead.salesPerson || (typeof remarksModalLead.leadBy === 'object' ? remarksModalLead.leadBy?.name : null) || "Sales",
-                    status: remarksModalLead.leadStatus || remarksModalLead.status || "Lead Remarks",
-                    date: remarksModalLead.createdDate || remarksModalLead.date || "Recently",
-                    time: remarksModalLead.createdTime || "",
-                    rawDate: remarksModalLead.createdAt || null,
-                    notes: remarksModalLead.remarks || remarksModalLead.remark || remarksModalLead.requirement || "",
-                    attachments: remarksModalLead.remarksFiles || remarksModalLead.remarkAttachments || remarksModalLead.attachments || []
-                  });
-                }
-
-                // Deduplicate
-                const uniqueList = [];
-                const seenKeys = new Set();
-                arr.forEach((item) => {
-                  const key = `${item.notes || ''}-${item.date || ''}-${item.time || ''}-${item.status || ''}`;
-                  if (!seenKeys.has(key)) {
-                    seenKeys.add(key);
-                    uniqueList.push(item);
+                if (!interestedRemark && remarksModalLead.remarks && remarksModalLead.remarks !== leadCaptureRemark) {
+                  if (leadCaptureRemark && remarksModalLead.remarks.startsWith(leadCaptureRemark)) {
+                    const extra = remarksModalLead.remarks.slice(leadCaptureRemark.length).trim();
+                    interestedRemark = extra || remarksModalLead.remarks.trim();
+                  } else {
+                    interestedRemark = remarksModalLead.remarks.trim();
                   }
+                }
+                if (!interestedRemark) {
+                  interestedRemark = (remarksModalLead.statusRemark || "").trim() || "Lead marked as Interested.";
+                }
+
+                // Strictly separate Interested Media vs Registration Media
+                const interestedFilesExplicit = (Array.isArray(remarksModalLead.interestedFiles) && remarksModalLead.interestedFiles.length > 0)
+                  ? remarksModalLead.interestedFiles
+                  : [];
+
+                let interestedAttachments = [];
+                let registrationRemarksFiles = [];
+
+                if (interestedFilesExplicit.length > 0) {
+                  interestedAttachments = interestedFilesExplicit;
+                  const interestedUrls = new Set(interestedFilesExplicit.map(f => typeof f === 'string' ? f : f?.url).filter(Boolean));
+                  registrationRemarksFiles = (Array.isArray(remarksModalLead.remarksFiles) ? remarksModalLead.remarksFiles : []).filter(f => {
+                    const u = typeof f === 'string' ? f : f?.url;
+                    return u && !interestedUrls.has(u);
+                  });
+                } else {
+                  // Fallback: Check if remarksFiles has files from both registration and interested time
+                  const allRemarksFiles = Array.isArray(remarksModalLead.remarksFiles) ? remarksModalLead.remarksFiles : [];
+                  const interestedTimeMs = meaningfulInterestedTl?.changedAt
+                    ? new Date(meaningfulInterestedTl.changedAt).getTime()
+                    : remarksModalLead.intrestedFromTableLeadAt
+                    ? new Date(remarksModalLead.intrestedFromTableLeadAt).getTime()
+                    : 0;
+                  const createdTimeMs = remarksModalLead.createdAt ? new Date(remarksModalLead.createdAt).getTime() : 0;
+
+                  if (interestedTimeMs > 0 && allRemarksFiles.length > 1) {
+                    const interestedList = [];
+                    const registrationList = [];
+                    for (const f of allRemarksFiles) {
+                      let fileTime = 0;
+                      if (f._id && typeof f._id === 'string' && f._id.length === 24) {
+                        fileTime = parseInt(f._id.substring(0, 8), 16) * 1000;
+                      }
+                      if (fileTime && createdTimeMs && fileTime > (createdTimeMs + 10000)) {
+                        interestedList.push(f);
+                      } else if (fileTime && interestedTimeMs && Math.abs(fileTime - interestedTimeMs) <= 120000) {
+                        interestedList.push(f);
+                      } else {
+                        registrationList.push(f);
+                      }
+                    }
+                    if (interestedList.length > 0) {
+                      interestedAttachments = interestedList;
+                      registrationRemarksFiles = registrationList;
+                    } else {
+                      interestedAttachments = allRemarksFiles;
+                    }
+                  } else {
+                    interestedAttachments = allRemarksFiles;
+                  }
+                }
+
+                const leadCaptureFiles = [
+                  ...(Array.isArray(remarksModalLead.projectDetailFiles) ? remarksModalLead.projectDetailFiles : (remarksModalLead.projectDetailAttachments || [])),
+                  ...registrationRemarksFiles
+                ];
+
+                arr.push({
+                  id: "lead-capture",
+                  rep: leadCreatorName,
+                  status: "Lead Registered",
+                  date: leadCreateDate,
+                  time: leadCreateTime,
+                  rawDate: remarksModalLead.createdAt || null,
+                  notes: leadCaptureRemark,
+                  attachments: leadCaptureFiles
                 });
 
-                const sortedLogs = uniqueList.sort((a, b) => {
+                const isLeadInterested = remarksModalLead.isInterested === true ||
+                  remarksModalLead.intrestedFromTableLead === true ||
+                  remarksModalLead.intrestedStatus === "Intrested" ||
+                  interestedTimelines.length > 0 ||
+                  Boolean(remarksModalLead.interestedRemark);
+
+                if (isLeadInterested) {
+                  arr.push({
+                    id: "lead-interested",
+                    rep: interestedRep,
+                    status: "Marked as Interested",
+                    date: interestedDate,
+                    time: interestedTime,
+                    rawDate: meaningfulInterestedTl?.changedAt || remarksModalLead.intrestedFromTableLeadAt || null,
+                    notes: interestedRemark,
+                    attachments: interestedAttachments
+                  });
+                }
+
+                // Sort: Newest log on top (Interested first, then Lead Registered below)
+                const sortedLogs = [...arr].sort((a, b) => {
                   const timeA = a.rawDate ? new Date(a.rawDate).getTime() : 0;
                   const timeB = b.rawDate ? new Date(b.rawDate).getTime() : 0;
                   if (timeA && timeB && timeA !== timeB) return timeB - timeA;
-                  return 0;
+                  return a.id === "lead-interested" ? -1 : 1;
                 });
 
                 if (sortedLogs.length === 0) {
@@ -2021,18 +2116,7 @@ const Lead = () => {
             </div>
 
             {/* Modal Footer */}
-            <div className="p-4 px-6 border-t border-slate-100 flex items-center justify-between bg-slate-50/40">
-              <button
-                type="button"
-                onClick={() => {
-                  const l = remarksModalLead;
-                  setRemarksModalLead(null);
-                  handleOpenScheduleModal(l);
-                }}
-                className="px-4 py-2 rounded-xl bg-slate-900 text-white font-bold text-xs hover:bg-black transition-all cursor-pointer shadow-xs"
-              >
-                + Schedule Next
-              </button>
+            <div className="p-4 px-6 border-t border-slate-100 flex items-center justify-end bg-slate-50/40">
               <button
                 type="button"
                 onClick={() => setRemarksModalLead(null)}
@@ -2057,65 +2141,38 @@ const Lead = () => {
         let rawHistory = [];
         if (Array.isArray(followupDetailsModalLead.followupHistory) && followupDetailsModalLead.followupHistory.length > 0) {
           rawHistory = [...followupDetailsModalLead.followupHistory];
-        } else if (Array.isArray(followupDetailsModalLead.statusTimeline) && followupDetailsModalLead.statusTimeline.length > 0) {
-          rawHistory = followupDetailsModalLead.statusTimeline.map((st, sIdx) => {
-            const dt = st.changedAt ? new Date(st.changedAt) : null;
+        } else if (Array.isArray(followupDetailsModalLead.followups) && followupDetailsModalLead.followups.length > 0) {
+          rawHistory = followupDetailsModalLead.followups.map((f) => {
+            const dt = f.dateTime ? new Date(f.dateTime) : (f.createdAt ? new Date(f.createdAt) : null);
             const fDate = dt && !isNaN(dt.getTime())
               ? dt.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' })
-              : (followupDetailsModalLead.createdDate || "Recently");
+              : "--";
             const fTime = dt && !isNaN(dt.getTime())
               ? dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })
               : "";
-            const isInitial = sIdx === 0;
-            const isLatest = sIdx === followupDetailsModalLead.statusTimeline.length - 1;
-            const files = (isInitial || isLatest)
-              ? (followupDetailsModalLead.remarksFiles || followupDetailsModalLead.remarkAttachments || followupDetailsModalLead.attachments || [])
-              : [];
-
+            const creatorObj = typeof f.createdBy === "object" ? f.createdBy : null;
             return {
-              rep: (typeof st.changedBy === 'object' ? st.changedBy?.name : null) || followupDetailsModalLead.salesPerson || user?.name || "Sales",
-              repDesignation: user?.role || "",
-              department: loggedInDepartment || "Sales",
-              talkToPerson: followupDetailsModalLead.clientName || followupDetailsModalLead.concernPersonName || "--",
-              discussionType: st.status || "Status Change",
-              personDesignation: followupDetailsModalLead.clientDesignation || "--",
-              discussionWithClient: st.remarks || st.remark || (isInitial ? (followupDetailsModalLead.remarks || followupDetailsModalLead.remark) : "--"),
-              nextDiscussionTopic: "--",
-              rating: 4,
-              matrix: {},
-              followupRemark: st.remarks || st.remark || (isInitial ? (followupDetailsModalLead.remarks || followupDetailsModalLead.remark) : ""),
+              rep: creatorObj?.name || followupDetailsModalLead.salesPerson || user?.name || "Sales",
+              repDesignation: creatorObj?.role || user?.role || "",
+              department: (typeof creatorObj?.departments === "object" ? creatorObj.departments?.name : null) || loggedInDepartment || "Sales",
+              talkToPerson: f.talkToPerson || followupDetailsModalLead.clientName || followupDetailsModalLead.concernPersonName || "--",
+              discussionType: f.type || "Call",
+              personDesignation: f.personDesignation || followupDetailsModalLead.clientDesignation || "--",
+              discussionWithClient: f.currentDiscussion?.discussion || f.followupRemark?.remarks || "--",
+              nextDiscussionTopic: f.nextDiscussion?.nextDiscussion || "--",
+              rating: f.rating !== undefined ? f.rating : 4,
+              matrix: f.matrix || {},
+              followupRemark: f.followupRemark?.remarks || "",
               date: fDate,
               time: fTime,
-              rawDate: st.changedAt,
+              rawDate: f.dateTime || f.createdAt,
               attachments: {
-                current: [],
-                next: [],
-                remarks: files
+                current: f.currentDiscussion?.files || [],
+                next: f.nextDiscussion?.files || [],
+                remarks: f.followupRemark?.files || []
               }
             };
           });
-        } else if (followupDetailsModalLead.notes || followupDetailsModalLead.remark || followupDetailsModalLead.remarks || (Array.isArray(followupDetailsModalLead.remarksFiles) && followupDetailsModalLead.remarksFiles.length > 0) || followupDetailsModalLead.nextFollowupDate || followupDetailsModalLead.isFollowupScheduled) {
-          rawHistory = [{
-            rep: user?.name || followupDetailsModalLead.salesPerson || followupDetailsModalLead.assignTo || "",
-            repDesignation: user?.role || "",
-            department: loggedInDepartment || "Sales",
-            talkToPerson: followupDetailsModalLead.clientName || followupDetailsModalLead.concernPersonName || "--",
-            discussionType: followupDetailsModalLead.channelType || followupDetailsModalLead.type || "Call",
-            personDesignation: followupDetailsModalLead.clientDesignation || "--",
-            discussionWithClient: followupDetailsModalLead.notes || followupDetailsModalLead.remark || followupDetailsModalLead.remarks || followupDetailsModalLead.requirement || "--",
-            nextDiscussionTopic: followupDetailsModalLead.nextDiscussionTopic || "--",
-            rating: followupDetailsModalLead.rating || 4,
-            matrix: {},
-            followupRemark: followupDetailsModalLead.remark || followupDetailsModalLead.remarks || "",
-            date: followupDetailsModalLead.createdDate || "Recently",
-            time: followupDetailsModalLead.createdTime || "",
-            rawDate: followupDetailsModalLead.createdAt,
-            attachments: {
-              current: [],
-              next: [],
-              remarks: followupDetailsModalLead.remarksFiles || followupDetailsModalLead.remarkAttachments || followupDetailsModalLead.attachments || []
-            }
-          }];
         }
 
         // Ensure descending chronological order (newest at index 0)

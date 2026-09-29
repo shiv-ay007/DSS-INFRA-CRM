@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from "react";
-import { FaCommentDots, FaPaperPlane, FaSpinner, FaArrowRight, FaCheck, FaLock } from "react-icons/fa";
+import { FaCommentDots, FaPaperPlane, FaSpinner, FaArrowRight, FaCheck, FaLock, FaSave, FaTimes, FaEdit } from "react-icons/fa";
 import { toast } from "react-toastify";
 import CommentWithMedia from "../../../../../Common/Components/CommentWithMedia";
 import WhatsAppAudioPlayer from "../../../../../Common/Components/WhatsAppAudioPlayer";
@@ -33,6 +33,8 @@ const PresalesDiscussionLog = ({
   onSaveCurrentStage,
   readOnly = false,
   isCompleted = false,
+  isEditing = false,
+  onCancelEdit,
   currentUser = "Admin"
 }) => {
   const [remarkText, setRemarkText] = useState("");
@@ -121,8 +123,8 @@ const PresalesDiscussionLog = ({
       setRemarkText("");
       setRemarkAttachments([]);
 
-      // 3. Move to next stage
-      if (typeof onNextStage === "function") {
+      // 3. Move to next stage (only if not editing a completed stage)
+      if (!isEditing && typeof onNextStage === "function") {
         onNextStage();
       }
     } catch (err) {
@@ -227,11 +229,17 @@ const PresalesDiscussionLog = ({
 
       {/* Discussion Note / Audio Box (Active or Dummy when Completed) */}
       <div className="space-y-2.5 pt-3 border-t border-slate-100">
-        <div className={isCompleted || readOnly ? "opacity-75 pointer-events-none select-none cursor-not-allowed" : ""}>
+        <div className={!isEditing && (isCompleted || readOnly) ? "opacity-75 pointer-events-none select-none cursor-not-allowed" : ""}>
           <CommentWithMedia
-            title={`Add Stage ${activeStageId} Discussion Note / Audio`}
+            title={
+              isEditing
+                ? `Update Stage ${activeStageId} Discussion Note / Audio`
+                : `Add Stage ${activeStageId} Discussion Note / Audio`
+            }
             placeholder={
-              isCompleted
+              isEditing
+                ? `Update Stage ${activeStageId} notes, remarks or additional media...`
+                : isCompleted
                 ? `Stage ${activeStageId} discussion notes recorded & completed.`
                 : readOnly
                 ? `Stage ${activeStageId} is locked. Complete previous stages first.`
@@ -241,23 +249,49 @@ const PresalesDiscussionLog = ({
             onChange={(val) => setRemarkText(val)}
             files={remarkAttachments}
             onFilesChange={(newFiles) => setRemarkAttachments(newFiles)}
-            allowMedia={!isCompleted && !readOnly}
-            disabled={isCompleted || readOnly}
+            allowMedia={isEditing || (!isCompleted && !readOnly)}
+            disabled={!isEditing && (isCompleted || readOnly)}
           />
         </div>
 
-        <div className="pt-1">
+        <div className="pt-1 flex items-center gap-2">
+          {isEditing && onCancelEdit && (
+            <button
+              type="button"
+              disabled={isSubmitting}
+              onClick={onCancelEdit}
+              className="py-3 px-4 rounded-xl text-xs sm:text-sm font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 transition-all flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+            >
+              <FaTimes className="text-xs text-slate-500" />
+              <span>Cancel</span>
+            </button>
+          )}
+
           <button
             type="button"
-            disabled={isCompleted || readOnly || isSubmitting}
+            disabled={(!isEditing && isCompleted) || readOnly || isSubmitting}
             onClick={handleSubmit}
             className={`w-full py-3 rounded-xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 ${
-              isCompleted || readOnly
+              (!isEditing && isCompleted) || readOnly
                 ? "bg-slate-200 text-slate-500 border border-slate-300 cursor-not-allowed shadow-none"
+                : isEditing
+                ? "bg-blue-600 hover:bg-blue-700 active:scale-98 text-white shadow-sm cursor-pointer"
                 : "bg-emerald-600 hover:bg-emerald-700 active:scale-98 text-white shadow-sm cursor-pointer"
             }`}
           >
-            {isCompleted ? (
+            {isEditing ? (
+              isSubmitting ? (
+                <>
+                  <FaSpinner className="animate-spin text-sm" />
+                  <span>Updating Stage {activeStageId}...</span>
+                </>
+              ) : (
+                <>
+                  <FaSave className="text-xs" />
+                  <span>Update Stage {activeStageId} Details</span>
+                </>
+              )
+            ) : isCompleted ? (
               <>
                 <FaCheck className="text-xs text-emerald-600" />
                 <span>Stage {activeStageId} Completed — Notes Locked</span>
