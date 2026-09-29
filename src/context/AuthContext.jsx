@@ -13,24 +13,44 @@ export const AuthProvider = ({ children }) => {
   const isWorker = role === "Worker";
   const isObserver = role === "Observer";
 
-  // Fetch current user on mount / page refresh via cookies
+  // Fetch current user on mount / page refresh via session
   useEffect(() => {
     let isMounted = true;
-    const fetchUserFromCookie = async () => {
+    const fetchUserFromSession = async () => {
+      // If there is no session token in sessionStorage, do not auto-login
+      const sessionToken = sessionStorage.getItem("accessToken");
+      if (!sessionToken) {
+        if (isMounted) {
+          setUser(null);
+          // Clean up any stale localStorage tokens from previous versions
+          localStorage.removeItem("dss_user");
+          localStorage.removeItem("accessToken");
+          localStorage.removeItem("refreshToken");
+          setLoading(false);
+        }
+        return;
+      }
+
       try {
         const res = await getCurrentUserApi();
         if (isMounted && res && res.success && res.data) {
           setUser(res.data);
         } else if (isMounted) {
           setUser(null);
+          sessionStorage.removeItem("dss_user");
+          sessionStorage.removeItem("accessToken");
+          sessionStorage.removeItem("refreshToken");
           localStorage.removeItem("dss_user");
           localStorage.removeItem("accessToken");
           localStorage.removeItem("refreshToken");
         }
       } catch (err) {
-        console.warn("Cookie session check failed:", err);
+        console.warn("Session check failed:", err);
         if (isMounted) {
           setUser(null);
+          sessionStorage.removeItem("dss_user");
+          sessionStorage.removeItem("accessToken");
+          sessionStorage.removeItem("refreshToken");
           localStorage.removeItem("dss_user");
           localStorage.removeItem("accessToken");
           localStorage.removeItem("refreshToken");
@@ -42,7 +62,7 @@ export const AuthProvider = ({ children }) => {
       }
     };
 
-    fetchUserFromCookie();
+    fetchUserFromSession();
 
     return () => {
       isMounted = false;
@@ -54,21 +74,26 @@ export const AuthProvider = ({ children }) => {
     setUser(userData);
   };
 
-  // Login handler
+  // Login handler: saves to sessionStorage so session ends when browser/tab closes
   const login = (userData, accessToken, refreshToken) => {
     setUser(userData);
+    // Clear old localStorage if any
+    localStorage.removeItem("dss_user");
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
+
     if (userData) {
-      localStorage.setItem("dss_user", JSON.stringify(userData));
+      sessionStorage.setItem("dss_user", JSON.stringify(userData));
     }
     if (accessToken) {
-      localStorage.setItem("accessToken", accessToken);
+      sessionStorage.setItem("accessToken", accessToken);
     }
     if (refreshToken) {
-      localStorage.setItem("refreshToken", refreshToken);
+      sessionStorage.setItem("refreshToken", refreshToken);
     }
   };
 
-  // Logout handler: calls backend logout to clear cookies & clears state
+  // Logout handler: calls backend logout to clear cookies & clears session
   const logout = async () => {
     try {
       await logoutApi();

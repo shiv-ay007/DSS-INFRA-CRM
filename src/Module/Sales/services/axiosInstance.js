@@ -16,7 +16,7 @@ export const API_BASE_URL =
  * Returns dynamic authorization and content-type headers.
  */
 export const getAuthHeaders = (isFormData = false) => {
-  const token = localStorage.getItem("accessToken");
+  const token = sessionStorage.getItem("accessToken");
   const headers = {};
 
   if (!isFormData) {
@@ -41,7 +41,7 @@ const apiClient = axios.create({
 // Request Interceptor: Attach bearer token & handle content headers
 apiClient.interceptors.request.use(
   (config) => {
-    const token = localStorage.getItem("accessToken");
+    const token = sessionStorage.getItem("accessToken");
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
