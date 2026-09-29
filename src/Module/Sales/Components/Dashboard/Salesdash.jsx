@@ -3,13 +3,15 @@ import { Link } from "react-router-dom";
 import { FaTrashRestore } from "react-icons/fa";
 import PageHeader from "../../../../Common/Components/PageHeader";
 import DashboardMetrics from "./DashboardMetrics";
-import FollowupsDueToday from "./FollowupsDueToday";
+import ExecutiveKpiBar from "./ExecutiveKpiBar";
 import LeadStatusBreakdown from "./LeadStatusBreakdown";
-import RecentLeadsTable from "./RecentLeadsTable";
-import { metricsData as defaultMetrics, initialFollowups, statusBreakdownData as defaultStatus, recentLeadsData as defaultRecent } from "../../data/dashboardData";
+import RevenueAndLeadTrendsChart from "./RevenueAndLeadTrendsChart";
+import LeadSourceDistributionChart from "./LeadSourceDistributionChart";
+import ActiveProjectsSiteTracker from "./ActiveProjectsSiteTracker";
+import { metricsData as defaultMetrics, statusBreakdownData as defaultStatus } from "../../data/dashboardData";
 import { getAllLeadsApi } from "../../services/totalLeads.api";
-import { getFollowupLeadsApi } from "../../services/followup.api";
-import { getDashboardStatsApi } from "../../services/dashboard.api";
+import { activeProjectService } from "../../services/activeProjectService";
+import { pmsWbsService } from "../../services/pmsWbsService";
 import {
   useLeadContext,
   subscribeToLeadUpdates
@@ -23,7 +25,8 @@ const Salesdash = () => {
 
   const { getCachedData, setCachedData } = useLeadContext();
   const [leads, setLeads] = useState([]);
-  const [scheduledFollowups, setScheduledFollowups] = useState([]);
+  const [activeProjects, setActiveProjects] = useState([]);
+  const [wbsStagesCount, setWbsStagesCount] = useState(25);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -35,6 +38,29 @@ const Salesdash = () => {
         setIsLoading(false);
       }
 
+      // 1. Fetch Active Construction Projects from Local Execution Service
+      try {
+        const prjs = activeProjectService.getAllActiveProjects();
+        if (Array.isArray(prjs)) {
+          setActiveProjects(prjs);
+        }
+      } catch (err) {
+        console.warn("Active projects fetch error:", err);
+      }
+
+      // 2. Fetch Dynamic WBS Stages count from Master
+      try {
+        const wbsRes = await pmsWbsService.getAllWbsData();
+        if (wbsRes?.data?.stages && Array.isArray(wbsRes.data.stages)) {
+          setWbsStagesCount(wbsRes.data.stages.length);
+        } else if (Array.isArray(wbsRes?.data?.data?.stages)) {
+          setWbsStagesCount(wbsRes.data.data.stages.length);
+        }
+      } catch (err) {
+        console.warn("WBS master fetch error:", err);
+      }
+
+      // 3. Fetch All Leads from API
       try {
         setIsLoading(true);
         const [leadsRes] = await Promise.allSettled([
@@ -88,7 +114,7 @@ const Salesdash = () => {
     return () => unsubscribe();
   }, [getCachedData, setCachedData]);
 
-  // 1. Dynamic Top 4 Metrics Cards
+  // 1. Dynamic Top 4 Metrics Cards (Brought to Row 1)
   const dynamicMetrics = useMemo(() => {
     const total = leads.length;
     const hotCount = leads.filter((l) => (l.leadStatus || l.status || "").toLowerCase() === "hot").length;
@@ -104,32 +130,7 @@ const Salesdash = () => {
     });
   }, [leads]);
 
-  // 2. Dynamic Follow-ups Due Today (Only genuine scheduled follow-ups, zero dummy fallbacks)
-  const dynamicFollowups = useMemo(() => {
-    const listToUse = scheduledFollowups.length > 0
-      ? scheduledFollowups
-      : leads.filter(
-          (l) => l.isFollowupScheduled || l.nextFollowupDate || (Array.isArray(l.followupHistory) && l.followupHistory.length > 0)
-        );
-
-    return listToUse.slice(0, 5).map((l, index) => {
-      const timeVal = l.nextFollowupTime || l.followupTime || l.createdTime || "--";
-      const tagVal = Array.isArray(l.workType)
-        ? (l.workType[0] || l.workCategory || "Followup Call")
-        : (l.workType || l.workCategory || "Followup Call");
-
-      return {
-        id: l.leadId || l._id || l.id || index + 1,
-        name: l.clientName || l.concernPersonName || "Client",
-        company: l.projectDetail || l.companyName || l.address || l.workCategory || "Project Inquiry",
-        time: timeVal,
-        phone: l.phoneNumber || l.contact || l.phone || "--",
-        tag: tagVal
-      };
-    });
-  }, [scheduledFollowups, leads]);
-
-  // 3. Dynamic Lead Status Breakdown (Donut Data)
+  // 2. Dynamic Lead Status Breakdown (Donut Data)
   const { statusBreakdown, totalLeadsCount, conversionRate } = useMemo(() => {
     const total = leads.length;
     const hotCount = leads.filter((l) => (l.leadStatus || l.status || "").toLowerCase() === "hot").length;
@@ -158,41 +159,15 @@ const Salesdash = () => {
     };
   }, [leads]);
 
-  // 4. Dynamic Recent Leads Table Data
-  const dynamicRecentLeads = useMemo(() => {
-    const sliced = leads.slice(0, 5).map((l, index) => {
-      const amt = Number(l.expectedBusiness || l.expectedRevenue || l.budget || 0);
-      const formattedAmt = amt > 0 ? `₹ ${amt.toLocaleString("en-IN")}` : "₹ 1,50,000";
-      const statusRaw = l.leadStatus || l.status || "Warm";
-      const formattedStatus = statusRaw.charAt(0).toUpperCase() + statusRaw.slice(1).toLowerCase();
-
-      const leadIdStr = l.leadId || (l.id && !String(l.id).match(/^[0-9a-fA-F]{24}$/) ? l.id : null) || `LD-${901 + index}`;
-
-      return {
-        id: leadIdStr,
-        leadId: leadIdStr,
-        _id: l._id || l.id,
-        date: l.createdDate || l.date || "25/08/2026",
-        name: l.clientName || l.concernPersonName || "Client Name",
-        company: l.projectDetail || l.companyName || l.workCategory || "Project Inquiry",
-        amount: formattedAmt,
-        status: formattedStatus,
-        source: l.leadMode || l.leadSource || "Direct Call"
-      };
-    });
-
-    return sliced.length > 0 ? sliced : defaultRecent;
-  }, [leads]);
-
   return (
-    <div className="space-y-4 font-sans pb-6">
-      {/* 1. HEADER & ADD LEAD CTA */}
+    <div className="space-y-4 font-sans pb-8">
+      {/* HEADER & ADD LEAD CTA */}
       <div className="sticky top-0 z-30 bg-[#F8FAFC] pt-1 pb-2">
         <PageHeader
           title="LEAD DASHBOARD"
           badge="Live Pipeline"
           badgeColor="bg-emerald-100/90 text-emerald-800 border-emerald-300"
-          description="Complete overview of your daily leads, revenue pipeline, status breakdowns, and scheduled follow-ups."
+          description="Executive 360° overview of daily leads, revenue pipeline, construction site execution, and operational health."
           rightActions={
             <div className="flex items-center gap-2">
               <Link
@@ -211,7 +186,7 @@ const Salesdash = () => {
                   className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-slate-200 text-slate-400 text-xs sm:text-sm font-bold shadow-none cursor-not-allowed opacity-60 shrink-0"
                   title="Disabled for Observer"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 fill-none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                   </svg>
                   <span>Add Lead</span>
@@ -221,7 +196,7 @@ const Salesdash = () => {
                   to="/sales/leads/add"
                   className="inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg bg-gradient-to-r from-emerald-600 via-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white text-xs sm:text-sm font-bold shadow-sm shadow-emerald-600/25 active:scale-95 transition-all cursor-pointer shrink-0"
                 >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
+                  <svg className="w-4 h-4 fill-none" stroke="currentColor" strokeWidth="2.5" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
                   </svg>
                   <span>Add Lead</span>
@@ -232,21 +207,42 @@ const Salesdash = () => {
         />
       </div>
 
-      {/* 2. 4 TOP STATS CARDS */}
+      {/* ROW 1: PRIMARY METRICS (TOTAL LEADS, HOT, WARM, COLD) */}
       <DashboardMetrics metrics={dynamicMetrics} />
 
-      {/* 3. MIDDLE SECTION (FOLLOW-UPS & DONUT CHART) */}
+      {/* ROW 2: EXECUTIVE 360° KPI BAR (MINIMALIST STYLE MATCHING ROW 1) */}
+      <ExecutiveKpiBar
+        leads={leads}
+        activeProjectsCount={activeProjects.length}
+        wbsStagesCount={wbsStagesCount}
+      />
+
+      {/* ROW 3: REVENUE & PIPELINE TRENDS (8 COLS) + STATUS DISTRIBUTION (4 COLS) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
-        <FollowupsDueToday data={dynamicFollowups} />
-        <LeadStatusBreakdown
-          statusBreakdown={statusBreakdown}
-          totalLeads={totalLeadsCount}
-          conversionRate={conversionRate}
-        />
+        <div className="lg:col-span-8 flex flex-col">
+          <RevenueAndLeadTrendsChart leads={leads} />
+        </div>
+        <div className="lg:col-span-4 flex flex-col">
+          <LeadStatusBreakdown
+            statusBreakdown={statusBreakdown}
+            totalLeads={totalLeadsCount}
+            conversionRate={conversionRate}
+          />
+        </div>
       </div>
 
-      {/* 4. RECENT LEADS TABLE */}
-      <RecentLeadsTable recentLeads={dynamicRecentLeads} isLoading={isLoading} />
+      {/* ROW 4: ACTIVE CONSTRUCTION SITES TRACKER (8 COLS) + LEAD ACQUISITION CHANNELS (4 COLS) */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
+        <div className="lg:col-span-8 flex flex-col">
+          <ActiveProjectsSiteTracker
+            activeProjects={activeProjects}
+            wbsStagesCount={wbsStagesCount}
+          />
+        </div>
+        <div className="lg:col-span-4 flex flex-col">
+          <LeadSourceDistributionChart leads={leads} />
+        </div>
+      </div>
     </div>
   );
 };

@@ -7,7 +7,13 @@ import {
   FaChartLine,
   FaMoneyBillWave,
   FaCoins,
-  FaGift
+  FaGift,
+  FaFire,
+  FaClock,
+  FaPaperPlane,
+  FaComments,
+  FaSun,
+  FaSnowflake
 } from "react-icons/fa";
 
 const LeadKpiSlider = ({ stats }) => {
@@ -35,6 +41,56 @@ const LeadKpiSlider = ({ stats }) => {
       cardGradient: "from-indigo-50/90 via-blue-50/30 to-white",
       borderColor: "border-indigo-200/90",
       textColor: "text-indigo-900"
+    },
+    {
+      id: "hot",
+      label: "Hot Leads",
+      value: stats.hot,
+      icon: <FaFire className="w-4 h-4 text-rose-600" />,
+      iconBg: "bg-rose-100/90 text-rose-600",
+      cardGradient: "from-rose-50/90 via-red-50/30 to-white",
+      borderColor: "border-rose-200/90",
+      textColor: "text-rose-900"
+    },
+    {
+      id: "warm",
+      label: "Warm Leads",
+      value: stats.warm,
+      icon: <FaSun className="w-4 h-4 text-amber-600" />,
+      iconBg: "bg-amber-100/90 text-amber-600",
+      cardGradient: "from-amber-50/90 via-orange-50/30 to-white",
+      borderColor: "border-amber-200/90",
+      textColor: "text-amber-900"
+    },
+    {
+      id: "cold",
+      label: "Cold Leads",
+      value: stats.cold,
+      icon: <FaSnowflake className="w-4 h-4 text-sky-600" />,
+      iconBg: "bg-sky-100/90 text-sky-600",
+      cardGradient: "from-sky-50/90 via-blue-50/30 to-white",
+      borderColor: "border-sky-200/90",
+      textColor: "text-sky-900"
+    },
+    {
+      id: "readyForSales",
+      label: "Ready for Sales",
+      value: stats.readyForSales,
+      icon: <FaPaperPlane className="w-4 h-4 text-emerald-600" />,
+      iconBg: "bg-emerald-100/90 text-emerald-600",
+      cardGradient: "from-emerald-50/90 via-teal-50/30 to-white",
+      borderColor: "border-emerald-200/90",
+      textColor: "text-emerald-900"
+    },
+    {
+      id: "inDiscussion",
+      label: "In Discussion",
+      value: stats.inDiscussion,
+      icon: <FaComments className="w-4 h-4 text-purple-600" />,
+      iconBg: "bg-purple-100/90 text-purple-600",
+      cardGradient: "from-purple-50/90 via-fuchsia-50/30 to-white",
+      borderColor: "border-purple-200/90",
+      textColor: "text-purple-900"
     },
     {
       id: "converted",
@@ -99,8 +155,12 @@ const LeadKpiSlider = ({ stats }) => {
   ];
 
   // Helper to check if a value is 0 or empty
-  const isZeroValue = (val) => {
+  const isZeroValue = (val, cardId) => {
     if (val === undefined || val === null) return true;
+    // Essential priority cards stay visible if explicitly provided in stats
+    if (["total", "fresh", "hot", "warm", "cold", "readyForSales", "inDiscussion", "expectedRevenue"].includes(cardId)) {
+      return false;
+    }
     const str = String(val).trim();
     if (str === "0" || str === "0.0%" || str === "0%" || str === "0.0") return true;
     const clean = str.replace(/[₹,\sLakhsL%]/gi, "");
@@ -108,7 +168,7 @@ const LeadKpiSlider = ({ stats }) => {
     return false;
   };
 
-  const visibleCards = cardsData.filter((card) => !isZeroValue(card.value));
+  const visibleCards = cardsData.filter((card) => !isZeroValue(card.value, card.id));
 
   const checkScroll = useCallback(() => {
     if (scrollRef.current) {
@@ -119,51 +179,32 @@ const LeadKpiSlider = ({ stats }) => {
         setScrollProgress((scrollLeft / maxScroll) * 100);
       } else {
         setCanScroll(false);
+        setScrollProgress(0);
       }
     }
   }, []);
 
   useEffect(() => {
-    const timer = setTimeout(checkScroll, 100);
+    checkScroll();
     window.addEventListener("resize", checkScroll);
-    return () => {
-      clearTimeout(timer);
-      window.removeEventListener("resize", checkScroll);
-    };
+    return () => window.removeEventListener("resize", checkScroll);
   }, [visibleCards.length, checkScroll]);
 
-  const handleScroll = () => {
-    checkScroll();
-  };
-
-  const handleRangeChange = (e) => {
-    const val = Number(e.target.value);
-    setScrollProgress(val);
-    if (scrollRef.current) {
-      const { scrollWidth, clientWidth } = scrollRef.current;
-      const maxScroll = scrollWidth - clientWidth;
-      scrollRef.current.scrollLeft = (val / 100) * maxScroll;
-    }
-  };
-
-  if (visibleCards.length === 0) return null;
-
   return (
-    <div className="relative w-full space-y-2">
-      {/* HORIZONTAL SLIDER CONTAINER */}
+    <div className="relative group/slider w-full">
       <div
         ref={scrollRef}
-        onScroll={handleScroll}
-        className="flex items-center gap-3.5 overflow-x-auto scroll-smooth py-1 px-1 [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-slate-100 [&::-webkit-scrollbar-track]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-thumb]:rounded-full hover:[&::-webkit-scrollbar-thumb]:bg-slate-400"
-        style={{ scrollbarWidth: "thin", scrollbarColor: "#CBD5E1 #F1F5F9" }}
+        onScroll={checkScroll}
+        className="flex items-stretch gap-3.5 sm:gap-4 overflow-x-auto pb-1 scroll-smooth snap-x select-none"
+        style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
         {visibleCards.map((card) => (
           <div
             key={card.id}
-            className={`w-[210px] min-w-[210px] h-[105px] shrink-0 p-3.5 rounded-2xl bg-gradient-to-br ${card.cardGradient} border ${card.borderColor} shadow-2xs hover:shadow-md transition-all flex flex-col justify-between`}
+            className={`min-w-[170px] sm:min-w-[210px] md:min-w-[230px] flex-1 p-3.5 rounded-2xl bg-gradient-to-br ${card.cardGradient} border ${card.borderColor} shadow-2xs hover:shadow-xs transition-all flex flex-col justify-between shrink-0 snap-start`}
           >
-            <div className="flex items-center justify-between">
-              <span className={`text-[11px] font-extrabold uppercase tracking-wider ${card.textColor}`}>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] sm:text-xs font-extrabold uppercase tracking-wider text-slate-700">
                 {card.label}
               </span>
               <div className={`w-8 h-8 rounded-xl ${card.iconBg} flex items-center justify-center shadow-2xs`}>
@@ -171,24 +212,18 @@ const LeadKpiSlider = ({ stats }) => {
               </div>
             </div>
 
-            <div className="text-xl sm:text-2xl font-black text-slate-900 font-mono tracking-tight">
+            <div className={`text-xl sm:text-2xl font-black ${card.textColor} tracking-tight font-mono`}>
               {card.value}
             </div>
           </div>
         ))}
       </div>
 
-      {/* BOTTOM SLIDER OPTION */}
       {canScroll && (
-        <div className="flex items-center justify-center gap-2 pt-0.5">
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={scrollProgress}
-            onChange={handleRangeChange}
-            className="w-48 sm:w-64 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-[#FF5722] hover:accent-[#E64A19] transition-all"
-            title="Slide to scroll cards"
+        <div className="w-full bg-slate-200/70 h-1 rounded-full mt-2 overflow-hidden">
+          <div
+            className="h-full bg-slate-400/80 rounded-full transition-all duration-150"
+            style={{ width: `${Math.max(15, scrollProgress)}%` }}
           />
         </div>
       )}

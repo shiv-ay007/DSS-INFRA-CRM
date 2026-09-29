@@ -18,7 +18,7 @@ const LeadStatusBreakdown = ({ statusBreakdown = statusBreakdownData, totalLeads
   const newOffset = -(hotPct + warmPct + coldPct);
 
   return (
-    <div className="lg:col-span-5 bg-white rounded-xl border border-slate-200/90 shadow-2xs p-3.5 sm:p-4 flex flex-col justify-between">
+    <div className="w-full h-full bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 sm:p-5 flex flex-col justify-between">
       <div>
         <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
           <h2 className="text-sm sm:text-base font-extrabold text-slate-900 tracking-tight">

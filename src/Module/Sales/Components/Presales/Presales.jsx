@@ -298,6 +298,8 @@ const Presales = () => {
   const [filterBusinessType, setFilterBusinessType] = useState("ALL");
   const [filterAssignedTo, setFilterAssignedTo] = useState("ALL");
   const [filterCity, setFilterCity] = useState("ALL");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
 
   // Closure modal state
   const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
@@ -576,6 +578,7 @@ const Presales = () => {
     setFilterBusinessType("ALL");
     setFilterAssignedTo("ALL");
     setFilterCity("ALL");
+    setCurrentPage(1);
   };
 
   // Filtered Table Records
@@ -624,6 +627,22 @@ const Presales = () => {
       return matchSearch && matchPriority && matchJobType && matchBusinessType && matchAssignedTo && matchCity;
     });
   }, [presalesList, searchTerm, filterPriority, filterJobType, filterBusinessType, filterAssignedTo, filterCity]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterPriority, filterJobType, filterBusinessType, filterAssignedTo, filterCity, rowsPerPage]);
+
+  // Pagination calculations
+  const totalItems = filteredPresales.length;
+  const totalPages = Math.ceil(totalItems / rowsPerPage) || 1;
+  const startItem = totalItems > 0 ? (currentPage - 1) * rowsPerPage + 1 : 0;
+  const endItem = Math.min(currentPage * rowsPerPage, totalItems);
+
+  const paginatedPresales = useMemo(() => {
+    const start = (currentPage - 1) * rowsPerPage;
+    return filteredPresales.slice(start, start + rowsPerPage);
+  }, [filteredPresales, currentPage, rowsPerPage]);
 
   // View Pipeline of a specific Presale
   const handleOpenPipelineForClient = (client) => {
@@ -1583,7 +1602,7 @@ const Presales = () => {
                     </td>
                   </tr>
                 ) : (
-                  filteredPresales.map((item, idx) => {
+                  paginatedPresales.map((item, idx) => {
                     const amt = Number(item.expectedBusiness || item.amount || 0);
                     const p = String(item.priority || "High").toUpperCase();
                     const isHigh = p === "HIGH" || p === "HOT";
@@ -1602,7 +1621,7 @@ const Presales = () => {
                       <tr key={item.id || idx} className="hover:bg-slate-50/80 transition-colors">
                         {/* 1. SR NO */}
                         <td className="py-2.5 px-3 text-center font-mono font-bold text-slate-700 border-r border-slate-100">
-                          {idx + 1}
+                          {(currentPage - 1) * rowsPerPage + idx + 1}
                         </td>
 
                         {/* 2. ACTIONS */}
@@ -1811,6 +1830,65 @@ const Presales = () => {
               </tbody>
             </table>
           </div>
+
+          {/* 2. FIXED PAGINATION FOOTER */}
+          {totalItems > 0 && !loading && (
+            <div className="flex flex-col sm:flex-row justify-between items-center gap-3 p-3.5 border-t border-slate-200/90 bg-slate-50/50 text-xs sm:text-sm">
+              <div className="flex flex-wrap items-center gap-3 text-slate-600 font-medium text-center sm:text-left">
+                <span>
+                  Showing <strong className="text-slate-900 font-bold">{startItem}</strong> to{" "}
+                  <strong className="text-slate-900 font-bold">{endItem}</strong> of{" "}
+                  <strong className="text-slate-900 font-bold">{totalItems}</strong> entries
+                </span>
+                <div className="flex items-center gap-1.5 ml-1">
+                  <span className="text-slate-500 font-bold text-xs">Per page:</span>
+                  <div className="relative w-20">
+                    <select
+                      value={rowsPerPage}
+                      onChange={(e) => {
+                        setRowsPerPage(Number(e.target.value));
+                        setCurrentPage(1);
+                      }}
+                      className="w-full appearance-none px-2.5 py-1 rounded-xl border border-slate-200 bg-white text-xs font-bold text-slate-800 focus:outline-hidden focus:border-black cursor-pointer pr-6 shadow-2xs"
+                    >
+                      {[10, 25, 50, 100].map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
+                      <svg className="w-3 h-3" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center justify-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1.5 border border-slate-200 rounded-xl bg-white text-slate-700 font-bold text-xs sm:text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 cursor-pointer shadow-2xs transition-colors"
+                >
+                  Previous
+                </button>
+                <span className="px-3 py-1.5 border border-slate-200 rounded-xl bg-white font-mono font-bold text-xs sm:text-sm text-slate-800 shadow-2xs">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={currentPage >= totalPages}
+                  className="px-3 py-1.5 border border-slate-200 rounded-xl bg-white text-slate-700 font-bold text-xs sm:text-sm disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-100 cursor-pointer shadow-2xs transition-colors"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

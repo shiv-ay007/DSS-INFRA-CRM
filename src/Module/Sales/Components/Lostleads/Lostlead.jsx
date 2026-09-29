@@ -746,6 +746,15 @@ const Lostlead = () => {
     }).length;
   }, [filteredLeads]);
 
+  const budgetLostAmount = useMemo(() => {
+    return filteredLeads
+      .filter((item) => {
+        const reason = String(item.lostReason || item.reason || "").toUpperCase();
+        return reason.includes("PRICE") || reason.includes("BUDGET") || reason.includes("PAISE");
+      })
+      .reduce((sum, item) => sum + (Number(item.expectedBusiness || item.expectedBusinessAmount || item.expectedRevenue) || 0), 0);
+  }, [filteredLeads]);
+
   const formattedLostAmount = useMemo(() => {
     const inLakhs = (totalLostAmount / 100000).toLocaleString("en-IN", {
       minimumFractionDigits: 2,
@@ -753,6 +762,14 @@ const Lostlead = () => {
     });
     return `₹${inLakhs} Lakhs`;
   }, [totalLostAmount]);
+
+  const formattedBudgetLostAmount = useMemo(() => {
+    const inLakhs = (budgetLostAmount / 100000).toLocaleString("en-IN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+    return `₹${inLakhs} Lakhs`;
+  }, [budgetLostAmount]);
 
   const paginatedLeads = useMemo(() => {
     const start = (currentPage - 1) * rowsPerPage;
@@ -794,7 +811,7 @@ const Lostlead = () => {
     },
     {
       id: "budget",
-      label: "Budget / Price Out",
+      label: "Budget Out Leads",
       value: budgetLostCount,
       formattedValue: String(budgetLostCount),
       icon: <FaTags className="w-4 h-4" />,
@@ -802,13 +819,22 @@ const Lostlead = () => {
       cardGradient: "from-purple-50/90 via-fuchsia-50/30 to-white",
       borderColor: "border-purple-200/90",
       textColor: "text-purple-900"
+    },
+    {
+      id: "pricingLoss",
+      label: "Pricing Loss Value",
+      value: budgetLostAmount,
+      formattedValue: formattedBudgetLostAmount,
+      tooltip: `₹${budgetLostAmount.toLocaleString("en-IN")}`,
+      icon: <FaRupeeSign className="w-4 h-4 text-emerald-600" />,
+      iconBg: "bg-emerald-100/90 text-emerald-600",
+      cardGradient: "from-emerald-50/90 via-teal-50/30 to-white",
+      borderColor: "border-emerald-200/90",
+      textColor: "text-emerald-900"
     }
   ];
 
-  const visibleLostCards = lostCardsData.filter((card) => {
-    if (typeof card.value === "number") return card.value > 0;
-    return !isZeroValue(card.formattedValue);
-  });
+  const visibleLostCards = lostCardsData;
 
   return (
     <div className="space-y-4 font-sans pb-16">
@@ -861,7 +887,9 @@ const Lostlead = () => {
             ? "max-w-xs"
             : visibleLostCards.length === 2
             ? "sm:grid-cols-2 max-w-xl"
-            : "sm:grid-cols-2 md:grid-cols-3"
+            : visibleLostCards.length === 3
+            ? "sm:grid-cols-2 md:grid-cols-3"
+            : "sm:grid-cols-2 lg:grid-cols-4"
         } gap-4`}>
           {visibleLostCards.map((card) => (
             <div

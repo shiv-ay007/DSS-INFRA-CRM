@@ -1542,6 +1542,9 @@ const SalseTotalLeads = () => {
   const stats = useMemo(() => {
     const total = leads.length;
     const fresh = leads.filter((l) => (l.leadType || "").toUpperCase() === "FRESH").length;
+    const hot = leads.filter((l) => (l.leadStatus || l.status || "").toLowerCase() === "hot").length;
+    const warm = leads.filter((l) => (l.leadStatus || l.status || "").toLowerCase() === "warm").length;
+    const cold = leads.filter((l) => (l.leadStatus || l.status || "").toLowerCase() === "cold").length;
     const converted = leads.filter((l) => (l.status || "").toUpperCase() === "CONVERTED").length;
     const interested = leads.filter((l) => (l.status || "").toUpperCase().includes("INTERESTED")).length;
     const conversionRate = total > 0 ? `${((converted / total) * 100).toFixed(1)}%` : "0.0%";
@@ -1560,6 +1563,9 @@ const SalseTotalLeads = () => {
     return {
       total: String(total),
       fresh: String(fresh),
+      hot: String(hot),
+      warm: String(warm),
+      cold: String(cold),
       converted: String(converted),
       interested: String(interested),
       conversionRate,

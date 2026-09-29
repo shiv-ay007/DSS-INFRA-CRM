@@ -1187,6 +1187,8 @@ const Lead = () => {
   const stats = useMemo(() => {
     const total = leads.length;
     const fresh = leads.filter((l) => (l.leadType || "").toUpperCase() === "FRESH").length;
+    const readyForSales = leads.filter((l) => isLeadTransferredToSales(l) || (l.leadStatus || l.status || "").toUpperCase().includes("INTERESTED") || l.inSalesManagement === true).length;
+    const inDiscussion = leads.filter((l) => (l.leadStatus || l.status || "").toLowerCase() === "warm" || Boolean(l.nextFollowupDate || l.isFollowupScheduled)).length;
     const converted = leads.filter((l) => (l.status || "").toUpperCase() === "CONVERTED").length;
     const interested = leads.filter((l) => (l.status || "").toUpperCase().includes("INTERESTED")).length;
     const conversionRate = total > 0 ? `${((converted / total) * 100).toFixed(1)}%` : "0.0%";
@@ -1205,6 +1207,8 @@ const Lead = () => {
     return {
       total: String(total),
       fresh: String(fresh),
+      readyForSales: String(readyForSales),
+      inDiscussion: String(inDiscussion),
       converted: String(converted),
       interested: String(interested),
       conversionRate,

@@ -102,7 +102,7 @@ const workerMenuItems = [
         id: "wbs_master", 
         label: "WBS Stages & Tasks", 
         path: "/sales/master/pms-template/wbs-master", 
-        badge: "23 Stages",
+        badge: "25 Stages",
         icon: <FaLayerGroup className="w-3.5 h-3.5 text-indigo-400" />,
         badgeStyle: "bg-indigo-500/20 text-indigo-300 border-indigo-500/30"
       },
@@ -210,7 +210,7 @@ const observerMenuItems = [
         id: "wbs_master", 
         label: "WBS Stages & Tasks", 
         path: "/sales/master/pms-template/wbs-master", 
-        badge: "23 Stages",
+        badge: "25 Stages",
         icon: <FaLayerGroup className="w-3.5 h-3.5 text-indigo-400" />,
         badgeStyle: "bg-indigo-500/20 text-indigo-300 border-indigo-500/30"
       },
