@@ -163,14 +163,19 @@ const ActiveProjectsListComponent = () => {
     setCurrentPage(1);
   }, [searchQuery, selectedClient, selectedCategory, selectedWorkType]);
 
+  // Active finalized projects only (Tareeqa 2: Only show projects whose PMS template is finalized, not draft)
+  const activeFinalizedProjects = useMemo(() => {
+    return projects.filter((p) => isPmsMasterdataCreated(p, pmsTemplates));
+  }, [projects, pmsTemplates]);
+
   // KPI Metrics
   const metrics = useMemo(() => {
-    const total = projects.length;
+    const total = activeFinalizedProjects.length;
     const uniqueClients = new Set(
-      projects.map((p) => p.clientName).filter((c) => c && c !== "—" && c !== "Unnamed Client")
+      activeFinalizedProjects.map((p) => p.clientName).filter((c) => c && c !== "—" && c !== "Unnamed Client")
     ).size;
-    const totalStages = projects.reduce((acc, p) => acc + (p.stages?.length || 0), 0);
-    const totalTasks = projects.reduce(
+    const totalStages = activeFinalizedProjects.reduce((acc, p) => acc + (p.stages?.length || 0), 0);
+    const totalTasks = activeFinalizedProjects.reduce(
       (acc, p) =>
         acc +
         (p.stages || []).reduce(
@@ -180,19 +185,19 @@ const ActiveProjectsListComponent = () => {
       0
     );
     return { total, uniqueClients, totalStages, totalTasks };
-  }, [projects]);
+  }, [activeFinalizedProjects]);
 
   // Filter option lists
   const clientOptions = useMemo(() => {
     const set = new Set(
-      projects.map((p) => p.clientName).filter((c) => c && c !== "—" && c !== "Unnamed Client")
+      activeFinalizedProjects.map((p) => p.clientName).filter((c) => c && c !== "—" && c !== "Unnamed Client")
     );
     return ["All", ...Array.from(set).sort()];
-  }, [projects]);
+  }, [activeFinalizedProjects]);
 
   const categoryOptions = useMemo(() => {
     const set = new Set(
-      projects.flatMap((p) => {
+      activeFinalizedProjects.flatMap((p) => {
         const cat = p.workCategory || p.category || p.engagementScope;
         if (Array.isArray(cat)) return cat.filter(Boolean);
         if (typeof cat === "string") return cat.split(",").map((s) => s.trim()).filter(Boolean);
@@ -200,12 +205,12 @@ const ActiveProjectsListComponent = () => {
       })
     );
     return ["All", ...Array.from(set).sort()];
-  }, [projects]);
+  }, [activeFinalizedProjects]);
 
   const workTypeOptions = useMemo(() => {
-    const set = new Set(projects.map((p) => p.workType || p.projectType).filter(Boolean));
+    const set = new Set(activeFinalizedProjects.map((p) => p.workType || p.projectType).filter(Boolean));
     return ["All", ...Array.from(set).sort()];
-  }, [projects]);
+  }, [activeFinalizedProjects]);
 
   // Active filters count
   const activeFiltersCount = useMemo(() => {
@@ -229,7 +234,7 @@ const ActiveProjectsListComponent = () => {
 
   // Filtered + Sorted Projects
   const filteredProjects = useMemo(() => {
-    return projects
+    return activeFinalizedProjects
       .filter((p) => {
         if (selectedClient !== "All" && p.clientName !== selectedClient) return false;
         if (selectedCategory !== "All") {
@@ -258,7 +263,7 @@ const ActiveProjectsListComponent = () => {
         const timeB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
         return timeB - timeA;
       });
-  }, [projects, selectedClient, selectedCategory, selectedWorkType, searchQuery]);
+  }, [activeFinalizedProjects, selectedClient, selectedCategory, selectedWorkType, searchQuery]);
 
   // Paginated
   const paginatedProjects = useMemo(() => {

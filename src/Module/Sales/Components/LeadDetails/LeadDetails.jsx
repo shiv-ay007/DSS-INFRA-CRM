@@ -105,10 +105,14 @@ const LeadDetails = () => {
             createdDate: formattedDate,
             date: formattedDate,
             address: backendLead.address || "--",
-            projectDetail: backendLead.projectDetail || backendLead.remark || "",
-            remarks: backendLead.remarks || backendLead.remark || backendLead.lossRemark || "",
-            remark: backendLead.remarks || backendLead.remark || backendLead.lossRemark || "",
-            lossRemark: backendLead.lossRemark || backendLead.remarks || backendLead.remark || "",
+            projectDetail: backendLead.projectDetail || backendLead.projectDetails || "",
+            projectDetails: backendLead.projectDetail || backendLead.projectDetails || "",
+            projectDetailFiles: backendLead.projectDetailFiles || [],
+            projectDetailAttachments: backendLead.projectDetailFiles || [],
+            remarks: backendLead.remarks || backendLead.remark || "",
+            remark: backendLead.remarks || backendLead.remark || "",
+            requirement: backendLead.projectDetail || backendLead.requirement || "",
+            lossRemark: backendLead.lossRemark || "",
             reason: backendLead.lossReason || backendLead.lostReason || backendLead.reason || "",
             lostReason: backendLead.lossReason || backendLead.lostReason || backendLead.reason || "",
             lossReason: backendLead.lossReason || backendLead.lostReason || backendLead.reason || "",
@@ -218,14 +222,14 @@ const LeadDetails = () => {
         {/* 2. GRID LAYOUT */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* LEFT COLUMN (8 COLS): CLIENT INFO, REQUIREMENTS, & TIMELINE */}
-          <div className="lg:col-span-8 space-y-6">
+          <div className="lg:col-span-8 space-y-6 min-w-0 w-full">
             <ClientInfoCard lead={lead} />
             <RequirementAddressCard lead={lead} />
             <FollowupTimelineCard lead={lead} onAddRemark={handleAddRemark} />
           </div>
 
           {/* RIGHT COLUMN (4 COLS): LEAD OVERVIEW METADATA */}
-          <div className="lg:col-span-4 space-y-6 sticky top-6">
+          <div className="lg:col-span-4 space-y-6 sticky top-6 min-w-0 w-full">
             <LeadOverviewCard lead={lead} />
           </div>
         </div>

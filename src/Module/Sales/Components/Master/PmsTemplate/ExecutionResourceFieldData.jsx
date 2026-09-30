@@ -144,6 +144,15 @@ const ExecutionResourceFieldData = ({
       gridBorder: "border-2 border-emerald-200",
       gridBg: "bg-white",
       reactSelectTheme: "emerald"
+    },
+    subtask: {
+      dotColor: "bg-cyan-600",
+      badgeBg: "bg-cyan-600 text-white font-black",
+      titleColor: "text-cyan-950 font-black",
+      headerBg: "bg-cyan-100/95 border-2 border-cyan-300",
+      gridBorder: "border-2 border-cyan-200",
+      gridBg: "bg-white",
+      reactSelectTheme: "cyan"
     }
   }[level] || {
     dotColor: "bg-indigo-600",
@@ -766,7 +775,7 @@ const ExecutionResourceFieldData = ({
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-indigo-700 bg-white hover:bg-indigo-50 border border-indigo-200 hover:border-indigo-300 rounded-lg transition-colors cursor-pointer"
             >
               <FaPlus className="w-3 h-3 text-indigo-600" />
-              <span>Add Material / Supplier</span>
+              <span>Add Material</span>
             </button>
           </div>
         </div>

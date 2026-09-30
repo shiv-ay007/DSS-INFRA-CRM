@@ -113,10 +113,12 @@ const CreateActiveProjectComponent = () => {
     loadAuxData();
   }, []);
 
-  // Map of PMS Templates by ID, clientName, projectName
+  // Map of PMS Templates by ID, clientName, projectName (excludes Draft templates)
   const pmsTemplateMap = useMemo(() => {
     const map = new Map();
     (pmsTemplates || []).forEach((t) => {
+      const isDraft = t?.isDraft === true || t?.status === "Draft" || String(t?.status || "").toLowerCase() === "draft";
+      if (isDraft) return;
       const pId = t.projectId?._id || t.projectId;
       if (pId) map.set(String(pId), t);
       const lId = t.leadId?._id || t.leadId;

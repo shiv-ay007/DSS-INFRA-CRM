@@ -16,6 +16,9 @@ export const pmsWbsService = {
   getTasksPaginated: async (params = {}) => {
     return await api.get("/pms-wbs/tasks", { params });
   },
+  getSubtasksPaginated: async (params = {}) => {
+    return await api.get("/pms-wbs/subtasks", { params });
+  },
 
   // 2. Seed / Restore Default Master Data
   seedWbsData: async (overwrite = false) => {
@@ -53,6 +56,17 @@ export const pmsWbsService = {
   },
   deleteTask: async (id) => {
     return await api.delete(`/pms-wbs/tasks/${id}`);
+  },
+
+  // 5.1 Subtask Endpoints
+  createSubtask: async (payload) => {
+    return await api.post("/pms-wbs/subtasks", payload);
+  },
+  updateSubtask: async (id, payload) => {
+    return await api.put(`/pms-wbs/subtasks/${id}`, payload);
+  },
+  deleteSubtask: async (id) => {
+    return await api.delete(`/pms-wbs/subtasks/${id}`);
   },
 
   // 6. Project Status Endpoints

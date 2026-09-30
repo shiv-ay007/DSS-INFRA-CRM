@@ -18,7 +18,8 @@ import {
   FaCalendarAlt,
   FaTimes,
   FaTasks,
-  FaFileAlt
+  FaFileAlt,
+  FaClipboardList
 } from "react-icons/fa";
 import { HiOutlineTemplate } from "react-icons/hi";
 import { HiSparkles } from "react-icons/hi2";
@@ -95,11 +96,12 @@ const PmsTemplateComponent = () => {
     setLoading(true);
     try {
       // 1. Fetch live templates and WBS masters concurrently
-      const [templatesRes, stagesRes, worksRes, tasksRes] = await Promise.allSettled([
+      const [templatesRes, stagesRes, worksRes, tasksRes, subtasksRes] = await Promise.allSettled([
         pmsTemplateService.getAllTemplates(),
         pmsWbsService.getStagesPaginated({ limit: 1000 }),
         pmsWbsService.getWorksPaginated({ limit: 1000 }),
-        pmsWbsService.getTasksPaginated({ limit: 1000 })
+        pmsWbsService.getTasksPaginated({ limit: 1000 }),
+        pmsWbsService.getSubtasksPaginated({ limit: 1000 })
       ]);
 
       let liveTemplates = [];
@@ -112,6 +114,7 @@ const PmsTemplateComponent = () => {
       const stageList = stagesRes.status === "fulfilled" ? (stagesRes.value?.data?.data || stagesRes.value?.data || []) : [];
       const workList = worksRes.status === "fulfilled" ? (worksRes.value?.data?.data || worksRes.value?.data || []) : [];
       const taskList = tasksRes.status === "fulfilled" ? (tasksRes.value?.data?.data || tasksRes.value?.data || []) : [];
+      const subtaskList = subtasksRes.status === "fulfilled" ? (subtasksRes.value?.data?.data || subtasksRes.value?.data || []) : [];
 
       const stageMap = new Map();
       stageList.forEach((s) => {
@@ -129,6 +132,14 @@ const PmsTemplateComponent = () => {
       taskList.forEach((t) => {
         if (t._id) taskMap.set(String(t._id), t);
         if (t.task_code) taskMap.set(String(t.task_code), t);
+      });
+
+      const subtaskMap = new Map();
+      subtaskList.forEach((st) => {
+        if (st._id) subtaskMap.set(String(st._id), st);
+        if (st.id) subtaskMap.set(String(st.id), st);
+        if (st.subtask_code) subtaskMap.set(String(st.subtask_code), st);
+        if (st.code) subtaskMap.set(String(st.code), st);
       });
 
       // Also read local storage saved tasks
@@ -188,11 +199,29 @@ const PmsTemplateComponent = () => {
               const tCode = tRef.task_code || (typeof tsk === "object" ? tsk.taskId?.task_code || tsk.task_code : null) || (typeof tRawId === "string" ? tRawId : `Task ${tIdx + 1}`);
               const tName = tRef.task_name || (typeof tsk === "object" ? tsk.taskId?.task_name || tsk.task_name : null) || tCode;
 
+              const resolvedSubtasks = (tsk.subtasks || []).map((st, stIdx) => {
+                const stRawId = typeof st === "object" ? st.subtaskId?._id || st.subtaskId : st;
+                const stRef = typeof st === "object" && st.subtaskId?.subtask_name
+                  ? st.subtaskId
+                  : subtaskMap.get(String(stRawId)) || {};
+
+                const stCode = stRef.subtask_code || (typeof st === "object" ? st.subtaskId?.subtask_code || st.subtask_code : null) || (typeof stRawId === "string" ? stRawId : `Subtask ${stIdx + 1}`);
+                const stName = stRef.subtask_name || (typeof st === "object" ? st.subtaskId?.subtask_name || st.subtask_name || st.subtaskName : null) || stCode;
+
+                return {
+                  subtaskId: stCode,
+                  subtask_code: stCode,
+                  subtask_name: stName,
+                  fieldData: typeof st === "object" ? st.fieldData : {}
+                };
+              });
+
               return {
                 taskId: tCode,
                 task_code: tCode,
                 task_name: tName,
-                fieldData: typeof tsk === "object" ? tsk.fieldData : {}
+                fieldData: typeof tsk === "object" ? tsk.fieldData : {},
+                subtasks: resolvedSubtasks
               };
             });
 
@@ -217,6 +246,17 @@ const PmsTemplateComponent = () => {
         const worksCount = resolvedStages.reduce((acc, s) => acc + (s.works?.length || 0), 0);
         const tasksCount = resolvedStages.reduce(
           (acc, s) => acc + (s.works?.reduce((wAcc, w) => wAcc + (w.tasks?.length || 0), 0) || 0),
+          0
+        );
+        const subtasksCount = resolvedStages.reduce(
+          (acc, s) =>
+            acc +
+            (s.works?.reduce(
+              (wAcc, w) =>
+                wAcc +
+                (w.tasks?.reduce((tAcc, t) => tAcc + (t.subtasks?.length || 0), 0) || 0),
+              0
+            ) || 0),
           0
         );
 
@@ -326,6 +366,7 @@ const PmsTemplateComponent = () => {
           stagesCount: resolvedStages.length || item.milestones || 1,
           worksCount: worksCount || 0,
           tasksCount: tasksCount || item.tasksCount || 0,
+          subtasksCount: subtasksCount || 0,
           duration: durationDisplay,
           createdDateFormatted,
           workWillDoneBy: firstFieldData.workWillDoneBy || item.workWillDoneBy || "Civil Contractor",
@@ -353,8 +394,9 @@ const PmsTemplateComponent = () => {
   // KPI Calculations strictly matching Table Columns:
   // 1. Total Templates (Project Templates)
   // 2. Clients Mapped (matching Column: CLIENT DETAILS)
-  // 3. Total WBS Stages (matching Column: STAGES / WORKS / TASKS)
-  // 4. Total Deliverable Tasks (matching Column: STAGES / WORKS / TASKS)
+  // 3. Total WBS Stages (matching Column: STAGES / WORKS / TASKS / SUBTASKS)
+  // 4. Total Deliverable Tasks (matching Column: STAGES / WORKS / TASKS / SUBTASKS)
+  // 5. Total Subtasks (matching Column: STAGES / WORKS / TASKS / SUBTASKS)
   const stats = useMemo(() => {
     const total = templates.length;
     const uniqueClients = new Set(
@@ -364,7 +406,8 @@ const PmsTemplateComponent = () => {
     ).size;
     const totalStages = templates.reduce((acc, t) => acc + (Number(t.stagesCount) || 0), 0);
     const totalTasks = templates.reduce((acc, t) => acc + (Number(t.tasksCount) || 0), 0);
-    return { total, uniqueClients, totalStages, totalTasks };
+    const totalSubtasks = templates.reduce((acc, t) => acc + (Number(t.subtasksCount) || 0), 0);
+    return { total, uniqueClients, totalStages, totalTasks, totalSubtasks };
   }, [templates]);
 
   // Dynamic filter options based on templates
@@ -602,11 +645,11 @@ const PmsTemplateComponent = () => {
       )
     },
 
-    // 4. Stages, Works, Tasks Counts (kitne stage hai kitne work hai kitne task hai ye show hoga bs aur kuch na)
+    // 4. Stages, Works, Tasks, Subtasks Counts
     stagesWorksTasks: {
-      label: "Stages / Works / Tasks",
+      label: "Stages / Works / Tasks / Subtasks",
       align: "center",
-      headerClass: "min-w-[220px]",
+      headerClass: "min-w-[280px]",
       render: (_, row) => (
         <div className="py-1 flex flex-wrap items-center justify-center gap-1.5">
           <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 whitespace-nowrap">
@@ -617,6 +660,9 @@ const PmsTemplateComponent = () => {
           </span>
           <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
             {row.tasksCount} {row.tasksCount === 1 ? "Task" : "Tasks"}
+          </span>
+          <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-cyan-50 text-cyan-700 border border-cyan-200 whitespace-nowrap">
+            {row.subtasksCount || 0} {(row.subtasksCount || 0) === 1 ? "Subtask" : "Subtasks"}
           </span>
         </div>
       )
@@ -727,7 +773,7 @@ const PmsTemplateComponent = () => {
       </div>
 
       {/* ================= COMPACT KPI CARDS (MATCHING TABLE COLUMNS) ================= */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
         <KpiCard
           gradient="bg-gradient-to-br from-blue-600 to-indigo-700"
           label="Total Templates"
@@ -759,6 +805,14 @@ const PmsTemplateComponent = () => {
           subtitle="Deliverable tasks defined"
           icon={<FaTasks className="w-5 h-5 text-white" />}
           IconBg={<FaTasks className="w-20 h-20" />}
+        />
+        <KpiCard
+          gradient="bg-gradient-to-br from-cyan-600 to-teal-700"
+          label="Total Subtasks"
+          value={stats.totalSubtasks}
+          subtitle="Granular subtasks defined"
+          icon={<FaClipboardList className="w-5 h-5 text-white" />}
+          IconBg={<FaClipboardList className="w-20 h-20" />}
         />
       </div>
 

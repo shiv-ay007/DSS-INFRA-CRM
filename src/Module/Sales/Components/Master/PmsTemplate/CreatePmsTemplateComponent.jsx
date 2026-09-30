@@ -253,6 +253,8 @@ export const CreatePmsTemplateComponent = () => {
     return [];
   });
 
+  const [wbsSubtasks, setWbsSubtasks] = useState([]);
+
   const [wbsLoading, setWbsLoading] = useState(false);
   const [projectStatusList, setProjectStatusList] = useState(PROJECT_STATUS_LIST);
 
@@ -284,7 +286,7 @@ export const CreatePmsTemplateComponent = () => {
 
   const [errors, setErrors] = useState({});
 
-  // Stage -> Work -> Task hierarchy state with per-stage execution details.
+  // Stage -> Work -> Task -> Subtask hierarchy state with per-stage execution details.
   const [wbsStructure, setWbsStructure] = useState({
     stages: []
   });
@@ -292,10 +294,11 @@ export const CreatePmsTemplateComponent = () => {
   // Accordion expanded state for each Stage card
   const [expandedStages, setExpandedStages] = useState({});
 
-  // 3-Level Stepper Active Tab state (Image 1 Chart UI)
+  // 4-Level Stepper Active Tab state (Stage -> Work -> Task -> Subtask)
   const [activeStageId, setActiveStageId] = useState(null);
   const [activeWorkId, setActiveWorkId] = useState(null);
   const [activeTaskId, setActiveTaskId] = useState(null);
+  const [activeSubtaskId, setActiveSubtaskId] = useState(null);
 
   // Active Dropdown state tracking: { type: 'contractor'|'material'|'supplier', stageId: 'S1' }
   const [activeDropdown, setActiveDropdown] = useState(null);
@@ -495,19 +498,21 @@ export const CreatePmsTemplateComponent = () => {
         console.log("Using seed contractors fallback");
       }
 
-      // 4. WBS 3 Dedicated Backend APIs: Stages, Works, Tasks (Limit: 1000)
+      // 4. WBS Dedicated Backend APIs: Stages, Works, Tasks, Subtasks (Limit: 1000)
       try {
         setWbsLoading(true);
-        const [stagesRes, worksRes, tasksRes, statusesRes] = await Promise.all([
+        const [stagesRes, worksRes, tasksRes, subtasksRes, statusesRes] = await Promise.all([
           pmsWbsService.getStagesPaginated({ limit: 1000 }),
           pmsWbsService.getWorksPaginated({ limit: 1000 }),
           pmsWbsService.getTasksPaginated({ limit: 1000 }),
+          pmsWbsService.getSubtasksPaginated({ limit: 1000 }).catch(() => null),
           pmsWbsService.getAllProjectStatuses().catch(() => null)
         ]);
 
         const stagesData = stagesRes?.data || stagesRes?.data?.data || (Array.isArray(stagesRes) ? stagesRes : []);
         const worksData = worksRes?.data || worksRes?.data?.data || (Array.isArray(worksRes) ? worksRes : []);
         const tasksData = tasksRes?.data || tasksRes?.data?.data || (Array.isArray(tasksRes) ? tasksRes : []);
+        const subtasksData = subtasksRes?.data || subtasksRes?.data?.data || (Array.isArray(subtasksRes) ? subtasksRes : []);
         const statusesData = statusesRes?.data?.data || statusesRes?.data || [];
 
         if (Array.isArray(statusesData) && statusesData.length > 0) {
@@ -525,6 +530,9 @@ export const CreatePmsTemplateComponent = () => {
         if (Array.isArray(tasksData) && tasksData.length > 0) {
           setWbsTasks(tasksData);
           localStorage.setItem(PMS_MASTER_TASKS_KEY, JSON.stringify(tasksData));
+        }
+        if (Array.isArray(subtasksData) && subtasksData.length > 0) {
+          setWbsSubtasks(subtasksData);
         }
 
         // 4. Fetch existing PMS templates to detect already configured projects
@@ -667,8 +675,20 @@ export const CreatePmsTemplateComponent = () => {
                         return {
                           taskId: tsk.taskId?.task_code || tsk.task_code || tsk.taskId,
                           taskObjId: tsk.taskId?._id || tsk.taskId,
+                          taskName: tsk.taskId?.task_name || tsk.task_name || "",
                           ...tfData,
-                          materials: tskMaterials.length > 0 ? tskMaterials : tfData.materials || []
+                          materials: tskMaterials.length > 0 ? tskMaterials : tfData.materials || [],
+                          subtasks: (tsk.subtasks || []).map((stsk) => {
+                            const stfData = stsk.fieldData || {};
+                            const stskMaterials = mapMaterialSupplierToMaterials(stfData);
+                            return {
+                              subtaskId: stsk.subtaskId?.subtask_code || stsk.subtask_code || stsk.subtaskId,
+                              subtaskObjId: stsk.subtaskId?._id || stsk.subtaskId,
+                              subtaskName: stsk.subtaskId?.subtask_name || stsk.subtask_name || "",
+                              ...stfData,
+                              materials: stskMaterials.length > 0 ? stskMaterials : stfData.materials || []
+                            };
+                          })
                         };
                       })
                     };
@@ -902,6 +922,18 @@ export const CreatePmsTemplateComponent = () => {
     return [...matching, ...others];
   };
 
+  // 4. Dynamic Subtasks for a specific Task
+  const getSubtasksForTask = (taskCode) => {
+    return (wbsSubtasks || []).map((st) => {
+      const code = st.subtask_code || st.code || st.id || "";
+      const name = st.subtask_name || st.name || "";
+      return {
+        value: code,
+        label: name ? `${code} - ${name}` : code
+      };
+    });
+  };
+
   // Toggle stage accordion
   const toggleStageExpanded = (stageId) => {
     setExpandedStages((prev) => ({
@@ -937,6 +969,7 @@ export const CreatePmsTemplateComponent = () => {
               taskId: mt.task_code || mt.code || mt.id,
               taskObjId: mt._id || mt.id || null,
               taskName: mt.task_name || mt.name || "",
+              subtasks: [],
               ...DEFAULT_STAGE_DETAILS
             })),
             ...DEFAULT_STAGE_DETAILS
@@ -1014,6 +1047,7 @@ export const CreatePmsTemplateComponent = () => {
               taskId: tId,
               taskObjId: foundTask?._id || foundTask?.id || null,
               taskName: foundTask?.task_name || foundTask?.name || "",
+              subtasks: [],
               ...DEFAULT_STAGE_DETAILS
             };
           });
@@ -1028,13 +1062,55 @@ export const CreatePmsTemplateComponent = () => {
     }
   };
 
-  // Auto-synchronize activeStageId, activeWorkId, and activeTaskId with current hierarchy
+  // Level 4: Subtasks multi-select change handler for a specific Task under a Work
+  const handleSubtasksChange = (stageId, workId, taskId, newSubtaskIds) => {
+    setWbsStructure((prev) => {
+      const nextStages = (prev.stages || []).map((stg) => {
+        if (stg.stageId !== stageId) return stg;
+        const nextWorks = (stg.works || []).map((w) => {
+          if (w.workId !== workId) return w;
+          const nextTasks = (w.tasks || []).map((t) => {
+            const curTId = typeof t === "object" ? t.taskId : t;
+            if (curTId !== taskId) return t;
+            const baseTask = typeof t === "object" ? t : { taskId: t, ...DEFAULT_STAGE_DETAILS };
+            const currentSubtasksMap = new Map(
+              (baseTask.subtasks || []).map((st) => [typeof st === "object" ? st.subtaskId : st, st])
+            );
+            const nextSubtasks = newSubtaskIds.map((stId) => {
+              if (currentSubtasksMap.has(stId)) {
+                return currentSubtasksMap.get(stId);
+              }
+              const foundSubtask = (wbsSubtasks || []).find(
+                (st) => (st.subtask_code || st.code || st.id) === stId
+              );
+              return {
+                subtaskId: stId,
+                subtaskObjId: foundSubtask?._id || foundSubtask?.id || null,
+                subtaskName: foundSubtask?.subtask_name || foundSubtask?.name || "",
+                ...DEFAULT_STAGE_DETAILS
+              };
+            });
+            return { ...baseTask, subtasks: nextSubtasks };
+          });
+          return { ...w, tasks: nextTasks };
+        });
+        return { ...stg, works: nextWorks };
+      });
+      return { stages: nextStages };
+    });
+    if (newSubtaskIds.length > 0 && (!activeSubtaskId || !newSubtaskIds.includes(activeSubtaskId))) {
+      setActiveSubtaskId(newSubtaskIds[0]);
+    }
+  };
+
+  // Auto-synchronize activeStageId, activeWorkId, activeTaskId and activeSubtaskId with current hierarchy
   useEffect(() => {
     const stages = wbsStructure.stages || [];
     if (stages.length === 0) {
       if (activeStageId !== null) setActiveStageId(null);
       if (activeWorkId !== null) setActiveWorkId(null);
       if (activeTaskId !== null) setActiveTaskId(null);
+      if (activeSubtaskId !== null) setActiveSubtaskId(null);
       return;
     }
 
@@ -1049,6 +1125,7 @@ export const CreatePmsTemplateComponent = () => {
     if (works.length === 0) {
       if (activeWorkId !== null) setActiveWorkId(null);
       if (activeTaskId !== null) setActiveTaskId(null);
+      if (activeSubtaskId !== null) setActiveSubtaskId(null);
       return;
     }
 
@@ -1062,6 +1139,7 @@ export const CreatePmsTemplateComponent = () => {
     const tasks = currentWork?.tasks || [];
     if (tasks.length === 0) {
       if (activeTaskId !== null) setActiveTaskId(null);
+      if (activeSubtaskId !== null) setActiveSubtaskId(null);
       return;
     }
 
@@ -1071,7 +1149,21 @@ export const CreatePmsTemplateComponent = () => {
     if (effectiveTaskId !== activeTaskId) {
       setActiveTaskId(effectiveTaskId);
     }
-  }, [wbsStructure, activeStageId, activeWorkId, activeTaskId]);
+
+    const currentTask = tasks.find((t) => getTId(t) === effectiveTaskId);
+    const subtasks = currentTask?.subtasks || [];
+    if (subtasks.length === 0) {
+      if (activeSubtaskId !== null) setActiveSubtaskId(null);
+      return;
+    }
+
+    const getStId = (st) => (typeof st === "object" ? st.subtaskId : st);
+    const currentSubtaskExists = subtasks.some((st) => getStId(st) === activeSubtaskId);
+    const effectiveSubtaskId = currentSubtaskExists ? activeSubtaskId : getStId(subtasks[0]);
+    if (effectiveSubtaskId !== activeSubtaskId) {
+      setActiveSubtaskId(effectiveSubtaskId);
+    }
+  }, [wbsStructure, activeStageId, activeWorkId, activeTaskId, activeSubtaskId]);
 
   const removeStage = (stageId) => {
     setWbsStructure((prev) => ({
@@ -1096,6 +1188,7 @@ export const CreatePmsTemplateComponent = () => {
     setActiveStageId(null);
     setActiveWorkId(null);
     setActiveTaskId(null);
+    setActiveSubtaskId(null);
   };
 
   // Update field value for a specific Work
@@ -1130,6 +1223,38 @@ export const CreatePmsTemplateComponent = () => {
                 if (curId !== taskId) return t;
                 const baseObj = typeof t === "object" ? t : { taskId: t, ...DEFAULT_STAGE_DETAILS };
                 return { ...baseObj, [field]: value };
+              })
+            };
+          })
+        };
+      })
+    }));
+  };
+
+  // Update field value for a specific Subtask
+  const updateSubtaskField = (stageId, workId, taskId, subtaskId, field, value) => {
+    setWbsStructure((prev) => ({
+      stages: (prev.stages || []).map((s) => {
+        if (s.stageId !== stageId) return s;
+        return {
+          ...s,
+          works: (s.works || []).map((w) => {
+            if (w.workId !== workId) return w;
+            return {
+              ...w,
+              tasks: (w.tasks || []).map((t) => {
+                const curTId = typeof t === "object" ? t.taskId : t;
+                if (curTId !== taskId) return t;
+                const baseTask = typeof t === "object" ? t : { taskId: t, subtasks: [] };
+                return {
+                  ...baseTask,
+                  subtasks: (baseTask.subtasks || []).map((st) => {
+                    const curStId = typeof st === "object" ? st.subtaskId : st;
+                    if (curStId !== subtaskId) return st;
+                    const baseSubtask = typeof st === "object" ? st : { subtaskId: st, ...DEFAULT_STAGE_DETAILS };
+                    return { ...baseSubtask, [field]: value };
+                  })
+                };
               })
             };
           })
@@ -1228,6 +1353,65 @@ export const CreatePmsTemplateComponent = () => {
     toast.info(`Copied details from Work ${workId} to Task ${taskId}`);
   };
 
+  // Copy execution details from parent Task down to Subtask
+  const copyTaskToSubtask = (stageId, workId, taskId, subtaskId) => {
+    const targetStage = (wbsStructure.stages || []).find((s) => s.stageId === stageId);
+    const targetWork = targetStage?.works?.find((w) => w.workId === workId);
+    const targetTask = targetWork?.tasks?.find((t) => (typeof t === "object" ? t.taskId : t) === taskId);
+    if (!targetTask) return;
+
+    setWbsStructure((prev) => ({
+      stages: (prev.stages || []).map((s) => {
+        if (s.stageId !== stageId) return s;
+        return {
+          ...s,
+          works: (s.works || []).map((w) => {
+            if (w.workId !== workId) return w;
+            return {
+              ...w,
+              tasks: (w.tasks || []).map((t) => {
+                const curTId = typeof t === "object" ? t.taskId : t;
+                if (curTId !== taskId) return t;
+                const baseTask = typeof t === "object" ? t : { taskId: t, subtasks: [] };
+                return {
+                  ...baseTask,
+                  subtasks: (baseTask.subtasks || []).map((st) => {
+                    const curStId = typeof st === "object" ? st.subtaskId : st;
+                    if (curStId !== subtaskId) return st;
+                    const baseSubtask = typeof st === "object" ? st : { subtaskId: st };
+                    return {
+                      ...baseSubtask,
+                      workWillDoneBy: targetTask.workWillDoneBy || baseSubtask.workWillDoneBy,
+                      contractorType: targetTask.contractorType || baseSubtask.contractorType,
+                      toolsVehicles: Array.isArray(targetTask.toolsVehicles)
+                        ? [...targetTask.toolsVehicles]
+                        : baseSubtask.toolsVehicles,
+                      materialRequired: targetTask.materialRequired || baseSubtask.materialRequired,
+                      materialDetails: targetTask.materialDetails || baseSubtask.materialDetails,
+                      supplierType: targetTask.supplierType || baseSubtask.supplierType,
+                      supplierName: targetTask.supplierName || baseSubtask.supplierName,
+                      materials: Array.isArray(targetTask.materials)
+                        ? JSON.parse(JSON.stringify(targetTask.materials))
+                        : (baseSubtask.materials || []),
+                      maxTimeToComplete: targetTask.maxTimeToComplete || baseSubtask.maxTimeToComplete,
+                      timeUnit: targetTask.timeUnit || baseSubtask.timeUnit,
+                      deadlineDate: targetTask.deadlineDate || baseSubtask.deadlineDate,
+                      durationDays: targetTask.durationDays || baseSubtask.durationDays,
+                      durationHours: targetTask.durationHours || baseSubtask.durationHours,
+                      instruction: targetTask.instruction || baseSubtask.instruction,
+                      remark: targetTask.remark || baseSubtask.remark
+                    };
+                  })
+                };
+              })
+            };
+          })
+        };
+      })
+    }));
+    toast.info(`Copied details from Task ${taskId} to Subtask ${subtaskId}`);
+  };
+
   // Bulk apply execution details from Stage down to ALL its works
   const applyStageToAllWorks = (stageId) => {
     const targetStage = (wbsStructure.stages || []).find((s) => s.stageId === stageId);
@@ -1324,6 +1508,68 @@ export const CreatePmsTemplateComponent = () => {
     toast.success(`Applied Work ${workId} details to all ${tasksCount} tasks!`);
   };
 
+  // Bulk apply execution details from Task down to ALL its subtasks
+  const applyTaskToAllSubtasks = (stageId, workId, taskId) => {
+    const targetStage = (wbsStructure.stages || []).find((s) => s.stageId === stageId);
+    const targetWork = targetStage?.works?.find((w) => w.workId === workId);
+    const targetTask = targetWork?.tasks?.find((t) => (typeof t === "object" ? t.taskId : t) === taskId);
+    if (!targetTask) return;
+    const subtasksCount = targetTask.subtasks?.length || 0;
+    if (subtasksCount === 0) {
+      toast.warning(`No subtasks selected under Task ${taskId} yet.`);
+      return;
+    }
+
+    setWbsStructure((prev) => ({
+      stages: (prev.stages || []).map((s) => {
+        if (s.stageId !== stageId) return s;
+        return {
+          ...s,
+          works: (s.works || []).map((w) => {
+            if (w.workId !== workId) return w;
+            return {
+              ...w,
+              tasks: (w.tasks || []).map((t) => {
+                const curTId = typeof t === "object" ? t.taskId : t;
+                if (curTId !== taskId) return t;
+                const baseTask = typeof t === "object" ? t : { taskId: t, subtasks: [] };
+                return {
+                  ...baseTask,
+                  subtasks: (baseTask.subtasks || []).map((st) => {
+                    const baseSubtask = typeof st === "object" ? st : { subtaskId: st };
+                    return {
+                      ...baseSubtask,
+                      workWillDoneBy: targetTask.workWillDoneBy || baseSubtask.workWillDoneBy,
+                      contractorType: targetTask.contractorType || baseSubtask.contractorType,
+                      toolsVehicles: Array.isArray(targetTask.toolsVehicles)
+                        ? [...targetTask.toolsVehicles]
+                        : baseSubtask.toolsVehicles,
+                      materialRequired: targetTask.materialRequired || baseSubtask.materialRequired,
+                      materialDetails: targetTask.materialDetails || baseSubtask.materialDetails,
+                      supplierType: targetTask.supplierType || baseSubtask.supplierType,
+                      supplierName: targetTask.supplierName || baseSubtask.supplierName,
+                      materials: Array.isArray(targetTask.materials)
+                        ? JSON.parse(JSON.stringify(targetTask.materials))
+                        : (baseSubtask.materials || []),
+                      maxTimeToComplete: targetTask.maxTimeToComplete || baseSubtask.maxTimeToComplete,
+                      timeUnit: targetTask.timeUnit || baseSubtask.timeUnit,
+                      deadlineDate: targetTask.deadlineDate || baseSubtask.deadlineDate,
+                      durationDays: targetTask.durationDays || baseSubtask.durationDays,
+                      durationHours: targetTask.durationHours || baseSubtask.durationHours,
+                      instruction: targetTask.instruction || baseSubtask.instruction,
+                      remark: targetTask.remark || baseSubtask.remark
+                    };
+                  })
+                };
+              })
+            };
+          })
+        };
+      })
+    }));
+    toast.success(`Applied Task ${taskId} details to all ${subtasksCount} subtasks!`);
+  };
+
   // Live count computations
   const stagesList = wbsStructure.stages || [];
   const totalStagesCount = stagesList.length;
@@ -1336,6 +1582,24 @@ export const CreatePmsTemplateComponent = () => {
       stagesList.reduce(
         (sum, s) =>
           sum + (s.works || []).reduce((wSum, w) => wSum + (w.tasks?.length || 0), 0),
+        0
+      ),
+    [stagesList]
+  );
+  const totalSubtasksCount = useMemo(
+    () =>
+      stagesList.reduce(
+        (sum, s) =>
+          sum +
+          (s.works || []).reduce(
+            (wSum, w) =>
+              wSum +
+              (w.tasks || []).reduce(
+                (tSum, t) => tSum + (t.subtasks?.length || 0),
+                0
+              ),
+            0
+          ),
         0
       ),
     [stagesList]
@@ -1819,9 +2083,28 @@ export const CreatePmsTemplateComponent = () => {
             const tskObj = typeof tsk === "object" ? tsk : {};
             const taskFieldData = extractFieldData(tskObj, workFieldData);
 
+            const dbSubtasks = (tskObj.subtasks || []).map((st) => {
+              const stCode = typeof st === "object" ? st.subtaskId : st;
+              const stObj = (wbsSubtasks || []).find(
+                (s) =>
+                  s.subtask_code === stCode ||
+                  s.code === stCode ||
+                  s._id === st.subtaskObjId ||
+                  s.id === st.subtaskObjId
+              );
+              const subtaskObj = typeof st === "object" ? st : {};
+              const subtaskFieldData = extractFieldData(subtaskObj, taskFieldData);
+
+              return {
+                subtaskId: subtaskObj.subtaskObjId || stObj?._id || stObj?.id || null,
+                fieldData: subtaskFieldData
+              };
+            });
+
             return {
               taskId: tskObj.taskObjId || tObj?._id || tObj?.id || null,
-              fieldData: taskFieldData
+              fieldData: taskFieldData,
+              subtasks: dbSubtasks
             };
           });
 
@@ -2247,12 +2530,12 @@ export const CreatePmsTemplateComponent = () => {
                       <h3 className="text-sm font-extrabold text-slate-900 tracking-tight">
                         WBS Hierarchy Breakdown
                       </h3>
-                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100">
-                        Stages • Works • Tasks
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-cyan-50 text-cyan-800 border border-cyan-100">
+                        Stages • Works • Tasks • Subtasks
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500 mt-0.5">
-                      Loaded from 3 dedicated backend APIs ({wbsStages.length} Stages, {wbsWorks.length} Works, {wbsTasks.length} Tasks)
+                      Loaded from 4 dedicated backend APIs ({wbsStages.length} Stages, {wbsWorks.length} Works, {wbsTasks.length} Tasks, {wbsSubtasks.length} Subtasks)
                     </p>
                   </div>
                 </div>
@@ -2266,6 +2549,9 @@ export const CreatePmsTemplateComponent = () => {
                   </span>
                   <span className="px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-[11px] font-extrabold text-emerald-700 shadow-2xs">
                     {totalTasksCount} Task{totalTasksCount === 1 ? "" : "s"}
+                  </span>
+                  <span className="px-3 py-1 rounded-full bg-cyan-50 border border-cyan-200 text-[11px] font-extrabold text-cyan-700 shadow-2xs">
+                    {totalSubtasksCount} Subtask{totalSubtasksCount === 1 ? "" : "s"}
                   </span>
                   {stagesList.length > 0 && (
                     <button
@@ -2346,19 +2632,45 @@ export const CreatePmsTemplateComponent = () => {
                     typeof activeTaskRaw === "object"
                       ? activeTaskRaw
                       : activeTaskRaw
-                      ? { taskId: activeTaskRaw, ...DEFAULT_STAGE_DETAILS }
+                      ? { taskId: activeTaskRaw, ...DEFAULT_STAGE_DETAILS, subtasks: [] }
+                      : null;
+
+                  const activeTaskSubtasks = activeTaskObj?.subtasks || [];
+                  const activeSubtaskRaw =
+                    activeTaskSubtasks.find(
+                      (st) => (typeof st === "object" ? st.subtaskId : st) === activeSubtaskId
+                    ) || activeTaskSubtasks[0];
+                  const activeSubtaskIdEffective =
+                    typeof activeSubtaskRaw === "object" ? activeSubtaskRaw.subtaskId : activeSubtaskRaw;
+                  const activeSubtaskObj =
+                    typeof activeSubtaskRaw === "object"
+                      ? activeSubtaskRaw
+                      : activeSubtaskRaw
+                      ? { subtaskId: activeSubtaskRaw, ...DEFAULT_STAGE_DETAILS }
                       : null;
 
                   // Bottom-up Hierarchical Completion Logic:
-                  // 1. Task complete when workWillDoneBy is filled
-                  const isTaskComplete = (task) => {
-                    if (!task) return false;
-                    const obj = typeof task === "object" ? task : null;
+                  // 1. Subtask complete when workWillDoneBy is filled
+                  const isSubtaskComplete = (subtask) => {
+                    if (!subtask) return false;
+                    const obj = typeof subtask === "object" ? subtask : null;
                     if (!obj) return false;
                     return Boolean(obj.workWillDoneBy && String(obj.workWillDoneBy).trim() !== "");
                   };
 
-                  // 2. Work complete: Work must have at least 1 task, its own mandatory field filled, AND all child tasks complete
+                  // 2. Task complete: Task must have workWillDoneBy filled, AND if it has child subtasks, all child subtasks complete
+                  const isTaskComplete = (task) => {
+                    if (!task) return false;
+                    const obj = typeof task === "object" ? task : null;
+                    if (!obj) return false;
+                    const ownFilled = Boolean(obj.workWillDoneBy && String(obj.workWillDoneBy).trim() !== "");
+                    const subtasks = obj.subtasks || [];
+                    if (subtasks.length === 0) return ownFilled;
+                    const allSubtasksDone = subtasks.every((st) => isSubtaskComplete(st));
+                    return ownFilled && allSubtasksDone;
+                  };
+
+                  // 3. Work complete: Work must have at least 1 task, its own mandatory field filled, AND all child tasks complete
                   const isWorkComplete = (work) => {
                     if (!work) return false;
                     const ownFilled = Boolean(work.workWillDoneBy && String(work.workWillDoneBy).trim() !== "");
@@ -2368,7 +2680,7 @@ export const CreatePmsTemplateComponent = () => {
                     return ownFilled && allTasksDone;
                   };
 
-                  // 3. Stage complete: Stage must have at least 1 work, its own mandatory field filled, AND all child works complete
+                  // 4. Stage complete: Stage must have at least 1 work, its own mandatory field filled, AND all child works complete
                   const isStageComplete = (stg) => {
                     if (!stg) return false;
                     const ownFilled = Boolean(stg.workWillDoneBy && String(stg.workWillDoneBy).trim() !== "");
@@ -2890,35 +3202,251 @@ export const CreatePmsTemplateComponent = () => {
 
                                           {/* ACTIVE TASK DETAILS */}
                                           {activeTaskObj && (
-                                            <div className="p-4 rounded-xl border-[3px] border-emerald-500 bg-emerald-50/25">
-                                              <ExecutionResourceFieldData
-                                                title={`TASK ${activeTaskIdEffective} — EXECUTION & RESOURCE DETAILS`}
-                                                subtitle={`Configure execution team, materials & timeline for Task ${activeTaskIdEffective}`}
-                                                level="task"
-                                                badge={`TASK ${activeTaskIdEffective}`}
-                                                data={activeTaskObj}
-                                                onChange={(field, val) =>
-                                                  updateTaskField(
-                                                    activeStage.stageId,
-                                                    activeWork.workId,
-                                                    activeTaskIdEffective,
-                                                    field,
-                                                    val
-                                                  )
-                                                }
-                                                onCopyFromParent={() =>
-                                                  copyWorkToTask(
-                                                    activeStage.stageId,
-                                                    activeWork.workId,
-                                                    activeTaskIdEffective
-                                                  )
-                                                }
-                                                copyLabel={`Copy from Work ${activeWork.workId}`}
-                                                contractorList={contractorList}
-                                                materialList={materialList}
-                                                supplierList={supplierList}
-                                                toolsOptions={TOOLS_VEHICLES_MASTER}
-                                              />
+                                            <div className="space-y-4">
+                                              <div className="p-4 rounded-xl border-[3px] border-emerald-500 bg-emerald-50/25">
+                                                <ExecutionResourceFieldData
+                                                  title={`TASK ${activeTaskIdEffective} — EXECUTION & RESOURCE DETAILS`}
+                                                  subtitle={`Configure execution team, materials & timeline for Task ${activeTaskIdEffective}`}
+                                                  level="task"
+                                                  badge={`TASK ${activeTaskIdEffective}`}
+                                                  data={activeTaskObj}
+                                                  onChange={(field, val) =>
+                                                    updateTaskField(
+                                                      activeStage.stageId,
+                                                      activeWork.workId,
+                                                      activeTaskIdEffective,
+                                                      field,
+                                                      val
+                                                    )
+                                                  }
+                                                  onCopyFromParent={() =>
+                                                    copyWorkToTask(
+                                                      activeStage.stageId,
+                                                      activeWork.workId,
+                                                      activeTaskIdEffective
+                                                    )
+                                                  }
+                                                  copyLabel={`Copy from Work ${activeWork.workId}`}
+                                                  contractorList={contractorList}
+                                                  materialList={materialList}
+                                                  supplierList={supplierList}
+                                                  toolsOptions={TOOLS_VEHICLES_MASTER}
+                                                />
+                                              </div>
+
+                                              {/* LEVEL 4: SUBTASKS CONFIGURATION & STEPPER FOR ACTIVE TASK */}
+                                              <div className="mt-4 pt-4 border-t-2 border-dashed border-cyan-200 space-y-4">
+                                                {/* Subtask selector header */}
+                                                <div className="bg-white p-3.5 rounded-xl border border-cyan-200 shadow-2xs">
+                                                  <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                                                    <div className="flex items-center gap-2">
+                                                      <span className="w-5 h-5 rounded-md bg-cyan-600 text-white text-[11px] font-black flex items-center justify-center shadow-2xs">
+                                                        ST
+                                                      </span>
+                                                      <label className="text-xs font-black uppercase tracking-wider text-cyan-950">
+                                                        Subtasks for Task {activeTaskIdEffective}
+                                                      </label>
+                                                      <span className="text-[10px] font-bold text-cyan-700 bg-cyan-50 px-2 py-0.5 rounded-full border border-cyan-200">
+                                                        {activeTaskSubtasks.length} Selected
+                                                      </span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                      {activeTaskSubtasks.length > 1 && (
+                                                        <button
+                                                          type="button"
+                                                          onClick={() =>
+                                                            applyTaskToAllSubtasks(
+                                                              activeStage.stageId,
+                                                              activeWork.workId,
+                                                              activeTaskIdEffective
+                                                            )
+                                                          }
+                                                          className="text-[11px] font-bold text-cyan-700 bg-cyan-50 hover:bg-cyan-100 border border-cyan-200 px-2.5 py-0.5 rounded-md transition-colors cursor-pointer"
+                                                          title="Apply this Task's execution & resource details to all its selected subtasks"
+                                                        >
+                                                          Apply to All {activeTaskSubtasks.length} Subtasks
+                                                        </button>
+                                                      )}
+                                                      {activeTaskSubtasks.length > 0 && (
+                                                        <button
+                                                          type="button"
+                                                          onClick={() =>
+                                                            handleSubtasksChange(
+                                                              activeStage.stageId,
+                                                              activeWork.workId,
+                                                              activeTaskIdEffective,
+                                                              []
+                                                            )
+                                                          }
+                                                          className="text-[11px] font-bold text-red-500 hover:text-red-700 hover:bg-red-50 px-2 py-0.5 rounded-md transition-colors cursor-pointer"
+                                                          title="Clear all subtasks for this task"
+                                                        >
+                                                          Clear Subtasks
+                                                        </button>
+                                                      )}
+                                                      <span className="text-[10px] font-bold text-cyan-600 bg-cyan-50 px-2 py-0.5 rounded-full border border-cyan-100">
+                                                        {getSubtasksForTask(activeTaskIdEffective).length} Available
+                                                      </span>
+                                                    </div>
+                                                  </div>
+
+                                                  <ReactSelectMulti
+                                                    options={getSubtasksForTask(activeTaskIdEffective)}
+                                                    value={activeTaskSubtasks.map((st) => (typeof st === "object" ? st.subtaskId : st))}
+                                                    onChange={(newSubtaskIds) =>
+                                                      handleSubtasksChange(
+                                                        activeStage.stageId,
+                                                        activeWork.workId,
+                                                        activeTaskIdEffective,
+                                                        newSubtaskIds
+                                                      )
+                                                    }
+                                                    placeholder={`Select subtasks for ${activeTaskIdEffective}...`}
+                                                    themeColor="cyan"
+                                                    allowSelectAll={true}
+                                                  />
+                                                </div>
+
+                                                {/* Subtasks Stepper & Active Subtask Execution Details */}
+                                                {activeTaskSubtasks.length > 0 && (
+                                                  <div className="space-y-4">
+                                                    {/* Subtask Stepper Pipeline */}
+                                                    <div className="bg-white p-3.5 rounded-xl border border-cyan-200 shadow-2xs">
+                                                      <div className="flex items-center justify-between mb-2">
+                                                        <span className="text-xs font-black uppercase tracking-wider text-cyan-900 flex items-center gap-1.5">
+                                                          <span className="w-2 h-2 rounded-full bg-cyan-600"></span>
+                                                          Subtask Stepper Pipeline
+                                                        </span>
+                                                        <span className="text-[11px] text-slate-400 font-medium">
+                                                          Select a subtask to view & define its execution & resource details
+                                                        </span>
+                                                      </div>
+
+                                                      <div className="overflow-x-auto pb-1 scrollbar-thin">
+                                                        <div className="flex items-center gap-1 min-w-max py-1">
+                                                          {activeTaskSubtasks.map((st, stIdx) => {
+                                                            const stId = typeof st === "object" ? st.subtaskId : st;
+                                                            const stObj = (wbsSubtasks || []).find(
+                                                              (s) => (s.subtask_code || s.code || s.id) === stId
+                                                            );
+                                                            const isSubtaskActive = activeSubtaskIdEffective === stId;
+                                                            const isStDone = isSubtaskComplete(st);
+
+                                                            return (
+                                                              <React.Fragment key={stId}>
+                                                                <button
+                                                                  type="button"
+                                                                  onClick={() => setActiveSubtaskId(stId)}
+                                                                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all cursor-pointer text-left ${
+                                                                    isSubtaskActive
+                                                                      ? "bg-white text-slate-900 border-2 border-cyan-600 shadow-xs ring-3 ring-cyan-100/70"
+                                                                      : "bg-white text-slate-700 border border-slate-200/90 hover:border-cyan-300 hover:bg-cyan-50/40"
+                                                                  }`}
+                                                                >
+                                                                  <span
+                                                                    className={`w-4 h-4 rounded text-[9px] font-black flex items-center justify-center transition-colors ${
+                                                                      isSubtaskActive
+                                                                        ? "bg-cyan-600 text-white shadow-2xs"
+                                                                        : isStDone
+                                                                        ? "bg-cyan-50 text-cyan-700 border border-cyan-200 font-extrabold"
+                                                                        : "bg-slate-100 text-slate-600"
+                                                                    }`}
+                                                                  >
+                                                                    ST
+                                                                  </span>
+                                                                  <span className="font-bold text-xs text-slate-900">
+                                                                    {stId}
+                                                                  </span>
+                                                                  {stObj?.subtask_name && (
+                                                                    <span className="font-normal text-slate-500 text-[11px] truncate max-w-[110px]">
+                                                                      - {stObj.subtask_name}
+                                                                    </span>
+                                                                  )}
+                                                                  {isStDone ? (
+                                                                    <span className="text-[9px] font-bold text-cyan-700 bg-cyan-50 px-1.5 py-0.2 rounded border border-cyan-200 flex items-center gap-0.5 shrink-0">
+                                                                      <FaCheckCircle className="w-2 h-2 text-cyan-600" /> Filled
+                                                                    </span>
+                                                                  ) : (
+                                                                    <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200 flex items-center gap-0.5 shrink-0">
+                                                                      <FaExclamationCircle className="w-2 h-2 text-amber-500" /> Pending
+                                                                    </span>
+                                                                  )}
+                                                                </button>
+
+                                                                {/* Thick connecting arrow between Subtasks */}
+                                                                {stIdx < activeTaskSubtasks.length - 1 && (
+                                                                  <div className="flex items-center px-1.5 shrink-0 select-none">
+                                                                    <div
+                                                                      className={`w-3 h-[3px] rounded-l-full transition-colors ${
+                                                                        isStDone ? "bg-cyan-400" : "bg-slate-300"
+                                                                      }`}
+                                                                    />
+                                                                    <div
+                                                                      className={`w-5 h-5 rounded-full flex items-center justify-center border-2 transition-all shadow-2xs shrink-0 ${
+                                                                        isStDone
+                                                                          ? "bg-cyan-50 border-cyan-500 text-cyan-600"
+                                                                          : "bg-white border-slate-300 text-slate-400"
+                                                                      }`}
+                                                                      title={
+                                                                        isStDone
+                                                                          ? "Subtask filled - Ready for next subtask"
+                                                                          : "Subtask details pending"
+                                                                      }
+                                                                    >
+                                                                      <FaArrowRight className="w-2 h-2" />
+                                                                    </div>
+                                                                    <div
+                                                                      className={`w-3 h-[3px] rounded-r-full transition-colors ${
+                                                                        isStDone ? "bg-cyan-400" : "bg-slate-300"
+                                                                      }`}
+                                                                    />
+                                                                  </div>
+                                                                )}
+                                                              </React.Fragment>
+                                                            );
+                                                          })}
+                                                        </div>
+                                                      </div>
+                                                    </div>
+
+                                                    {/* ACTIVE SUBTASK DETAILS */}
+                                                    {activeSubtaskObj && (
+                                                      <div className="p-4 rounded-xl border-[3px] border-cyan-500 bg-cyan-50/20">
+                                                        <ExecutionResourceFieldData
+                                                          title={`SUBTASK ${activeSubtaskIdEffective} — EXECUTION & RESOURCE DETAILS`}
+                                                          subtitle={`Configure execution team, materials & timeline for Subtask ${activeSubtaskIdEffective}`}
+                                                          level="subtask"
+                                                          badge={`SUBTASK ${activeSubtaskIdEffective}`}
+                                                          data={activeSubtaskObj}
+                                                          onChange={(field, val) =>
+                                                            updateSubtaskField(
+                                                              activeStage.stageId,
+                                                              activeWork.workId,
+                                                              activeTaskIdEffective,
+                                                              activeSubtaskIdEffective,
+                                                              field,
+                                                              val
+                                                            )
+                                                          }
+                                                          onCopyFromParent={() =>
+                                                            copyTaskToSubtask(
+                                                              activeStage.stageId,
+                                                              activeWork.workId,
+                                                              activeTaskIdEffective,
+                                                              activeSubtaskIdEffective
+                                                            )
+                                                          }
+                                                          copyLabel={`Copy from Task ${activeTaskIdEffective}`}
+                                                          contractorList={contractorList}
+                                                          materialList={materialList}
+                                                          supplierList={supplierList}
+                                                          toolsOptions={TOOLS_VEHICLES_MASTER}
+                                                        />
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                )}
+                                              </div>
                                             </div>
                                           )}
                                         </div>

@@ -234,8 +234,8 @@ const SalseTotalLeads = () => {
               return list;
             })(),
             remarks: backendLead.remarks || backendLead.remark || "",
-            remark: backendLead.remarks || backendLead.remark || backendLead.requirement || backendLead.notes || "",
-            requirement: backendLead.requirement || backendLead.remarks || backendLead.remark || backendLead.notes || "",
+            remark: backendLead.remarks || backendLead.remark || "",
+            requirement: backendLead.projectDetail || backendLead.requirement || backendLead.notes || "",
             remarksFile: backendLead.remarksFile || "",
             remarksFiles: backendLead.remarksFiles || [],
             remarkAttachments: (() => {

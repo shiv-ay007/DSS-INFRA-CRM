@@ -938,9 +938,22 @@ export const activeProjectService = {
           p?.clientName !== "M/s Royal Heritage Hotel"
       );
 
-      // PMS Template map for quick lookup
+      // Helper to check if a PMS template is in Draft mode
+      const isTemplateDraft = (t) => {
+        if (!t) return false;
+        return Boolean(
+          t.isDraft === true ||
+          t.status === "Draft" ||
+          String(t.status || "").toLowerCase() === "draft"
+        );
+      };
+
+      // Filter: Only finalized (non-draft) PMS Templates must be used
+      const finalizedPmsTemplates = (pmsTemplates || []).filter((t) => !isTemplateDraft(t));
+
+      // PMS Template map for quick lookup (finalized templates only)
       const pmsMap = new Map();
-      (pmsTemplates || []).forEach((t) => {
+      finalizedPmsTemplates.forEach((t) => {
         const pId = t.projectId?._id || t.projectId;
         if (pId) pmsMap.set(String(pId), t);
         const lId = t.leadId?._id || t.leadId;
@@ -971,7 +984,7 @@ export const activeProjectService = {
           closureStatus.includes("converted") ||
           presaleStatus.includes("converted");
 
-        // Find PMS template if available
+        // Find PMS template if available (matches finalized template only)
         let matchedTmpl = null;
         if (pmsMap.has(projId)) matchedTmpl = pmsMap.get(projId);
         else if (bp.leadId && pmsMap.has(String(typeof bp.leadId === "object" ? bp.leadId._id : bp.leadId))) {
@@ -1018,8 +1031,9 @@ export const activeProjectService = {
           return false;
         });
 
-        // If not promoted to active project, do NOT show in Active Projects
-        if (!isPromotedToActive) {
+        // Only include projects that are promoted to active AND have a finalized (non-draft) PMS template.
+        // If template is missing or still in Draft, do NOT display in Active Projects.
+        if (!isPromotedToActive || !matchedTmpl) {
           if (existingIdx !== -1) {
             list.splice(existingIdx, 1);
             changed = true;
@@ -1174,6 +1188,13 @@ export const activeProjectService = {
         }
       });
 
+      // Ensure any lingering projects in list without a finalized PMS template are cleaned up
+      const beforeCleanupLen = list.length;
+      list = list.filter((p) => isPmsMasterdataCreated(p, finalizedPmsTemplates));
+      if (list.length !== beforeCleanupLen) {
+        changed = true;
+      }
+
       if (changed) {
         localStorage.setItem(ACTIVE_PROJECTS_STORAGE_KEY, JSON.stringify(list));
       }
@@ -1187,7 +1208,7 @@ export const activeProjectService = {
 };
 
 /**
- * Checks if a project has an existing PMS Masterdata Template created
+ * Checks if a project has an existing PMS Masterdata Template created (excludes Draft templates)
  */
 export const isPmsMasterdataCreated = (row, allTemplates = []) => {
   if (!row) return false;
@@ -1198,7 +1219,17 @@ export const isPmsMasterdataCreated = (row, allTemplates = []) => {
   const rowClientName = (row.clientName || "").toLowerCase().trim();
   const rowProjectName = (row.projectName || "").toLowerCase().trim();
 
-  return (allTemplates || []).some((t) => {
+  // Exclude any templates that are in Draft mode
+  const validTemplates = (allTemplates || []).filter((t) => {
+    if (!t) return false;
+    const isDraft =
+      t.isDraft === true ||
+      t.status === "Draft" ||
+      String(t.status || "").toLowerCase() === "draft";
+    return !isDraft;
+  });
+
+  return validTemplates.some((t) => {
     if (!t) return false;
 
     const tProjId = String(

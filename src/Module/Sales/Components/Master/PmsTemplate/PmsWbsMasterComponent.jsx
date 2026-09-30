@@ -39,6 +39,15 @@ const PmsWbsMasterComponent = () => {
   const currentRole = role || user?.role || localStorage.getItem("role") || "";
   const isUserObserver = isObserver || String(currentRole).toLowerCase() === "observer";
 
+  // Clean up any old localStorage cache so fresh MongoDB data is loaded
+  useEffect(() => {
+    try {
+      localStorage.removeItem("pms_master_subtasks_data");
+      localStorage.removeItem("pms_master_works_data");
+      localStorage.removeItem("pms_master_tasks_data");
+    } catch {}
+  }, []);
+
   // 1. Data States (Loaded from localStorage or fetched from backend API)
   const [statuses, setStatuses] = useState(() => {
     try {
@@ -91,6 +100,9 @@ const PmsWbsMasterComponent = () => {
       return [];
     }
   });
+
+  // Subtasks strictly loaded from MongoDB (No localStorage)
+  const [subtasks, setSubtasks] = useState([]);
 
   // Loading & Submitting States
   const [loading, setLoading] = useState(false);
@@ -148,13 +160,18 @@ const PmsWbsMasterComponent = () => {
         if (Array.isArray(wbsRes.data.tasks) && wbsRes.data.tasks.length > 0) {
           setTasks(wbsRes.data.tasks);
         }
+        if (Array.isArray(wbsRes.data.subtasks)) {
+          setSubtasks(wbsRes.data.subtasks);
+        } else {
+          setSubtasks([]);
+        }
       }
 
       if (statusRes && statusRes.success && Array.isArray(statusRes.data)) {
         setStatuses(statusRes.data);
       }
     } catch (err) {
-      console.warn("Could not fetch PMS WBS data from backend (falling back to cache):", err);
+      console.warn("Could not fetch PMS WBS data from backend:", err);
     } finally {
       setLoading(false);
     }
@@ -164,8 +181,9 @@ const PmsWbsMasterComponent = () => {
     fetchMasterData();
   }, []);
 
-  // 2. View Mode State: 'statuses' | 'stages' | 'works' | 'tasks'
+  // 2. View Mode State: 'statuses' | 'stages' | 'works' | 'tasks' | 'subtasks'
   const [viewMode, setViewMode] = useState("statuses");
+  const [paginatedView, setPaginatedView] = useState("statuses");
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   // 2.1 Backend Pagination States
@@ -185,36 +203,47 @@ const PmsWbsMasterComponent = () => {
     return () => clearTimeout(handler);
   }, [searchTerm]);
 
-  // Reset page to 1 on tab change
+  // Reset page and clear table data immediately on tab change so rows from one tab never leak into another
   useEffect(() => {
     setCurrentPage(1);
+    setPaginatedData([]);
+    setTotalRecords(0);
+    setTotalPages(1);
+    setIsTableLoading(true);
   }, [viewMode]);
 
   // Fetch Paginated Table Data from Backend
   const fetchPaginatedTableData = async () => {
     try {
       setIsTableLoading(true);
+      const activeMode = viewMode;
       let res;
-      if (viewMode === "statuses") {
+      if (activeMode === "statuses") {
         res = await pmsWbsService.getProjectStatusesPaginated({
           page: currentPage,
           limit: pageLimit,
           search: debouncedSearch
         });
-      } else if (viewMode === "stages") {
+      } else if (activeMode === "stages") {
         res = await pmsWbsService.getStagesPaginated({
           page: currentPage,
           limit: pageLimit,
           search: debouncedSearch
         });
-      } else if (viewMode === "works") {
+      } else if (activeMode === "works") {
         res = await pmsWbsService.getWorksPaginated({
           page: currentPage,
           limit: pageLimit,
           search: debouncedSearch
         });
-      } else if (viewMode === "tasks") {
+      } else if (activeMode === "tasks") {
         res = await pmsWbsService.getTasksPaginated({
+          page: currentPage,
+          limit: pageLimit,
+          search: debouncedSearch
+        });
+      } else if (activeMode === "subtasks") {
+        res = await pmsWbsService.getSubtasksPaginated({
           page: currentPage,
           limit: pageLimit,
           search: debouncedSearch
@@ -223,16 +252,25 @@ const PmsWbsMasterComponent = () => {
 
       if (res && res.success && Array.isArray(res.data)) {
         setPaginatedData(res.data);
+        setPaginatedView(activeMode);
         if (res.pagination) {
           setTotalRecords(res.pagination.total);
           setTotalPages(res.pagination.totalPages || 1);
+        } else {
+          setTotalRecords(res.data.length);
+          setTotalPages(Math.ceil(res.data.length / pageLimit) || 1);
         }
       } else {
         setPaginatedData([]);
+        setPaginatedView(activeMode);
+        setTotalRecords(0);
+        setTotalPages(1);
       }
     } catch (err) {
       console.warn("Could not fetch paginated data from backend:", err);
       setPaginatedData([]);
+      setTotalRecords(0);
+      setTotalPages(1);
     } finally {
       setIsTableLoading(false);
     }
@@ -257,7 +295,7 @@ const PmsWbsMasterComponent = () => {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isModalOpen]);
 
-  // 3. Form State: 'status' | 'stage' | 'work' | 'task'
+  // 3. Form State: 'status' | 'stage' | 'work' | 'task' | 'subtask'
   const [entryType, setEntryType] = useState("status");
   const [formData, setFormData] = useState({
     code: "",
@@ -270,7 +308,7 @@ const PmsWbsMasterComponent = () => {
     order: 1
   });
 
-  const [editingItem, setEditingItem] = useState(null); // { type: 'status'|'stage'|'work'|'task', item }
+  const [editingItem, setEditingItem] = useState(null); // { type: 'status'|'stage'|'work'|'task'|'subtask', item }
 
   // Handle Form Change
   const handleInputChange = (field, value) => {
@@ -278,7 +316,7 @@ const PmsWbsMasterComponent = () => {
   };
 
   // Open Modal for Creating New Entry
-  const handleOpenAddModal = (type = viewMode === "statuses" ? "status" : viewMode === "tasks" ? "task" : viewMode === "works" ? "work" : "stage") => {
+  const handleOpenAddModal = (type = viewMode === "statuses" ? "status" : viewMode === "subtasks" ? "subtask" : viewMode === "tasks" ? "task" : viewMode === "works" ? "work" : "stage") => {
     if (isUserObserver) {
       toast.info("Observer Mode: Action is disabled.");
       return;
@@ -295,6 +333,8 @@ const PmsWbsMasterComponent = () => {
       suggestedCode = `W${works.length + 1}`;
     } else if (type === "task") {
       suggestedCode = `T${tasks.length + 1}`;
+    } else if (type === "subtask") {
+      suggestedCode = `ST${subtasks.length + 1}`;
     }
 
     setFormData({
@@ -408,6 +448,24 @@ const PmsWbsMasterComponent = () => {
           setTasks(prev => [...prev, created]);
           toast.success(`Task ${payload.task_code} saved into pms_tasks collection!`);
         }
+      } else if (entryType === "subtask") {
+        const payload = {
+          subtask_code: formData.code.trim().toUpperCase(),
+          subtask_name: formData.name.trim(),
+          order: editingItem ? (editingItem.item.order || 1) : subtasks.length + 1
+        };
+
+        if (editingItem) {
+          const res = await pmsWbsService.updateSubtask(editingItem.item._id, payload);
+          if (res && res.data) {
+            toast.success(`Subtask ${payload.subtask_code} updated successfully in database!`);
+          }
+        } else {
+          const res = await pmsWbsService.createSubtask(payload);
+          if (res && res.data) {
+            toast.success(`Subtask ${payload.subtask_code} saved into pms_subtasks collection!`);
+          }
+        }
       }
 
       // Close modal and reset form
@@ -476,6 +534,17 @@ const PmsWbsMasterComponent = () => {
         materials: item.materials || "",
         order: item.order || 1
       });
+    } else if (type === "subtask") {
+      setFormData({
+        code: item.subtask_code,
+        name: item.subtask_name,
+        description: "",
+        work_done_by: "CONTRACTOR",
+        contractor_type: "",
+        tools: "",
+        materials: "",
+        order: item.order || 1
+      });
     }
     setIsModalOpen(true);
   };
@@ -509,8 +578,8 @@ const PmsWbsMasterComponent = () => {
       try {
         await pmsWbsService.deleteStage(stage._id);
         setStages(prev => prev.filter(s => s._id !== stage._id));
-        setStats(prev => ({ ...prev, stages: Math.max(0, (prev.stages || 1) - 1) }));
         toast.success(`Permanently deleted Stage ${stage.stage_code}`);
+        fetchPaginatedTableData();
       } catch (err) {
         console.error("Delete stage error:", err);
         toast.error(err?.response?.data?.message || "Failed to delete stage");
@@ -527,8 +596,8 @@ const PmsWbsMasterComponent = () => {
       try {
         await pmsWbsService.deleteWork(work._id);
         setWorks(prev => prev.filter(w => w._id !== work._id));
-        setStats(prev => ({ ...prev, works: Math.max(0, (prev.works || 1) - 1) }));
         toast.success(`Permanently deleted Work ${work.work_code}`);
+        fetchPaginatedTableData();
       } catch (err) {
         console.error("Delete work error:", err);
         toast.error(err?.response?.data?.message || "Failed to delete work");
@@ -545,11 +614,29 @@ const PmsWbsMasterComponent = () => {
       try {
         await pmsWbsService.deleteTask(task._id);
         setTasks(prev => prev.filter(t => t._id !== task._id));
-        setStats(prev => ({ ...prev, tasks: Math.max(0, (prev.tasks || 1) - 1) }));
         toast.success(`Permanently deleted Task ${task.task_code}`);
+        fetchPaginatedTableData();
       } catch (err) {
         console.error("Delete task error:", err);
         toast.error(err?.response?.data?.message || "Failed to delete task");
+      }
+    }
+  };
+
+  const handleDeleteSubtask = async (subtask) => {
+    if (isUserObserver) {
+      toast.info("Observer Mode: Action is disabled.");
+      return;
+    }
+    if (window.confirm(`Delete Subtask "${subtask.subtask_code}: ${subtask.subtask_name}"?\nThis will permanently delete this subtask from database.`)) {
+      try {
+        await pmsWbsService.deleteSubtask(subtask._id);
+        setSubtasks(prev => prev.filter(st => st._id !== subtask._id));
+        toast.success(`Permanently deleted Subtask ${subtask.subtask_code}`);
+        fetchPaginatedTableData();
+      } catch (err) {
+        console.error("Delete subtask error:", err);
+        toast.error(err?.response?.data?.message || "Failed to delete subtask");
       }
     }
   };
@@ -624,11 +711,31 @@ const PmsWbsMasterComponent = () => {
     return filteredTasks.slice((currentPage - 1) * pageLimit, currentPage * pageLimit);
   }, [viewMode, paginatedData, filteredTasks, currentPage, pageLimit, totalRecords, isTableLoading, debouncedSearch]);
 
-  const activeTotalRecords = totalRecords || (
-    viewMode === "statuses" ? filteredStatuses.length :
-    viewMode === "stages" ? filteredStages.length :
-    viewMode === "works" ? filteredWorks.length : filteredTasks.length
-  );
+  const filteredSubtasks = useMemo(() => {
+    return subtasks.filter(st => {
+      const term = searchTerm.toLowerCase();
+      return (
+        (st.subtask_code && st.subtask_code.toLowerCase().includes(term)) ||
+        (st.subtask_name && st.subtask_name.toLowerCase().includes(term))
+      );
+    });
+  }, [subtasks, searchTerm]);
+
+  const currentSubtasksList = useMemo(() => {
+    if (viewMode === "subtasks" && paginatedView === "subtasks") {
+      return paginatedData;
+    }
+    return [];
+  }, [viewMode, paginatedView, paginatedData]);
+
+  const activeTotalRecords = viewMode === "subtasks"
+    ? (paginatedView === "subtasks" ? totalRecords : 0)
+    : (totalRecords || (
+        viewMode === "statuses" ? filteredStatuses.length :
+        viewMode === "stages" ? filteredStages.length :
+        viewMode === "works" ? filteredWorks.length :
+        filteredTasks.length
+      ));
   const activeTotalPages = totalPages || Math.ceil(activeTotalRecords / pageLimit) || 1;
 
   // Column configurations for the master views
@@ -740,13 +847,13 @@ const PmsWbsMasterComponent = () => {
       )
     },
     stage_name: {
-      label: "Stage Name / Description",
+      label: "Stage Name",
       align: "left",
       headerClass: "min-w-[260px]",
       render: (_, stage) => (
         <div className="py-0.5">
           <div className="font-bold text-slate-900">{stage.stage_name}</div>
-          {stage.description && (
+          {stage.description && stage.description.trim().toLowerCase() !== (stage.stage_name || "").trim().toLowerCase() && (
             <div className="text-[11px] text-slate-500 line-clamp-1">{stage.description}</div>
           )}
         </div>
@@ -846,19 +953,67 @@ const PmsWbsMasterComponent = () => {
     }
   }), [isUserObserver]);
 
+  const subtasksColumnConfig = useMemo(() => ({
+    actions: {
+      label: "Action",
+      align: "center",
+      headerClass: "w-28 min-w-[100px]",
+      render: (_, subtask) => (
+        !isUserObserver ? (
+          <div className="flex items-center justify-center gap-1.5">
+            <button
+              onClick={() => handleStartEdit("subtask", subtask)}
+              title="Edit Subtask"
+              className="p-1.5 text-slate-500 hover:text-cyan-600 hover:bg-cyan-50 rounded cursor-pointer transition-colors"
+            >
+              <FaEdit className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={() => handleDeleteSubtask(subtask)}
+              title="Delete Subtask"
+              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded cursor-pointer transition-colors"
+            >
+              <FaTrashAlt className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        ) : (
+          <span className="text-slate-400 text-xs">—</span>
+        )
+      )
+    },
+    subtask_code: {
+      label: "Subtask Code",
+      align: "center",
+      headerClass: "w-32 min-w-[110px]",
+      render: (val) => (
+        <span className="font-mono font-bold text-cyan-700">{val}</span>
+      )
+    },
+    subtask_name: {
+      label: "Subtask Name / Activity",
+      align: "left",
+      headerClass: "min-w-[260px]",
+      render: (val) => (
+        <span className="font-bold text-slate-900">{val}</span>
+      )
+    }
+  }), [isUserObserver]);
+
   const activeTableConfig = useMemo(() => {
     if (viewMode === "statuses") return statusesColumnConfig;
     if (viewMode === "stages") return stagesColumnConfig;
     if (viewMode === "works") return worksColumnConfig;
+    if (viewMode === "subtasks") return subtasksColumnConfig;
     return tasksColumnConfig;
-  }, [viewMode, statusesColumnConfig, stagesColumnConfig, worksColumnConfig, tasksColumnConfig]);
+  }, [viewMode, statusesColumnConfig, stagesColumnConfig, worksColumnConfig, tasksColumnConfig, subtasksColumnConfig]);
 
   const activeTableData = useMemo(() => {
     if (viewMode === "statuses") return currentStatusesList;
     if (viewMode === "stages") return currentStagesList;
     if (viewMode === "works") return currentWorksList;
+    if (viewMode === "subtasks") return currentSubtasksList;
     return currentTasksList;
-  }, [viewMode, currentStatusesList, currentStagesList, currentWorksList, currentTasksList]);
+  }, [viewMode, currentStatusesList, currentStagesList, currentWorksList, currentTasksList, currentSubtasksList]);
 
   return (
     <div className="w-full max-w-full space-y-5 pb-16 px-1 sm:px-2 font-sans text-slate-800">
@@ -913,8 +1068,13 @@ const PmsWbsMasterComponent = () => {
       </div>
 
       {/* 2. KPI METRICS CARDS */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="bg-white rounded-xl p-3.5 border border-slate-200 shadow-sm flex items-center justify-between">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div
+          onClick={() => setViewMode("statuses")}
+          className={`bg-white rounded-xl p-3.5 border shadow-sm flex items-center justify-between cursor-pointer transition-all ${
+            viewMode === "statuses" ? "ring-2 ring-amber-500 border-amber-400" : "border-slate-200 hover:border-amber-300"
+          }`}
+        >
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Status Master</p>
             <h3 className="text-2xl font-black text-amber-600 mt-0.5">{statuses.length}</h3>
@@ -925,7 +1085,12 @@ const PmsWbsMasterComponent = () => {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl p-3.5 border border-slate-200 shadow-sm flex items-center justify-between">
+        <div
+          onClick={() => setViewMode("stages")}
+          className={`bg-white rounded-xl p-3.5 border shadow-sm flex items-center justify-between cursor-pointer transition-all ${
+            viewMode === "stages" ? "ring-2 ring-indigo-500 border-indigo-400" : "border-slate-200 hover:border-indigo-300"
+          }`}
+        >
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Stage Master</p>
             <h3 className="text-2xl font-black text-indigo-700 mt-0.5">{stages.length}</h3>
@@ -936,7 +1101,12 @@ const PmsWbsMasterComponent = () => {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl p-3.5 border border-slate-200 shadow-sm flex items-center justify-between">
+        <div
+          onClick={() => setViewMode("works")}
+          className={`bg-white rounded-xl p-3.5 border shadow-sm flex items-center justify-between cursor-pointer transition-all ${
+            viewMode === "works" ? "ring-2 ring-blue-500 border-blue-400" : "border-slate-200 hover:border-blue-300"
+          }`}
+        >
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Work Master</p>
             <h3 className="text-2xl font-black text-blue-600 mt-0.5">{works.length}</h3>
@@ -947,13 +1117,34 @@ const PmsWbsMasterComponent = () => {
           </div>
         </div>
 
-        <div className="bg-white rounded-xl p-3.5 border border-slate-200 shadow-sm flex items-center justify-between">
+        <div
+          onClick={() => setViewMode("tasks")}
+          className={`bg-white rounded-xl p-3.5 border shadow-sm flex items-center justify-between cursor-pointer transition-all ${
+            viewMode === "tasks" ? "ring-2 ring-emerald-500 border-emerald-400" : "border-slate-200 hover:border-emerald-300"
+          }`}
+        >
           <div>
             <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Task Master</p>
             <h3 className="text-2xl font-black text-emerald-600 mt-0.5">{tasks.length}</h3>
             <p className="text-[11px] text-slate-400">Independent Tasks</p>
           </div>
           <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl">
+            <FaTasks className="w-5 h-5" />
+          </div>
+        </div>
+
+        <div
+          onClick={() => setViewMode("subtasks")}
+          className={`bg-white rounded-xl p-3.5 border shadow-sm flex items-center justify-between cursor-pointer transition-all ${
+            viewMode === "subtasks" ? "ring-2 ring-cyan-500 border-cyan-400" : "border-slate-200 hover:border-cyan-300"
+          }`}
+        >
+          <div>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Subtask Master</p>
+            <h3 className="text-2xl font-black text-cyan-600 mt-0.5">{subtasks.length}</h3>
+            <p className="text-[11px] text-slate-400">Independent Subtasks</p>
+          </div>
+          <div className="p-2.5 bg-cyan-50 text-cyan-600 rounded-xl">
             <FaTasks className="w-5 h-5" />
           </div>
         </div>
@@ -1011,6 +1202,18 @@ const PmsWbsMasterComponent = () => {
               <FaTasks className="w-3.5 h-3.5 text-emerald-600" />
               <span>Tasks Table ({tasks.length})</span>
             </button>
+
+            <button
+              onClick={() => setViewMode("subtasks")}
+              className={`px-3 py-1.5 rounded-none text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                viewMode === "subtasks"
+                  ? "bg-white text-cyan-700 shadow-xs border border-slate-200/80"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <FaTasks className="w-3.5 h-3.5 text-cyan-600" />
+              <span>Subtasks Table ({subtasks.length})</span>
+            </button>
           </div>
 
           {/* Right Action: Add button corresponding to active view (Hidden for Observer) */}
@@ -1052,6 +1255,15 @@ const PmsWbsMasterComponent = () => {
                   <span>Add Task</span>
                 </button>
               )}
+              {viewMode === "subtasks" && (
+                <button
+                  onClick={() => handleOpenAddModal("subtask")}
+                  className="px-3.5 py-1.5 bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500 text-white rounded-none text-xs font-bold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer active:scale-95"
+                >
+                  <FaPlus className="w-3 h-3" />
+                  <span>Add Subtask</span>
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -1063,7 +1275,17 @@ const PmsWbsMasterComponent = () => {
             <FaSearch className="w-3.5 h-3.5 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder={`Search ${viewMode} by code or name...`}
+              placeholder={
+                viewMode === "statuses"
+                  ? "Search statuses by name..."
+                  : viewMode === "stages"
+                  ? "Search stages by code or name..."
+                  : viewMode === "works"
+                  ? "Search works by code or name..."
+                  : viewMode === "subtasks"
+                  ? "Search subtasks by code or name..."
+                  : "Search tasks by code or name..."
+              }
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-none focus:bg-white focus:border-indigo-500 outline-none"
@@ -1110,6 +1332,8 @@ const PmsWbsMasterComponent = () => {
                 ? "bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border-b border-indigo-700/40"
                 : entryType === "work"
                 ? "bg-gradient-to-r from-slate-900 via-blue-950 to-slate-900 border-b border-blue-700/40"
+                : entryType === "subtask"
+                ? "bg-gradient-to-r from-slate-900 via-cyan-950 to-slate-900 border-b border-cyan-700/40"
                 : "bg-gradient-to-r from-slate-900 via-emerald-950 to-slate-900 border-b border-emerald-700/40"
             }`}>
               <div className="flex items-center gap-2.5 min-w-0">
@@ -1120,6 +1344,8 @@ const PmsWbsMasterComponent = () => {
                     ? "bg-indigo-500/20 text-indigo-300 border-indigo-500/30"
                     : entryType === "work"
                     ? "bg-blue-500/20 text-blue-300 border-blue-500/30"
+                    : entryType === "subtask"
+                    ? "bg-cyan-500/20 text-cyan-300 border-cyan-500/30"
                     : "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
                 }`}>
                   {editingItem ? <FaEdit className="w-4 h-4" /> : <FaPlus className="w-4 h-4" />}
@@ -1127,8 +1353,8 @@ const PmsWbsMasterComponent = () => {
                 <div className="min-w-0">
                   <h2 className="text-sm sm:text-base font-bold text-white truncate">
                     {editingItem
-                      ? `Edit ${editingItem.type.toUpperCase()}: ${editingItem.item.status_name || editingItem.item.status_code || editingItem.item.stage_code || editingItem.item.work_code || editingItem.item.task_code}`
-                      : `Add New ${entryType === "status" ? "Project Status" : entryType === "stage" ? "Stage" : entryType === "work" ? "Work" : "Task"}`
+                      ? `Edit ${editingItem.type.toUpperCase()}: ${editingItem.item.status_name || editingItem.item.status_code || editingItem.item.stage_code || editingItem.item.work_code || editingItem.item.task_code || editingItem.item.subtask_code}`
+                      : `Add New ${entryType === "status" ? "Project Status" : entryType === "stage" ? "Stage" : entryType === "work" ? "Work" : entryType === "subtask" ? "Subtask" : "Task"}`
                     }
                   </h2>
                   <p className="text-[11px] text-slate-300 truncate">
@@ -1175,21 +1401,27 @@ const PmsWbsMasterComponent = () => {
                       <strong className="text-emerald-700">Task Master:</strong> Add independent activity and task items (e.g. T1: MANUAL EXCAVATION, T2: CLEANING, etc.).
                     </p>
                   )}
+                  {entryType === "subtask" && (
+                    <p className="text-slate-600">
+                      <strong className="text-cyan-700">Subtask Master:</strong> Add independent subtask activities (e.g. ST1: SITE INSPECTION, ST2: MATERIAL TESTING, etc.).
+                    </p>
+                  )}
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* CODE INPUT (FOR STAGE, WORK, TASK ONLY) */}
+                {/* CODE INPUT (FOR STAGE, WORK, TASK, SUBTASK ONLY) */}
                 {entryType !== "status" && (
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      {entryType === "stage" ? "Stage Code" : entryType === "work" ? "Work Code" : "Task Code"} <span className="text-red-500">*</span>
+                      {entryType === "stage" ? "Stage Code" : entryType === "work" ? "Work Code" : entryType === "subtask" ? "Subtask Code" : "Task Code"} <span className="text-red-500">*</span>
                     </label>
                     <input
                       type="text"
                       placeholder={
                         entryType === "stage" ? "e.g. S1 or S24" :
                         entryType === "work" ? "e.g. W1 or W2" :
+                        entryType === "subtask" ? "e.g. ST1 or ST2" :
                         "e.g. T1 or T2"
                       }
                       value={formData.code}
@@ -1203,7 +1435,7 @@ const PmsWbsMasterComponent = () => {
                 {/* NAME INPUT */}
                 <div className={entryType === "status" ? "" : ""}>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    {entryType === "status" ? "Status Display Name" : entryType === "stage" ? "Stage Name" : entryType === "work" ? "Work Name / Description" : "Task Name / Activity"} <span className="text-red-500">*</span>
+                    {entryType === "status" ? "Status Display Name" : entryType === "stage" ? "Stage Name" : entryType === "work" ? "Work Name / Description" : entryType === "subtask" ? "Subtask Name" : "Task Name / Activity"} <span className="text-red-500">*</span>
                   </label>
                   <input
                     type="text"
@@ -1211,6 +1443,7 @@ const PmsWbsMasterComponent = () => {
                       entryType === "status" ? "e.g. On Track or Delayed" :
                       entryType === "stage" ? "e.g. SITE PREPARATION" :
                       entryType === "work" ? "e.g. REINFORCEMENT / BAR BINDING WORK" :
+                      entryType === "subtask" ? "e.g. SITE INSPECTION CHECK" :
                       "e.g. CLEANING [ BY JCB / LABOUR ]"
                     }
                     value={formData.name}
@@ -1281,6 +1514,8 @@ const PmsWbsMasterComponent = () => {
                       ? "bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500"
                       : entryType === "work"
                       ? "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500"
+                      : entryType === "subtask"
+                      ? "bg-gradient-to-r from-cyan-600 to-teal-600 hover:from-cyan-500 hover:to-teal-500"
                       : "bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500"
                   }`}
                 >
@@ -1300,6 +1535,8 @@ const PmsWbsMasterComponent = () => {
                       ? "Save Stage"
                       : entryType === "work"
                       ? "Save Work"
+                      : entryType === "subtask"
+                      ? "Save Subtask"
                       : "Save Task"}
                   </span>
                 </button>

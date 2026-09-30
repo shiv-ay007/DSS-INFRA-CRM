@@ -39,9 +39,12 @@ const RequirementAddressCard = ({ lead }) => {
   const address = addressParts.length > 0 ? addressParts.join(", ") : "--";
   
   const googleLocation = lead?.googleLocation || "";
-  const requirement = lead?.requirement || lead?.projectDetail || lead?.projectDetails || "New Lead Inquiry";
-  const projectDetailText = lead?.projectDetail || lead?.projectDetails || "";
   const remarksText = lead?.remarks || lead?.remark || "";
+  const projectDetailText =
+    lead?.projectDetail ||
+    lead?.projectDetails ||
+    (lead?.requirement && lead?.requirement !== remarksText && lead?.requirement !== lead?.remark ? lead?.requirement : "") ||
+    "";
 
   // Collect project detail media files
   const projectDetailAttachments = [];
@@ -66,10 +69,12 @@ const RequirementAddressCard = ({ lead }) => {
   }
 
   // Collect all media attachments from various backend/frontend shapes
+  // Make sure we do not duplicate files already shown under Project Attached Media
+  const projectDetailUrls = new Set(projectDetailAttachments.map((a) => a.url).filter(Boolean));
   const attachments = [];
   if (Array.isArray(lead?.remarksFiles)) {
     lead.remarksFiles.forEach((item) => {
-      if (item?.url && !attachments.some((a) => a.url === item.url)) {
+      if (item?.url && !projectDetailUrls.has(item.url) && !attachments.some((a) => a.url === item.url)) {
         attachments.push(item);
       }
     });
@@ -77,7 +82,7 @@ const RequirementAddressCard = ({ lead }) => {
   if (Array.isArray(lead?.remarkAttachments)) {
     lead.remarkAttachments.forEach((item) => {
       const url = item?.url || item?.preview;
-      if (url && !attachments.some((a) => a.url === url)) {
+      if (url && !projectDetailUrls.has(url) && !attachments.some((a) => a.url === url)) {
         attachments.push({
           url,
           fileType: item.type || "image",
@@ -89,7 +94,7 @@ const RequirementAddressCard = ({ lead }) => {
   if (Array.isArray(lead?.attachments)) {
     lead.attachments.forEach((item) => {
       const url = item?.url || item?.preview;
-      if (url && !attachments.some((a) => a.url === url)) {
+      if (url && !projectDetailUrls.has(url) && !attachments.some((a) => a.url === url)) {
         attachments.push({
           url,
           fileType: item.type || "image",
@@ -98,7 +103,12 @@ const RequirementAddressCard = ({ lead }) => {
       }
     });
   }
-  if (lead?.remarksFile && typeof lead.remarksFile === "string" && !attachments.some((a) => a.url === lead.remarksFile)) {
+  if (
+    lead?.remarksFile &&
+    typeof lead.remarksFile === "string" &&
+    !projectDetailUrls.has(lead.remarksFile) &&
+    !attachments.some((a) => a.url === lead.remarksFile)
+  ) {
     const url = lead.remarksFile;
     const isImg = url.match(/\.(png|jpg|jpeg|webp|gif|svg)($|\?)/i);
     const isAudio = url.match(/\.(mp3|wav|ogg|m4a|webm|aac)($|\?)/i);
@@ -172,8 +182,8 @@ const RequirementAddressCard = ({ lead }) => {
               </span>
             )}
           </div>
-          <p className="text-slate-800 font-semibold text-xs sm:text-sm leading-relaxed whitespace-pre-line">
-            {requirement}
+          <p className="text-slate-800 font-semibold text-xs sm:text-sm leading-relaxed whitespace-pre-line break-words">
+            {projectDetailText || "No project details provided."}
           </p>
 
           {/* Project Detail Media Files */}
@@ -290,7 +300,7 @@ const RequirementAddressCard = ({ lead }) => {
 
             {/* Remarks Text */}
             {remarksText && (
-              <p className="text-slate-800 font-medium text-xs sm:text-sm leading-relaxed whitespace-pre-line bg-white/80 p-3 rounded-lg border border-amber-100 shadow-2xs">
+              <p className="text-slate-800 font-medium text-xs sm:text-sm leading-relaxed whitespace-pre-line break-words bg-white/80 p-3 rounded-lg border border-amber-100 shadow-2xs">
                 {remarksText}
               </p>
             )}

@@ -12,7 +12,8 @@ const CheckboxOption = (props) => {
     indigo: "bg-indigo-600 border-indigo-600",
     blue: "bg-blue-600 border-blue-600",
     emerald: "bg-emerald-600 border-emerald-600",
-    amber: "bg-amber-600 border-amber-600"
+    amber: "bg-amber-600 border-amber-600",
+    cyan: "bg-cyan-600 border-cyan-600"
   }[themeColor] || "bg-indigo-600 border-indigo-600";
 
   return (
@@ -46,7 +47,8 @@ const CustomMultiValue = (props) => {
     indigo: "bg-indigo-50 border-indigo-200 text-indigo-800",
     emerald: "bg-emerald-50 border-emerald-200 text-emerald-800",
     blue: "bg-blue-50 border-blue-200 text-blue-800",
-    amber: "bg-amber-50 border-amber-200 text-amber-900"
+    amber: "bg-amber-50 border-amber-200 text-amber-900",
+    cyan: "bg-cyan-50 border-cyan-200 text-cyan-800"
   }[colorTheme] || "bg-indigo-50 border-indigo-200 text-indigo-800";
 
   return (
@@ -86,7 +88,8 @@ const CustomMenuList = (props) => {
     indigo: "text-indigo-600 hover:text-indigo-800",
     blue: "text-blue-600 hover:text-blue-800",
     emerald: "text-emerald-600 hover:text-emerald-800",
-    amber: "text-amber-600 hover:text-amber-800"
+    amber: "text-amber-600 hover:text-amber-800",
+    cyan: "text-cyan-600 hover:text-cyan-800"
   }[themeColor] || "text-indigo-600 hover:text-indigo-800";
 
   return (
@@ -200,7 +203,8 @@ export const ReactSelectMulti = ({
     indigo: { border: "#6366f1", shadow: "rgba(99, 102, 241, 0.15)", hover: "#818cf8" },
     blue: { border: "#2563eb", shadow: "rgba(37, 99, 235, 0.15)", hover: "#3b82f6" },
     emerald: { border: "#059669", shadow: "rgba(5, 150, 105, 0.15)", hover: "#10b981" },
-    amber: { border: "#d97706", shadow: "rgba(217, 119, 6, 0.15)", hover: "#f59e0b" }
+    amber: { border: "#d97706", shadow: "rgba(217, 119, 6, 0.15)", hover: "#f59e0b" },
+    cyan: { border: "#0891b2", shadow: "rgba(8, 145, 178, 0.15)", hover: "#06b6d4" }
   }[themeColor] || { border: "#6366f1", shadow: "rgba(99, 102, 241, 0.15)", hover: "#818cf8" };
 
   return (

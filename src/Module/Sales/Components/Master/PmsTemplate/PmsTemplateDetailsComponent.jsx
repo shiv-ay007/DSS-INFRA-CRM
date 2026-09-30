@@ -162,6 +162,12 @@ const ExecutionFieldDataView = ({
       wrapperBorder: "border-teal-200",
       accentText: "text-teal-800",
       icon: <FaTasks className="text-teal-600 text-xs" />
+    },
+    subtask: {
+      wrapperBg: "bg-cyan-50/40",
+      wrapperBorder: "border-cyan-200",
+      accentText: "text-cyan-800",
+      icon: <FaClipboardList className="text-cyan-600 text-xs" />
     }
   };
 
@@ -381,6 +387,7 @@ const PmsTemplateDetailsComponent = () => {
             wbsStagesRes,
             wbsWorksRes,
             wbsTasksRes,
+            wbsSubtasksRes,
             projectsRes,
             statusesRes,
             materialsRes,
@@ -389,6 +396,7 @@ const PmsTemplateDetailsComponent = () => {
             pmsWbsService.getStagesPaginated({ limit: 500 }),
             pmsWbsService.getWorksPaginated({ limit: 500 }),
             pmsWbsService.getTasksPaginated({ limit: 500 }),
+            pmsWbsService.getSubtasksPaginated({ limit: 1000 }),
             getAllLeadProjectsApi(),
             pmsWbsService.getAllProjectStatuses(),
             materialService.getAllMaterials({ limit: 500 }),
@@ -407,11 +415,15 @@ const PmsTemplateDetailsComponent = () => {
             wbsTasksRes.status === "fulfilled" && wbsTasksRes.value?.data?.data
               ? wbsTasksRes.value.data.data
               : [];
+          const allSubtasks =
+            wbsSubtasksRes.status === "fulfilled" && wbsSubtasksRes.value?.data?.data
+              ? wbsSubtasksRes.value.data.data
+              : [];
           const allProjects =
             projectsRes.status === "fulfilled" && projectsRes.value?.data
               ? Array.isArray(projectsRes.value.data)
-                ? projectsRes.value.data
-                : projectsRes.value.data.data || []
+              : projectsRes.value.data.data || []
+              ? projectsRes.value.data.data || []
               : [];
           const allStatuses =
             statusesRes.status === "fulfilled" && statusesRes.value?.data
@@ -448,6 +460,14 @@ const PmsTemplateDetailsComponent = () => {
             if (t._id) taskMap.set(String(t._id), t);
             if (t.id) taskMap.set(String(t.id), t);
             if (t.task_code) taskMap.set(String(t.task_code), t);
+          });
+
+          const subtaskMap = new Map();
+          allSubtasks.forEach((st) => {
+            if (st._id) subtaskMap.set(String(st._id), st);
+            if (st.id) subtaskMap.set(String(st.id), st);
+            if (st.subtask_code) subtaskMap.set(String(st.subtask_code), st);
+            if (st.code) subtaskMap.set(String(st.code), st);
           });
 
           allProjects.forEach((p) => {
@@ -611,11 +631,38 @@ const PmsTemplateDetailsComponent = () => {
 
                 const taskFieldData = typeof tsk === "object" ? tsk.fieldData || {} : {};
 
+                const resolvedSubtasks = (typeof tsk === "object" && Array.isArray(tsk.subtasks) ? tsk.subtasks : []).map((st, stIdx) => {
+                  const stRawId = typeof st === "object" ? st.subtaskId?._id || st.subtaskId : st;
+                  const stRef =
+                    typeof st === "object" && st.subtaskId?.subtask_name
+                      ? st.subtaskId
+                      : subtaskMap.get(String(stRawId)) || {};
+
+                  const stCode =
+                    stRef.subtask_code ||
+                    (typeof st === "object" ? st.subtaskId?.subtask_code || st.subtask_code : null) ||
+                    (typeof stRawId === "string" ? stRawId : `Subtask ${stIdx + 1}`);
+                  const stName =
+                    stRef.subtask_name ||
+                    (typeof st === "object" ? st.subtaskId?.subtask_name || st.subtask_name || st.subtaskName : null) ||
+                    stCode;
+
+                  const subtaskFieldData = typeof st === "object" ? st.fieldData || {} : {};
+
+                  return {
+                    subtaskId: stCode,
+                    subtask_code: stCode,
+                    subtask_name: stName,
+                    fieldData: subtaskFieldData
+                  };
+                });
+
                 return {
                   taskId: tCode,
                   task_code: tCode,
                   task_name: tName,
-                  fieldData: taskFieldData
+                  fieldData: taskFieldData,
+                  subtasks: resolvedSubtasks
                 };
               });
 
@@ -712,6 +759,17 @@ const PmsTemplateDetailsComponent = () => {
   const totalWorks = resolvedStages.reduce((acc, s) => acc + (s.works?.length || 0), 0);
   const totalTasks = resolvedStages.reduce(
     (acc, s) => acc + (s.works?.reduce((wAcc, w) => wAcc + (w.tasks?.length || 0), 0) || 0),
+    0
+  );
+  const totalSubtasks = resolvedStages.reduce(
+    (acc, s) =>
+      acc +
+      (s.works?.reduce(
+        (wAcc, w) =>
+          wAcc +
+          (w.tasks?.reduce((tAcc, t) => tAcc + (t.subtasks?.length || 0), 0) || 0),
+        0
+      ) || 0),
     0
   );
 
@@ -921,7 +979,7 @@ const PmsTemplateDetailsComponent = () => {
       </div>
 
       {/* ================= 3. KPI METRIC CARDS (FIXED PROJECT STATUS & UNIFORM FONTS) ================= */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Stages</span>
@@ -957,6 +1015,17 @@ const PmsTemplateDetailsComponent = () => {
 
         <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs">
           <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Subtasks</span>
+            <div className="w-7 h-7 rounded-lg bg-cyan-50 text-cyan-600 flex items-center justify-center">
+              <FaClipboardList className="w-3.5 h-3.5" />
+            </div>
+          </div>
+          <p className="text-2xl font-black text-slate-900 mt-1">{totalSubtasks}</p>
+          <p className="text-[11px] text-slate-500 mt-0.5">Granular Subtasks</p>
+        </div>
+
+        <div className="bg-white p-3.5 rounded-xl border border-slate-200 shadow-2xs col-span-2 sm:col-span-1">
+          <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Project Status</span>
             <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
               <FaCheckCircle className="w-3.5 h-3.5" />
@@ -984,7 +1053,7 @@ const PmsTemplateDetailsComponent = () => {
         </div>
       </div>
 
-      {/* ================= 4. WBS EXECUTION BREAKDOWN (STAGE -> WORK -> TASK) ================= */}
+      {/* ================= 4. WBS EXECUTION BREAKDOWN (STAGE -> WORK -> TASK -> SUBTASK) ================= */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-2xs overflow-hidden">
         {/* Section Header */}
         <div className="bg-slate-50 px-4 py-3 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
@@ -994,7 +1063,7 @@ const PmsTemplateDetailsComponent = () => {
               WBS Execution Breakdown
             </h2>
             <span className="text-xs text-slate-500 hidden sm:inline font-medium">
-              ({resolvedStages.length} Stages • {totalWorks} Works • {totalTasks} Tasks)
+              ({resolvedStages.length} Stages • {totalWorks} Works • {totalTasks} Tasks • {totalSubtasks} Subtasks)
             </span>
           </div>
 
@@ -1191,6 +1260,53 @@ const PmsTemplateDetailsComponent = () => {
                                                   materialMap={materialMap}
                                                   supplierMap={supplierMap}
                                                 />
+
+                                                {/* Subtasks under this Task */}
+                                                {Array.isArray(tsk.subtasks) && tsk.subtasks.length > 0 && (
+                                                  <div className="mt-3 pt-3 border-t border-dashed border-cyan-200 space-y-2">
+                                                    <div className="flex items-center gap-1.5 text-xs font-black text-cyan-950 uppercase tracking-wider">
+                                                      <span className="w-1.5 h-1.5 rounded-full bg-cyan-600"></span>
+                                                      <span>Subtasks ({tsk.subtasks.length})</span>
+                                                    </div>
+
+                                                    <div className="space-y-2 ml-0 sm:ml-2">
+                                                      {tsk.subtasks.map((st, stIdx) => {
+                                                        const stFieldData = st.fieldData || {};
+
+                                                        return (
+                                                          <div
+                                                            key={stIdx}
+                                                            className="bg-cyan-50/30 p-3 rounded-lg border border-cyan-200/80 shadow-2xs space-y-2"
+                                                          >
+                                                            {/* Subtask Header */}
+                                                            <div className="flex items-center justify-between flex-wrap gap-2 pb-1.5 border-b border-cyan-100">
+                                                              <div className="flex items-center gap-2">
+                                                                <span className="font-mono text-[11px] font-black text-cyan-800 bg-cyan-100 px-1.5 py-0.5 rounded border border-cyan-200">
+                                                                  {st.subtask_code}
+                                                                </span>
+                                                                <strong className="text-xs font-bold text-slate-800">
+                                                                  {st.subtask_name}
+                                                                </strong>
+                                                              </div>
+                                                              <span className="text-[11px] font-bold text-slate-700 bg-white px-2 py-0.5 rounded border border-cyan-200 shadow-2xs">
+                                                                {stFieldData.durationFormatted || `${stFieldData.durationDays || 1} D`}
+                                                              </span>
+                                                            </div>
+
+                                                            {/* Subtask Field Data */}
+                                                            <ExecutionFieldDataView
+                                                              fieldData={stFieldData}
+                                                              level="subtask"
+                                                              label={`Subtask ${st.subtask_code} Resources`}
+                                                              materialMap={materialMap}
+                                                              supplierMap={supplierMap}
+                                                            />
+                                                          </div>
+                                                        );
+                                                      })}
+                                                    </div>
+                                                  </div>
+                                                )}
                                               </div>
                                             );
                                           })}

@@ -71,57 +71,84 @@ const LeadOverviewCard = ({ lead }) => {
 
       {/* KEY-VALUE ITEMS */}
       <div className="space-y-2.5 text-xs sm:text-sm">
-        <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50/90 border border-slate-200/70">
-          <span className="text-slate-500 font-bold uppercase tracking-wider">LEAD ID</span>
+        <div className="flex items-center justify-between gap-2 p-3 rounded-xl bg-slate-50/90 border border-slate-200/70">
+          <span className="text-slate-500 font-bold uppercase tracking-wider shrink-0">LEAD ID</span>
           <span className="font-mono font-black text-slate-900 px-3 py-1 rounded-lg bg-white border border-slate-300 shadow-2xs">
             {lead?.leadId || lead?.id || "LD-1001"}
           </span>
         </div>
 
-        <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50/90 border border-slate-200/70">
-          <span className="text-slate-500 font-bold uppercase tracking-wider">LEAD STATUS</span>
+        <div className="flex items-center justify-between gap-2 p-3 rounded-xl bg-slate-50/90 border border-slate-200/70">
+          <span className="text-slate-500 font-bold uppercase tracking-wider shrink-0">LEAD STATUS</span>
           <span className={`px-3 py-1 rounded-full text-xs border ${getStatusBadge(status)}`}>
             {status}
           </span>
         </div>
 
-
-        <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50/90 border border-slate-200/70">
-          <span className="text-slate-500 font-bold uppercase tracking-wider">LEAD TYPE</span>
+        <div className="flex items-center justify-between gap-2 p-3 rounded-xl bg-slate-50/90 border border-slate-200/70">
+          <span className="text-slate-500 font-bold uppercase tracking-wider shrink-0">LEAD TYPE</span>
           <span className="px-3 py-0.5 rounded-lg bg-blue-50 text-blue-700 font-black border border-blue-200 text-xs">
             {leadType}
           </span>
         </div>
 
-        <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50/90 border border-slate-200/70">
-          <span className="text-slate-500 font-bold uppercase tracking-wider">LEAD MODE</span>
-          <span className="font-black text-slate-900">{leadMode}</span>
+        <div className="flex items-center justify-between gap-2 p-3 rounded-xl bg-slate-50/90 border border-slate-200/70">
+          <span className="text-slate-500 font-bold uppercase tracking-wider shrink-0">LEAD MODE</span>
+          <span className="font-black text-slate-900 text-right break-words">{leadMode}</span>
         </div>
 
-        <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50/90 border border-slate-200/70">
-          <span className="text-slate-500 font-bold uppercase tracking-wider">WORK CATEGORY</span>
-          <span className="px-2.5 py-0.5 rounded-md text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
-            {lead?.workCategory || "Design"}
-          </span>
+        <div className="flex items-start justify-between gap-2 p-3 rounded-xl bg-slate-50/90 border border-slate-200/70">
+          <span className="text-slate-500 font-bold uppercase tracking-wider shrink-0 mt-0.5">WORK CATEGORY</span>
+          <div className="flex flex-wrap items-center justify-end gap-1.5 max-w-[65%]">
+            {(Array.isArray(lead?.workCategory)
+              ? lead.workCategory
+              : typeof lead?.workCategory === "string"
+              ? lead.workCategory.split(",").map((s) => s.trim())
+              : [lead?.workCategory || "Design"]
+            )
+              .filter(Boolean)
+              .map((cat, idx) => (
+                <span
+                  key={idx}
+                  className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-2xs"
+                >
+                  {cat}
+                </span>
+              ))}
+          </div>
         </div>
 
-        <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50/90 border border-slate-200/70">
-          <span className="text-slate-500 font-bold uppercase tracking-wider">WORK TYPE</span>
-          <span className="font-extrabold text-slate-800 text-xs max-w-[160px] truncate text-right">
-            {Array.isArray(lead?.workType) ? lead.workType.join(", ") : (lead?.workType || "Concept Drawing")}
-          </span>
+        <div className="flex items-start justify-between gap-2 p-3 rounded-xl bg-slate-50/90 border border-slate-200/70">
+          <span className="text-slate-500 font-bold uppercase tracking-wider shrink-0 mt-0.5">WORK TYPE</span>
+          <div className="flex flex-wrap items-center justify-end gap-1.5 max-w-[65%]">
+            {(Array.isArray(lead?.workType)
+              ? lead.workType
+              : typeof lead?.workType === "string"
+              ? lead.workType.split(",").map((s) => s.trim())
+              : [lead?.workType || "Concept Drawing"]
+            )
+              .filter(Boolean)
+              .map((wt, idx) => (
+                <span
+                  key={idx}
+                  className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-slate-100 text-slate-800 border border-slate-200 shadow-2xs"
+                >
+                  {wt}
+                </span>
+              ))}
+          </div>
         </div>
 
-        <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50/90 border border-slate-200/70">
-          <span className="text-slate-500 font-bold uppercase tracking-wider">EXPECTED BUSINESS</span>
+        <div className="flex items-center justify-between gap-2 p-3 rounded-xl bg-slate-50/90 border border-slate-200/70">
+          <span className="text-slate-500 font-bold uppercase tracking-wider shrink-0">EXPECTED BUSINESS</span>
           <span className="font-mono font-black text-emerald-800 text-xs bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
             ₹{Number(lead?.expectedBusiness || lead?.expectedRevenue || lead?.amount || 0).toLocaleString("en-IN")}
           </span>
         </div>
 
-        <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50/90 border border-slate-200/70">
-          <span className="text-slate-500 font-bold uppercase tracking-wider">CREATED DATE</span>
-          <span className="font-mono text-xs text-slate-800 font-extrabold">
+        <div className="flex items-center justify-between gap-2 p-3 rounded-xl bg-slate-50/90 border border-slate-200/70">
+          <span className="text-slate-500 font-bold uppercase tracking-wider shrink-0">CREATED DATE</span>
+          <span className="font-mono text-xs text-slate-800 font-extrabold text-right">
             {createdDate} {createdTime && `at ${createdTime}`}
           </span>
         </div>
