@@ -28,6 +28,8 @@ import ActiveProjectsPage from '../Pages/ActiveProjects/ActiveProjectsPage'
 import CreateActiveProjectPage from '../Pages/ActiveProjects/CreateActiveProjectPage'
 import ActiveProjectDetailsPage from '../Pages/ActiveProjects/ActiveProjectDetailsPage'
 import ActiveProjectExecutionPage from '../Pages/ActiveProjects/ActiveProjectExecutionPage'
+import CompleteProjects from '../Pages/CompleteProjects'
+import CompleteProjectDetailsPage from '../Pages/CompleteProjectDetailsPage'
 
 const SalesRoutes = () => {
   return (
@@ -60,6 +62,11 @@ const SalesRoutes = () => {
           <Route path="active-projects/create" element={<CreateActiveProjectPage />} />
           <Route path="active-projects/details/:id" element={<ActiveProjectDetailsPage />} />
           <Route path="active-projects/:id" element={<ActiveProjectExecutionPage />} />
+          {/* Complete / Closed Projects Archive */}
+          <Route path="complete-projects" element={<CompleteProjects />} />
+          <Route path="completed-projects" element={<CompleteProjects />} />
+          <Route path="complete-projects/details/:id" element={<CompleteProjectDetailsPage />} />
+          <Route path="complete-projects/:id" element={<CompleteProjectDetailsPage />} />
           {/* MasterForm Routes */}
           <Route path="master/pms-template" element={<PmsTemplate />} />
           <Route path="master/pms-template/wbs-master" element={<PmsWbsMasterPage />} />

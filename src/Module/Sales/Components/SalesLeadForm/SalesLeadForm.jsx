@@ -13,6 +13,7 @@ import CommentWithMedia from "../../../../Common/Components/CommentWithMedia";
 import { indianStatesList, workCategoryList, availableWorkTypes } from "../../data/addLeadData";
 import { getLeadByIdApi, updateLeadApi } from "../../services/totalLeads.api";
 import { createLeadProjectApi } from "../../services/leadProject.api";
+import { uploadMediaFileApi } from "../../services/upload.api";
 import {
   useLeadContext,
   updateLeadInStorage,
@@ -86,6 +87,51 @@ const SalesLeadForm = () => {
     const parsedWorkType = parseMultiField(leadData.workType);
     const parsedWorkCategory = parseMultiField(leadData.workCategory || leadData.businessType);
 
+    // Extract existing requirement/project files from lead
+    const existingReqFiles = [];
+    const sourceReqFiles = Array.isArray(leadData.projectDetailFiles) && leadData.projectDetailFiles.length > 0
+      ? leadData.projectDetailFiles
+      : (Array.isArray(leadData.projectDetailAttachments) ? leadData.projectDetailAttachments : []);
+    sourceReqFiles.forEach((f) => {
+      const url = f?.url || f?.preview;
+      if (url && !existingReqFiles.some((x) => (x.url || x.preview) === url)) {
+        existingReqFiles.push({
+          url,
+          fileType: f.fileType || f.type || "image",
+          type: f.fileType || f.type || "image",
+          name: f.name || "Requirement File",
+          size: f.size || 0
+        });
+      }
+    });
+
+    // Extract existing remarks files from lead
+    const existingRemarkFiles = [];
+    const sourceRemarkFiles = Array.isArray(leadData.remarksFiles) && leadData.remarksFiles.length > 0
+      ? leadData.remarksFiles
+      : (Array.isArray(leadData.remarkAttachments) ? leadData.remarkAttachments : (Array.isArray(leadData.attachments) ? leadData.attachments : []));
+    sourceRemarkFiles.forEach((f) => {
+      const url = f?.url || f?.preview;
+      if (url && !existingRemarkFiles.some((x) => (x.url || x.preview) === url)) {
+        existingRemarkFiles.push({
+          url,
+          fileType: f.fileType || f.type || "image",
+          type: f.fileType || f.type || "image",
+          name: f.name || "Remark Attachment",
+          size: f.size || 0
+        });
+      }
+    });
+    if (leadData.remarksFile && typeof leadData.remarksFile === "string" && !existingRemarkFiles.some((x) => (x.url || x.preview) === leadData.remarksFile)) {
+      existingRemarkFiles.push({
+        url: leadData.remarksFile,
+        fileType: "image",
+        type: "image",
+        name: "Remark Attachment",
+        size: 0
+      });
+    }
+
     setFormData({
       // Client Details fetched from lead
       clientName: leadData.concernPersonName || leadData.clientName || "",
@@ -115,9 +161,9 @@ const SalesLeadForm = () => {
       nextPersonName: leadData.nextPersonName || "",
       designation: leadData.designation || "",
       requirement: leadData.requirement || leadData.remarks || "",
-      requirementAttachments: [],
-      transferRemark: initialRemark || "",
-      transferRemarkAttachments: []
+      requirementAttachments: existingReqFiles,
+      transferRemark: initialRemark || leadData.transferRemark || "",
+      transferRemarkAttachments: existingRemarkFiles
     });
   };
 
@@ -291,9 +337,10 @@ const SalesLeadForm = () => {
         city: proj.city || "",
         state: proj.state || "",
         pincode: proj.pincode || "",
-        address: proj.address || "",
         requirement: proj.requirement || "",
+        requirementAttachments: Array.isArray(proj.projectDetailFiles) ? proj.projectDetailFiles.map(f => ({ ...f, type: f.fileType || f.type || "image" })) : [],
         transferRemark: proj.transferRemark || "",
+        transferRemarkAttachments: Array.isArray(proj.remarksFiles) ? proj.remarksFiles.map(f => ({ ...f, type: f.fileType || f.type || "image" })) : [],
         clientRating: Number(proj.clientRating || 4.5),
         projectCoordinatorName: proj.projectCoordinatorName || proj.nextPersonName || "",
         nextPersonName: proj.projectCoordinatorName || proj.nextPersonName || "",
@@ -415,41 +462,85 @@ const SalesLeadForm = () => {
       updatedAt: new Date().toISOString()
     };
 
-    // Upload any newly recorded audio or attached media files
-    const rawUploadFiles = [
-      ...(formData.transferRemarkAttachments || []),
-      ...(formData.requirementAttachments || [])
-    ]
-      .map((att) => att.file || att.blob || (att instanceof File || att instanceof Blob ? att : null))
-      .filter(Boolean);
+    // Helper to upload newly attached/recorded media files and retain existing ones
+    const processAttachments = async (attachmentsList) => {
+      const processed = [];
+      const list = Array.isArray(attachmentsList) ? attachmentsList : [];
+      for (const item of list) {
+        const rawFile = item?.file || item?.blob || (item instanceof File || item instanceof Blob ? item : null);
+        if (rawFile) {
+          try {
+            const upRes = await uploadMediaFileApi(rawFile, targetId);
+            if (upRes && upRes.data) {
+              const resData = upRes.data.data || upRes.data;
+              const mime = rawFile.type || "";
+              const inferredType = resData.fileType || item.type || (mime.startsWith("audio") ? "audio" : mime.startsWith("video") ? "video" : mime.startsWith("image") ? "image" : "document");
+              processed.push({
+                url: resData.url,
+                fileType: inferredType,
+                type: inferredType,
+                name: resData.name || item.name || rawFile.name || "attachment",
+                size: resData.size || rawFile.size || 0
+              });
+            }
+          } catch (uploadErr) {
+            console.error("Error uploading file to Cloudinary:", uploadErr);
+          }
+        } else if (item?.url) {
+          const itemType = item.fileType || item.type || "image";
+          processed.push({
+            url: item.url,
+            fileType: itemType,
+            type: itemType,
+            name: item.name || "attachment",
+            size: item.size || 0
+          });
+        }
+      }
+      return processed;
+    };
 
-    if (rawUploadFiles.length > 0 && targetId) {
+    const finalRequirementFiles = await processAttachments(formData.requirementAttachments);
+    const finalTransferRemarkFiles = await processAttachments(formData.transferRemarkAttachments);
+
+    finalLeadData.remarksFiles = finalTransferRemarkFiles;
+    finalLeadData.remarkAttachments = finalTransferRemarkFiles;
+    finalLeadData.attachments = finalTransferRemarkFiles;
+    finalLeadData.projectDetailFiles = finalRequirementFiles;
+    finalLeadData.projectDetailAttachments = finalRequirementFiles;
+    if (finalTransferRemarkFiles.length > 0) {
+      finalLeadData.remarksFile = finalTransferRemarkFiles[0].url;
+    }
+
+    if (targetId) {
       try {
-        await updateLeadApi(targetId, finalLeadData, rawUploadFiles);
+        await updateLeadApi(targetId, finalLeadData);
       } catch (upErr) {
         console.error("Error uploading files to lead:", upErr);
       }
     }
 
-      // Save project data ONLY to leadsproject collection with Lead ObjectId reference
-      const leadMongoId = lead?._id || (targetId && String(targetId).length === 24 ? targetId : finalLeadData._id || finalLeadData.leadId || id);
+    // Save project data ONLY to leadsproject collection with Lead ObjectId reference
+    const leadMongoId = lead?._id || (targetId && String(targetId).length === 24 ? targetId : finalLeadData._id || finalLeadData.leadId || id);
 
-      const projectPayload = {
-        ...formData,
-        businessType: cleanBusinessType,
-        workCategory: cleanWorkCategory,
-        leadId: leadMongoId,
-        projectId: editingProjectId || undefined,
-        workType: finalWorkType,
-        expectedBusiness: Number(formData.expectedBusiness) || 0,
-        clientRating: Number(formData.clientRating) || 4.5
-      };
+    const projectPayload = {
+      ...formData,
+      businessType: cleanBusinessType,
+      workCategory: cleanWorkCategory,
+      leadId: leadMongoId,
+      projectId: editingProjectId || undefined,
+      workType: finalWorkType,
+      expectedBusiness: Number(formData.expectedBusiness) || 0,
+      clientRating: Number(formData.clientRating) || 4.5,
+      projectDetailFiles: finalRequirementFiles,
+      remarksFiles: finalTransferRemarkFiles
+    };
 
-      // Strip non-schema attachment fields before sending JSON to backend
-      delete projectPayload.requirementAttachments;
-      delete projectPayload.transferRemarkAttachments;
+    // Strip non-schema attachment fields before sending JSON to backend
+    delete projectPayload.requirementAttachments;
+    delete projectPayload.transferRemarkAttachments;
 
-      const saveRes = await createLeadProjectApi(projectPayload);
+    const saveRes = await createLeadProjectApi(projectPayload);
       if (saveRes && saveRes.success === false) {
         toast.error(saveRes.message || "Failed to save project records.");
         setSubmitting(false);

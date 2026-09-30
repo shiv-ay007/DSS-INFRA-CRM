@@ -82,8 +82,10 @@ const Presales = () => {
   const [loading, setLoading] = useState(true);
   const [activePipelinePresale, setActivePipelinePresale] = useState(null);
 
-  // Presales List state (directly from backend API)
+  // Presales List state (Active, non-closed projects grouped by client)
   const [presalesList, setPresalesList] = useState([]);
+  // Cache of all projects (including closed ones) to resolve pipeline view when opened directly
+  const [allBackendProjectsList, setAllBackendProjectsList] = useState([]);
 
   // Resolve target presale for 11-Stage Pipeline Full-Page View
   const activePipelineRecord = useMemo(() => {
@@ -106,7 +108,7 @@ const Presales = () => {
     }
 
     if (id) {
-      // 1. Direct match with top-level client
+      // 1. Direct match with top-level client in active presales
       const foundClient = presalesList.find((p) => p.id === id || p._id === id || p.leadId === id);
       if (foundClient) return foundClient;
 
@@ -125,16 +127,22 @@ const Presales = () => {
         }
       }
 
+      // 3. Fallback: Search in allBackendProjectsList (e.g. for closed/complete projects opened directly)
+      const foundInAll = allBackendProjectsList.find(
+        (proj) => proj.id === id || proj._id === id || proj.leadId === id
+      );
+      if (foundInAll) return foundInAll;
+
       return location.state?.presale || null;
     }
     return null;
-  }, [activePipelinePresale, id, presalesList, location.state]);
+  }, [activePipelinePresale, id, presalesList, allBackendProjectsList, location.state]);
 
   // Fetch all projects directly from backend lead-projects API
   const fetchBackendProjects = async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const res = await getAllLeadProjectsApi();
+      const res = await getAllLeadProjectsApi({ isClosed: "false" });
       const backendProjects =
         res?.data?.projects || res?.projects || (Array.isArray(res?.data) ? res.data : Array.isArray(res) ? res : []);
 
@@ -166,6 +174,9 @@ const Presales = () => {
           activePerson: bp.nextPersonName || bp.projectCoordinatorName || bp.activePerson || bp.assignedTo || bp.salesPerson || leadObj?.salesPerson || "Admin",
           projectCoordinatorName: bp.projectCoordinatorName || bp.nextPersonName || "",
           nextPersonName: bp.projectCoordinatorName || bp.nextPersonName || "",
+          status: bp.status || leadObj?.status || "INTERESTED",
+          closureStatus: bp.closureStatus || leadObj?.closureStatus || "",
+          presaleStatus: bp.presaleStatus || leadObj?.presaleStatus || "",
           projectStatus: bp.projectStatus || "On Track",
           projectSubStatus: bp.projectSubStatus || "VISIT",
           designation: bp.designation || bp.nextPersonDesignation || "",
@@ -182,34 +193,51 @@ const Presales = () => {
         };
       });
 
-      // Deduplicate by Client so that each Client appears only once in Presales
+      // Save all projects to cache for direct ID pipeline lookups (e.g. viewing closed pipeline)
+      setAllBackendProjectsList(formatted);
+
+      // CRITICAL: Filter out CLOSED or COMPLETED projects!
+      // If a project is closed, it belongs ONLY to Complete Projects and must NOT appear in Presales.
+      const activeProjects = formatted.filter((item) => {
+        const bp = item.rawProject || {};
+        const status = String(item.status || "").toUpperCase();
+        const closureStatus = String(item.closureStatus || "").trim();
+        const presaleStatus = String(item.presaleStatus || "").toLowerCase();
+        const projectStatus = String(item.projectStatus || "").toLowerCase();
+
+        const isClosed =
+          bp.isClosed === true ||
+          bp.isCompleted === true ||
+          status === "CLOSED" ||
+          closureStatus.length > 0 ||
+          presaleStatus === "closed" ||
+          projectStatus === "closed";
+
+        return !isClosed;
+      });
+
+      // Deduplicate by Client (Phone number or Lead ID) so that different clients are never accidentally merged
       const clientMap = new Map();
       const phoneToKey = new Map();
-      const nameToKey = new Map();
       const leadIdToKey = new Map();
 
-      formatted.forEach((item) => {
+      activeProjects.forEach((item) => {
         const rawLeadId = item.leadId;
         const validLeadId = rawLeadId && String(rawLeadId).length >= 8 ? String(rawLeadId) : null;
         const cleanPhone = item.phoneNumber && item.phoneNumber !== "--" ? String(item.phoneNumber).replace(/\D/g, "") : "";
-        const cleanName = item.clientName && item.clientName !== "--" ? item.clientName.trim().toLowerCase() : "";
 
         let clientKey = null;
         if (cleanPhone && cleanPhone.length >= 7 && phoneToKey.has(cleanPhone)) {
           clientKey = phoneToKey.get(cleanPhone);
-        } else if (cleanName && cleanName !== "unnamed client" && nameToKey.has(cleanName)) {
-          clientKey = nameToKey.get(cleanName);
         } else if (validLeadId && leadIdToKey.has(validLeadId)) {
           clientKey = leadIdToKey.get(validLeadId);
         }
 
         if (!clientKey) {
           clientKey = (cleanPhone && cleanPhone.length >= 7 ? `phone_${cleanPhone}` : null) ||
-                      (cleanName && cleanName !== "unnamed client" ? `name_${cleanName}` : null) ||
                       (validLeadId ? `lead_${validLeadId}` : `id_${item.id}`);
 
           if (cleanPhone && cleanPhone.length >= 7) phoneToKey.set(cleanPhone, clientKey);
-          if (cleanName && cleanName !== "unnamed client") nameToKey.set(cleanName, clientKey);
           if (validLeadId) leadIdToKey.set(validLeadId, clientKey);
 
           clientMap.set(clientKey, {
@@ -225,7 +253,6 @@ const Presales = () => {
           existing.totalExpectedBusiness = (existing.totalExpectedBusiness || 0) + item.expectedBusiness;
 
           if (cleanPhone && cleanPhone.length >= 7) phoneToKey.set(cleanPhone, clientKey);
-          if (cleanName && cleanName !== "unnamed client") nameToKey.set(cleanName, clientKey);
           if (validLeadId) leadIdToKey.set(validLeadId, clientKey);
 
           // Keep the latest project's details as primary display data
@@ -491,16 +518,41 @@ const Presales = () => {
     if (!currentPresale) return;
     const targetId = currentPresale._id || currentPresale.id;
     setPresalesList((prev) =>
-      prev.map((item) =>
-        item.id === currentPresale.id ? { ...item, status: "CLOSED", closureStatus: closureOption } : item
-      )
+      prev
+        .map((p) => {
+          if (Array.isArray(p.allProjects)) {
+            const remaining = p.allProjects.filter(
+              (sub) => sub.id !== targetId && sub._id !== targetId
+            );
+            if (remaining.length === 0) return null;
+            const latest = remaining[remaining.length - 1];
+            return {
+              ...p,
+              ...latest,
+              projectsCount: remaining.length,
+              allProjects: remaining,
+              totalExpectedBusiness: remaining.reduce((sum, r) => sum + (r.expectedBusiness || 0), 0)
+            };
+          }
+          if (p.id === targetId || p._id === targetId) {
+            return null;
+          }
+          return p;
+        })
+        .filter(Boolean)
     );
     setIsCloseModalOpen(false);
     try {
       if (targetId) {
         await updateLeadProjectApi(targetId, {
           status: "CLOSED",
-          closureStatus: closureOption
+          closureStatus: closureOption,
+          isClosed: true,
+          isCompleted: true,
+          closedAt: new Date(),
+          closedAtStage: currentPresale?.currentStageId || 1,
+          closureReason: closureOption,
+          closureRemark: `Closed from Presales stage ${currentPresale?.currentStageId || 1}`
         });
       }
       toast.info(`Record marked as "${closureOption}".`);
@@ -1206,20 +1258,40 @@ const Presales = () => {
             }
           }}
           onUpdatePresale={(updatedItem) => {
-            setPresalesList((prev) =>
-              prev.map((p) => {
+            const isClosed =
+              updatedItem.status === "CLOSED" ||
+              String(updatedItem.closureStatus || "").trim().length > 0 ||
+              String(updatedItem.presaleStatus || "").toLowerCase() === "closed";
+
+            setPresalesList((prev) => {
+              if (isClosed) {
+                return prev
+                  .map((p) => {
+                    if (Array.isArray(p.allProjects)) {
+                      const remaining = p.allProjects.filter(
+                        (sub) => sub.id !== updatedItem.id && sub._id !== updatedItem._id
+                      );
+                      if (remaining.length === 0) return null;
+                      const latest = remaining[remaining.length - 1];
+                      return {
+                        ...p,
+                        ...latest,
+                        projectsCount: remaining.length,
+                        allProjects: remaining,
+                        totalExpectedBusiness: remaining.reduce((sum, r) => sum + (r.expectedBusiness || 0), 0)
+                      };
+                    }
+                    if (p.id === updatedItem.id || p._id === updatedItem._id) {
+                      return null;
+                    }
+                    return p;
+                  })
+                  .filter(Boolean);
+              }
+
+              return prev.map((p) => {
                 if (p.id === updatedItem.id || p._id === updatedItem._id) {
-                  return {
-                    ...p,
-                    ...updatedItem,
-                    allProjects: Array.isArray(p.allProjects)
-                      ? p.allProjects.map((sub) =>
-                          sub.id === updatedItem.id || sub._id === updatedItem._id
-                            ? { ...sub, ...updatedItem }
-                            : sub
-                        )
-                      : p.allProjects
-                  };
+                  return { ...p, ...updatedItem };
                 }
                 if (
                   Array.isArray(p.allProjects) &&
@@ -1237,8 +1309,8 @@ const Presales = () => {
                   };
                 }
                 return p;
-              })
-            );
+              });
+            });
             setActivePipelinePresale((prev) => {
               if (!prev) return updatedItem;
               const newAll = Array.isArray(prev.allProjects)

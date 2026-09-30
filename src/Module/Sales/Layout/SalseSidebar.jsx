@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import salesLogo from "../../../assets/SalesLogo.png";
 import { useAuth } from "../../../context/AuthContext";
-import { FaWpforms, FaBoxes, FaHardHat, FaLayerGroup } from "react-icons/fa";
+import { FaWpforms, FaBoxes, FaHardHat, FaLayerGroup, FaCheckCircle } from "react-icons/fa";
 import { HiOutlineTemplate } from "react-icons/hi";
 
 // 1. Worker (Admin / Staff) Menu Items - Has "Add Lead"
@@ -82,6 +82,14 @@ const workerMenuItems = [
     activeGradient: "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-600/30",
     iconColor: "text-blue-400 group-hover:text-blue-300",
     icon: <FaHardHat className="w-4 h-4 shrink-0" />
+  },
+  {
+    id: "complete_projects",
+    label: "Complete Projects",
+    path: "/sales/complete-projects",
+    activeGradient: "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/30",
+    iconColor: "text-emerald-400 group-hover:text-emerald-300",
+    icon: <FaCheckCircle className="w-4 h-4 shrink-0" />
   },
   {
     id: "master_form",
@@ -190,6 +198,14 @@ const observerMenuItems = [
     activeGradient: "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-600/30",
     iconColor: "text-blue-400 group-hover:text-blue-300",
     icon: <FaHardHat className="w-4 h-4 shrink-0" />
+  },
+  {
+    id: "complete_projects",
+    label: "Complete Projects",
+    path: "/sales/complete-projects",
+    activeGradient: "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-md shadow-emerald-600/30",
+    iconColor: "text-emerald-400 group-hover:text-emerald-300",
+    icon: <FaCheckCircle className="w-4 h-4 shrink-0" />
   },
   {
     id: "master_form",

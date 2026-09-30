@@ -372,6 +372,14 @@ const Salse = () => {
               }
             });
           }
+          if (Array.isArray(row.projectDetailFiles)) {
+            row.projectDetailFiles.forEach((f) => {
+              const url = f?.url || f?.preview;
+              if (url && !attachments.some((x) => (x.url || x.preview) === url)) {
+                attachments.push({ ...f, type: f.fileType || f.type || "image" });
+              }
+            });
+          }
           if (Array.isArray(row.remarkAttachments)) {
             row.remarkAttachments.forEach((att) => {
               const url = att?.url || att?.preview;

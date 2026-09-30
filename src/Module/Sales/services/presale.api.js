@@ -27,3 +27,11 @@ export const addPresaleRemarkApi = async (projectId, formData) => {
 export const closePresaleApi = async (projectId, formData) => {
   return await api.post(`/presales/${projectId}/close`, formData);
 };
+
+/**
+ * 5. Reopen / Restore Closed Presale back to In Progress
+ */
+export const reopenPresaleApi = async (projectId) => {
+  return await api.post(`/presales/${projectId}/reopen`);
+};
+
