@@ -494,20 +494,17 @@ const CompleteProjectDetailsComponent = () => {
           onBackClick={() => navigate("/sales/complete-projects")}
           rightActions={
             <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => setIsRestoreModalOpen(true)}
-                disabled={isUserObserver}
-                className={`px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 shadow-2xs ${
-                  isUserObserver
-                    ? "bg-slate-200 text-slate-400 cursor-not-allowed"
-                    : "bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer active:scale-95"
-                }`}
-                title={isUserObserver ? "Disabled in Observer Mode" : "Restore Project"}
-              >
-                <FaTrashRestore className="text-xs" />
-                <span>Restore Project</span>
-              </button>
+              {!isUserObserver && (
+                <button
+                  type="button"
+                  onClick={() => setIsRestoreModalOpen(true)}
+                  className="px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 shadow-2xs bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer active:scale-95"
+                  title="Restore Project"
+                >
+                  <FaTrashRestore className="text-xs" />
+                  <span>Restore Project</span>
+                </button>
+              )}
 
               <button
                 type="button"

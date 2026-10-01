@@ -1,6 +1,3 @@
-import { getAllLeadProjectsApi } from "./leadProject.api";
-import pmsWbsService from "./pmsWbsService";
-
 export const ACTIVE_PROJECTS_STORAGE_KEY = "dss_active_projects_data";
 
 // Standard 23 Major Construction Stages (Module 4 Master Blueprint)
@@ -196,6 +193,8 @@ export const calculateProjectRollup = (project) => {
   let completedTasks = 0;
   let inProgressTasks = 0;
   let overdueTasks = 0;
+  let totalSubtasks = 0;
+  let completedSubtasks = 0;
 
   const todayStr = new Date().toISOString().split("T")[0];
 
@@ -210,6 +209,11 @@ export const calculateProjectRollup = (project) => {
       const updatedTasks = (work.tasks || []).map((task) => {
         totalTasks += 1;
         stageTotalTasks += 1;
+
+        const taskSubtasks = Array.isArray(task.subtasks) ? task.subtasks : [];
+        totalSubtasks += taskSubtasks.length;
+        const taskCompletedSubtasks = taskSubtasks.filter((st) => st.status === "Completed").length;
+        completedSubtasks += taskCompletedSubtasks;
 
         const isDone = task.status === "Completed";
         const isInProg = task.status === "In Progress";
@@ -298,6 +302,9 @@ export const calculateProjectRollup = (project) => {
     completedTasks,
     inProgressTasks,
     overdueTasks,
+    totalSubtasks,
+    subtasksCount: totalSubtasks,
+    completedSubtasksCount: completedSubtasks,
     overallProgress,
     projectStatus: autoProjectStatus
   };
@@ -317,10 +324,12 @@ export const buildWbsLookupMaps = (wbsData = null) => {
   const stageMap = new Map();
   const workMap = new Map();
   const taskMap = new Map();
+  const subtaskMap = new Map();
 
   let stages = wbsData?.stages || [];
   let works = wbsData?.works || [];
   let tasks = wbsData?.tasks || [];
+  let subtasks = wbsData?.subtasks || [];
 
   if (!stages.length) {
     try {
@@ -338,6 +347,14 @@ export const buildWbsLookupMaps = (wbsData = null) => {
     try {
       const t = localStorage.getItem("pms_master_tasks_data");
       if (t) tasks = JSON.parse(t);
+    } catch (e) {}
+  }
+  if (!subtasks.length) {
+    try {
+      const st =
+        localStorage.getItem("pms_master_subtasks_data") ||
+        localStorage.getItem("dss_pms_subtasks_master_data");
+      if (st) subtasks = JSON.parse(st);
     } catch (e) {}
   }
 
@@ -362,7 +379,14 @@ export const buildWbsLookupMaps = (wbsData = null) => {
     if (t.code) taskMap.set(String(t.code), t);
   });
 
-  return { stageMap, workMap, taskMap };
+  (subtasks || []).forEach((st) => {
+    if (st._id) subtaskMap.set(String(st._id), st);
+    if (st.id) subtaskMap.set(String(st.id), st);
+    if (st.subtask_code) subtaskMap.set(String(st.subtask_code), st);
+    if (st.code) subtaskMap.set(String(st.code), st);
+  });
+
+  return { stageMap, workMap, taskMap, subtaskMap };
 };
 
 /**
@@ -386,7 +410,7 @@ export const hasCorruptedStageIds = (stages = []) => {
  * Maps PMS Template stages into clean, human-readable execution stages format
  */
 export const mapPmsStagesToExecutionStages = (pmsStages = [], wbsData = null, previousStages = []) => {
-  const { stageMap, workMap, taskMap } = buildWbsLookupMaps(wbsData);
+  const { stageMap, workMap, taskMap, subtaskMap } = buildWbsLookupMaps(wbsData);
 
   const prevTaskStatusMap = new Map();
   (previousStages || []).forEach((ps) => {
@@ -485,10 +509,53 @@ export const mapPmsStagesToExecutionStages = (pmsStages = [], wbsData = null, pr
 
         const prev = prevTaskStatusMap.get(tCode) || prevTaskStatusMap.get(String(rawTaskId)) || prevTaskStatusMap.get(tName.toLowerCase().trim()) || {};
 
+        const prevSubtaskMap = new Map();
+        (prev.subtasks || []).forEach((pst) => {
+          if (pst.subtaskId) prevSubtaskMap.set(String(pst.subtaskId), pst);
+          if (pst.subtaskName) prevSubtaskMap.set(String(pst.subtaskName).toLowerCase().trim(), pst);
+        });
+
+        const tSubtasks = (t.subtasks || []).map((st, stIdx) => {
+          const rawSubtaskId = typeof st.subtaskId === "object" && st.subtaskId !== null ? (st.subtaskId._id || st.subtaskId.id) : st.subtaskId;
+          const subtaskWbsObj = subtaskMap.get(String(rawSubtaskId)) || (typeof st.subtaskId === "object" ? st.subtaskId : null);
+
+          let stCode =
+            st.subtaskId?.subtask_code ||
+            st.subtask_code ||
+            st.subtaskCode ||
+            subtaskWbsObj?.subtask_code ||
+            subtaskWbsObj?.code ||
+            (typeof st.subtaskId === "string" && !isObjectId(st.subtaskId) ? st.subtaskId : null) ||
+            `${tCode}-ST${stIdx + 1}`;
+
+          let stName =
+            st.subtaskId?.subtask_name ||
+            st.subtask_name ||
+            st.subtaskName ||
+            subtaskWbsObj?.subtask_name ||
+            subtaskWbsObj?.name ||
+            stCode;
+
+          if (isObjectId(stName) || stName.includes(String(rawSubtaskId))) {
+            stName = subtaskWbsObj?.subtask_name || stCode;
+          }
+
+          const pst = prevSubtaskMap.get(stCode) || prevSubtaskMap.get(String(rawSubtaskId)) || prevSubtaskMap.get(stName.toLowerCase().trim()) || {};
+          const stFData = st.fieldData || fData || {};
+
+          return {
+            subtaskId: stCode,
+            subtaskName: stName,
+            status: pst.status || st.status || "Not Started",
+            fieldData: stFData
+          };
+        });
+
         return {
           taskId: tCode,
           taskName: tName,
           fieldData: t.fieldData || {},
+          subtasks: tSubtasks,
           status: prev.status || "Not Started",
           assignedContractor: prev.assignedContractor || contrName,
           deadlineDate: prev.deadlineDate || deadDate,
@@ -507,6 +574,7 @@ export const mapPmsStagesToExecutionStages = (pmsStages = [], wbsData = null, pr
             taskId: `${wCode}-T1`,
             taskName: `${wName} Execution`,
             fieldData: {},
+            subtasks: [],
             status: "Not Started",
             assignedContractor: "",
             deadlineDate: "",

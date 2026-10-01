@@ -52,7 +52,9 @@ const KpiCard = ({ gradient, label, value, subtitle, icon, IconBg }) => (
 
 const CompleteProjectsComponent = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { role, isObserver, user } = useAuth();
+  const currentRole = role || user?.role || "";
+  const isUserObserver = isObserver || String(currentRole).toLowerCase().trim() === "observer";
 
   const [loading, setLoading] = useState(true);
   const [closedProjects, setClosedProjects] = useState([]);
@@ -193,6 +195,10 @@ const CompleteProjectsComponent = () => {
 
   // Handle Restore Action
   const handleConfirmRestore = async () => {
+    if (isUserObserver) {
+      toast.info("Observer Mode: Action is disabled.");
+      return;
+    }
     if (!projectToRestore) return;
     setIsRestoring(true);
     try {
@@ -564,18 +570,20 @@ const CompleteProjectsComponent = () => {
                               <FaEye className="text-xs" />
                             </button>
 
-                            {/* RESTORE PROJECT BUTTON */}
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setProjectToRestore(item);
-                                setIsRestoreModalOpen(true);
-                              }}
-                              className="w-7 h-7 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
-                              title="Restore / Reopen Project to Presales"
-                            >
-                              <FaTrashRestore className="text-xs" />
-                            </button>
+                            {/* RESTORE PROJECT BUTTON (Worker only) */}
+                            {!isUserObserver && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setProjectToRestore(item);
+                                  setIsRestoreModalOpen(true);
+                                }}
+                                className="w-7 h-7 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
+                                title="Restore / Reopen Project to Presales"
+                              >
+                                <FaTrashRestore className="text-xs" />
+                              </button>
+                            )}
                           </div>
                         </td>
 
@@ -870,18 +878,20 @@ const CompleteProjectsComponent = () => {
                     <FaExternalLinkAlt className="text-xs" />
                     <span>Open Full Details Page</span>
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsModalOpen(false);
-                      setProjectToRestore(selectedProject);
-                      setIsRestoreModalOpen(true);
-                    }}
-                    className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
-                  >
-                    <FaTrashRestore className="text-xs" />
-                    <span>Restore Project</span>
-                  </button>
+                  {!isUserObserver && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsModalOpen(false);
+                        setProjectToRestore(selectedProject);
+                        setIsRestoreModalOpen(true);
+                      }}
+                      className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
+                    >
+                      <FaTrashRestore className="text-xs" />
+                      <span>Restore Project</span>
+                    </button>
+                  )}
                   {selectedProject.source === "Presales Pipeline" && (
                     <button
                       type="button"

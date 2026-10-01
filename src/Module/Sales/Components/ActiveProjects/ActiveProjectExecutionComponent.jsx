@@ -36,8 +36,9 @@ const ActiveProjectExecutionComponent = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const mode = searchParams.get("mode") || "view";
-  const { user } = useAuth();
-  const isViewerOnly = user?.role === "Observer";
+  const { role, isObserver, user } = useAuth();
+  const currentRole = role || user?.role || "";
+  const isViewerOnly = isObserver || String(currentRole).toLowerCase().trim() === "observer";
 
   const isEditMode = mode === "edit" && !isViewerOnly;
   const isReadOnly = !isEditMode;
@@ -62,6 +63,8 @@ const ActiveProjectExecutionComponent = () => {
     runningWorkId: "",
     completedTaskIds: [],
     runningTaskId: "",
+    completedSubtaskIds: [],
+    runningSubtaskId: "",
     finalTrackingRemark: ""
   });
 
@@ -259,6 +262,24 @@ const ActiveProjectExecutionComponent = () => {
         currentWorkTasks[0]?.taskId ||
         "";
 
+      const currentTaskObj = currentWorkTasks.find((t) => t.taskId === savedRunningTask);
+      const currentTaskSubtasks = currentTaskObj?.subtasks || [];
+
+      const savedCompletedSubtasks =
+        Array.isArray(latestTracking?.completedSubtaskIds)
+          ? latestTracking.completedSubtaskIds
+          : Array.isArray(data.completedSubtaskIds)
+          ? data.completedSubtaskIds
+          : currentTaskSubtasks.filter((st) => st.status === "Completed").map((st) => st.subtaskId);
+
+      const savedRunningSubtask =
+        latestTracking?.runningSubtaskId ||
+        data.runningSubtaskId ||
+        currentTaskSubtasks.find((st) => st.status === "In Progress")?.subtaskId ||
+        currentTaskSubtasks.find((st) => !savedCompletedSubtasks.includes(st.subtaskId))?.subtaskId ||
+        currentTaskSubtasks[0]?.subtaskId ||
+        "";
+
       setTrackingForm({
         projectStatus:
           latestTracking?.projectStatus ||
@@ -271,6 +292,8 @@ const ActiveProjectExecutionComponent = () => {
         runningWorkId: savedRunningWork,
         completedTaskIds: savedCompletedTasks,
         runningTaskId: savedRunningTask,
+        completedSubtaskIds: savedCompletedSubtasks,
+        runningSubtaskId: savedRunningSubtask,
         finalTrackingRemark:
           latestTracking?.finalTrackingRemark ||
           data.finalTrackingRemark ||
@@ -417,6 +440,54 @@ const ActiveProjectExecutionComponent = () => {
     });
   }, [selectedRunningWorkObj, lockedTaskIds]);
 
+  // Selected Running Task Object
+  const selectedRunningTaskObj = useMemo(() => {
+    if (!selectedRunningWorkObj) return null;
+    return (
+      (selectedRunningWorkObj.tasks || []).find((t) => t.taskId === trackingForm.runningTaskId) ||
+      null
+    );
+  }, [selectedRunningWorkObj, trackingForm.runningTaskId]);
+
+  // Subtasks that are already completed in previous tracking
+  const lockedSubtaskIds = useMemo(() => {
+    const locked = new Set();
+    if (selectedRunningTaskObj) {
+      (selectedRunningTaskObj.subtasks || []).forEach((st) => {
+        if (st.status === "Completed") locked.add(st.subtaskId);
+      });
+    }
+    const trackingList = Array.isArray(matchedTemplate?.executionTracking)
+      ? matchedTemplate.executionTracking
+      : [];
+    trackingList.forEach((t) => {
+      (t.completedSubtaskIds || []).forEach((stId) => locked.add(stId));
+    });
+    return Array.from(locked);
+  }, [selectedRunningTaskObj, matchedTemplate]);
+
+  // Subtasks under Running Task
+  const subtaskOptions = useMemo(() => {
+    if (!selectedRunningTaskObj) return [];
+    const lockedSet = new Set(lockedSubtaskIds);
+    return (selectedRunningTaskObj.subtasks || []).map((st, idx) => {
+      const cleanCode = isObjectId(st.subtaskId)
+        ? `${selectedRunningTaskObj.taskId || "T"}-ST${idx + 1}`
+        : st.subtaskId;
+      const cleanName =
+        isObjectId(st.subtaskName) || (st.subtaskName || "").startsWith("6a")
+          ? `Subtask ${cleanCode}`
+          : st.subtaskName;
+      const isLocked = lockedSet.has(st.subtaskId);
+      return {
+        value: st.subtaskId,
+        label: isLocked ? `${cleanCode} - ${cleanName} (Completed)` : `${cleanCode} - ${cleanName}`,
+        isDisabled: isLocked,
+        isFixed: isLocked
+      };
+    });
+  }, [selectedRunningTaskObj, lockedSubtaskIds]);
+
   // ============================================================
   // DERIVED PROGRESS STATS
   // ============================================================
@@ -443,6 +514,41 @@ const ActiveProjectExecutionComponent = () => {
     [stagesData]
   );
 
+  const totalSubtasksCount = useMemo(
+    () =>
+      stagesData.reduce(
+        (sum, s) =>
+          sum +
+          (s.works || []).reduce(
+            (wSum, w) =>
+              wSum + (w.tasks || []).reduce((tSum, t) => tSum + (t.subtasks?.length || 0), 0),
+            0
+          ),
+        0
+      ),
+    [stagesData]
+  );
+
+  const completedSubtasksCount = useMemo(
+    () =>
+      stagesData.reduce(
+        (sum, s) =>
+          sum +
+          (s.works || []).reduce(
+            (wSum, w) =>
+              wSum +
+              (w.tasks || []).reduce(
+                (tSum, t) =>
+                  tSum + (t.subtasks || []).filter((st) => st.status === "Completed").length,
+                0
+              ),
+            0
+          ),
+        0
+      ),
+    [stagesData]
+  );
+
   const progressPercent =
     totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0;
 
@@ -461,8 +567,9 @@ const ActiveProjectExecutionComponent = () => {
       const completedStageSet = new Set(trackingForm.completedStageIds || []);
       const completedWorkSet = new Set(trackingForm.completedWorkIds || []);
       const completedTaskSet = new Set(trackingForm.completedTaskIds || []);
+      const completedSubtaskSet = new Set(trackingForm.completedSubtaskIds || []);
 
-      // Synchronize statuses across stages, works, and tasks based on DDL selections
+      // Synchronize statuses across stages, works, tasks, and subtasks based on DDL selections
       const updatedStages = stagesData.map((stg) => {
         const isStageCompleted = completedStageSet.has(stg.stageId);
         const isStageRunning = stg.stageId === trackingForm.runningStageId;
@@ -472,15 +579,42 @@ const ActiveProjectExecutionComponent = () => {
           const isWorkRunning = isStageRunning && w.workId === trackingForm.runningWorkId;
 
           const updatedTasks = (w.tasks || []).map((t) => {
+            const isTaskCompleted = isWorkCompleted || completedTaskSet.has(t.taskId);
+            const isTaskRunning = isWorkRunning && t.taskId === trackingForm.runningTaskId;
+
+            const updatedSubtasks = (t.subtasks || []).map((st) => {
+              let stStatus = st.status || "Not Started";
+              if (isTaskCompleted || completedSubtaskSet.has(st.subtaskId)) {
+                stStatus = "Completed";
+              } else if (isTaskRunning && st.subtaskId === trackingForm.runningSubtaskId) {
+                stStatus = "In Progress";
+              }
+              return {
+                ...st,
+                status: stStatus
+              };
+            });
+
             let taskStatus = t.status || "Not Started";
-            if (isWorkCompleted || completedTaskSet.has(t.taskId)) {
+            if (isTaskCompleted) {
               taskStatus = "Completed";
-            } else if (isWorkRunning && t.taskId === trackingForm.runningTaskId) {
+            } else if (isTaskRunning) {
+              taskStatus = "In Progress";
+            } else if (
+              updatedSubtasks.length > 0 &&
+              updatedSubtasks.every((st) => st.status === "Completed")
+            ) {
+              taskStatus = "Completed";
+            } else if (
+              updatedSubtasks.some((st) => st.status === "In Progress" || st.status === "Completed")
+            ) {
               taskStatus = "In Progress";
             }
+
             return {
               ...t,
-              status: taskStatus
+              status: taskStatus,
+              subtasks: updatedSubtasks
             };
           });
 
@@ -529,10 +663,14 @@ const ActiveProjectExecutionComponent = () => {
         runningWorkId: trackingForm.runningWorkId,
         completedTaskIds: trackingForm.completedTaskIds,
         runningTaskId: trackingForm.runningTaskId,
+        completedSubtaskIds: trackingForm.completedSubtaskIds,
+        runningSubtaskId: trackingForm.runningSubtaskId,
         finalTrackingRemark: trackingForm.finalTrackingRemark,
         progressPercent,
         completedTasksCount,
-        totalTasksCount
+        totalTasksCount,
+        completedSubtasksCount,
+        totalSubtasksCount
       };
 
       // 2. Persist to MongoDB pms_templates collection
@@ -562,6 +700,8 @@ const ActiveProjectExecutionComponent = () => {
         runningWorkId: trackingForm.runningWorkId,
         completedTaskIds: trackingForm.completedTaskIds,
         runningTaskId: trackingForm.runningTaskId,
+        completedSubtaskIds: trackingForm.completedSubtaskIds,
+        runningSubtaskId: trackingForm.runningSubtaskId,
         stages: updatedStages
       });
 
@@ -923,16 +1063,22 @@ const ActiveProjectExecutionComponent = () => {
             </div>
 
             {/* 7. Running Task of Running Work (DDL) */}
-            <div className="space-y-1 md:col-span-2 lg:col-span-3">
+            <div className="space-y-1">
               <label className="block text-xs font-bold text-slate-700">
                 Running Task of Running Work
               </label>
               <select
                 disabled={isReadOnly || !trackingForm.runningWorkId}
                 value={trackingForm.runningTaskId}
-                onChange={(e) =>
-                  setTrackingForm((prev) => ({ ...prev, runningTaskId: e.target.value }))
-                }
+                onChange={(e) => {
+                  const newTaskId = e.target.value;
+                  setTrackingForm((prev) => ({
+                    ...prev,
+                    runningTaskId: newTaskId,
+                    completedSubtaskIds: [],
+                    runningSubtaskId: ""
+                  }));
+                }}
                 className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white disabled:bg-slate-50 cursor-pointer shadow-2xs disabled:cursor-not-allowed"
               >
                 <option value="">
@@ -948,7 +1094,62 @@ const ActiveProjectExecutionComponent = () => {
               </select>
             </div>
 
-            {/* 8. Final Tracking Remark */}
+            {/* 8. Complete Subtask of Running Task (DDL) */}
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-slate-700">
+                Complete Subtask of Running Task
+                <span className="ml-1 text-[10px] font-normal text-emerald-600">
+                  ({trackingForm.completedSubtaskIds?.length || 0} completed)
+                </span>
+              </label>
+              <ReactSelectMulti
+                isDisabled={isReadOnly || !trackingForm.runningTaskId}
+                placeholder={
+                  !trackingForm.runningTaskId
+                    ? "Select Running Task first..."
+                    : subtaskOptions.length === 0
+                    ? "No subtasks defined for this task"
+                    : "Select completed subtask(s)..."
+                }
+                options={subtaskOptions}
+                value={trackingForm.completedSubtaskIds}
+                onChange={(vals) => {
+                  const merged = Array.from(new Set([...lockedSubtaskIds, ...vals]));
+                  setTrackingForm((prev) => ({ ...prev, completedSubtaskIds: merged }));
+                }}
+                themeColor="emerald"
+              />
+            </div>
+
+            {/* 9. Running Subtask of Running Task (DDL) */}
+            <div className="space-y-1">
+              <label className="block text-xs font-bold text-slate-700">
+                Running Subtask of Running Task
+              </label>
+              <select
+                disabled={isReadOnly || !trackingForm.runningTaskId || subtaskOptions.length === 0}
+                value={trackingForm.runningSubtaskId}
+                onChange={(e) =>
+                  setTrackingForm((prev) => ({ ...prev, runningSubtaskId: e.target.value }))
+                }
+                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white disabled:bg-slate-50 cursor-pointer shadow-2xs disabled:cursor-not-allowed"
+              >
+                <option value="">
+                  {!trackingForm.runningTaskId
+                    ? "-- Select Running Task First --"
+                    : subtaskOptions.length === 0
+                    ? "-- No Subtasks Defined --"
+                    : "-- Select Running Subtask --"}
+                </option>
+                {subtaskOptions.map((st) => (
+                  <option key={st.value} value={st.value} disabled={st.isDisabled}>
+                    {st.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* 10. Final Tracking Remark */}
             <div className="space-y-1 md:col-span-2 lg:col-span-3">
               <label className="block text-xs font-bold text-slate-700">
                 Final Tracking Remark
@@ -971,11 +1172,16 @@ const ActiveProjectExecutionComponent = () => {
 
         {/* --- BOTTOM ACTIONS & SUMMARY --- */}
         <div className="flex items-center justify-between pt-1 flex-wrap gap-3">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs font-bold text-slate-600">Calculated Execution Progress:</span>
             <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-indigo-50 text-indigo-700 border border-indigo-200">
               {completedTasksCount} / {totalTasksCount} Tasks ({progressPercent}%)
             </span>
+            {totalSubtasksCount > 0 && (
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-amber-50 text-amber-700 border border-amber-200">
+                {completedSubtasksCount} / {totalSubtasksCount} Subtasks
+              </span>
+            )}
           </div>
 
           {isEditMode && (

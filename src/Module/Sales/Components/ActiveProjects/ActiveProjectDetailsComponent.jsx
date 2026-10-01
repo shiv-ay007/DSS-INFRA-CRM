@@ -18,10 +18,14 @@ import {
 } from "react-icons/fa";
 import { HiSparkles } from "react-icons/hi2";
 import activeProjectService from "../../services/activeProjectService";
+import { useAuth } from "../../../../context/AuthContext";
 
 const ActiveProjectDetailsComponent = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { role, isObserver, user } = useAuth();
+  const currentRole = role || user?.role || "";
+  const isUserObserver = isObserver || String(currentRole).toLowerCase().trim() === "observer";
   const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -96,10 +100,14 @@ const ActiveProjectDetailsComponent = () => {
           <div className="flex items-center gap-2.5 self-end sm:self-auto flex-wrap">
             <button
               type="button"
-              onClick={() => navigate(`/sales/active-projects/${project.id}`)}
+              onClick={() =>
+                navigate(
+                  `/sales/active-projects/${project.id}?mode=${isUserObserver ? "view" : "edit"}`
+                )
+              }
               className="px-4 py-2 bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white rounded-xl text-xs font-bold transition-all shadow-md shadow-emerald-900/30 cursor-pointer flex items-center gap-2 active:scale-95"
             >
-              <span>Go to Daily Tracking Screen</span>
+              <span>{isUserObserver ? "View Daily Tracking Screen" : "Go to Daily Tracking Screen"}</span>
               <FaArrowRight className="w-3 h-3" />
             </button>
           </div>
@@ -204,6 +212,13 @@ const ActiveProjectDetailsComponent = () => {
                         <p className="font-bold text-slate-800 truncate text-xs">{stage.stageName}</p>
                         <span className="text-[10px] text-slate-400">
                           {stage.completedWorksCount || 0}/{(stage.works || []).length} Works • {stage.completedTasksCount || 0}/{stage.totalTasksCount || 0} Tasks
+                          {(() => {
+                            const stageSubtasksCount = (stage.works || []).reduce(
+                              (sum, w) => sum + (w.tasks || []).reduce((tSum, t) => tSum + (t.subtasks || []).length, 0),
+                              0
+                            );
+                            return stageSubtasksCount > 0 ? ` • ${stageSubtasksCount} Subtasks` : "";
+                          })()}
                         </span>
                       </div>
                     </div>
@@ -248,7 +263,7 @@ const ActiveProjectDetailsComponent = () => {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-2 text-xs pt-1 border-t border-white/10">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs pt-1 border-t border-white/10">
               <div>
                 <span className="text-indigo-200 text-[11px] block">Stages Done</span>
                 <strong className="text-white text-sm font-black">
@@ -259,6 +274,12 @@ const ActiveProjectDetailsComponent = () => {
                 <span className="text-indigo-200 text-[11px] block">Tasks Finished</span>
                 <strong className="text-white text-sm font-black">
                   {project.completedTasks || 0} / {project.totalTasks || 0}
+                </strong>
+              </div>
+              <div>
+                <span className="text-indigo-200 text-[11px] block">Subtasks Done</span>
+                <strong className="text-white text-sm font-black">
+                  {project.completedSubtasksCount || 0} / {project.subtasksCount || project.totalSubtasks || 0}
                 </strong>
               </div>
             </div>

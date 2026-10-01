@@ -63,8 +63,9 @@ const KpiCard = ({ gradient, label, value, subtitle, icon, IconBg, onClick, isAc
 
 const ActiveProjectsListComponent = () => {
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const isViewerOnly = user?.role === "Observer";
+  const { role, isObserver, user } = useAuth();
+  const currentRole = role || user?.role || "";
+  const isViewerOnly = isObserver || String(currentRole).toLowerCase().trim() === "observer";
 
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -412,21 +413,37 @@ const ActiveProjectsListComponent = () => {
         }
       },
 
-      // 4. Stages / Works / Tasks
+      // 4. Stages / Works / Tasks / Subtasks
       stagesWorksTasks: {
-        label: "Stages / Works / Tasks",
+        label: "Stages / Works / Tasks / Subtasks",
         align: "center",
-        headerClass: "min-w-[220px]",
+        headerClass: "min-w-[280px]",
         render: (_, row) => {
           const hasPms = isPmsMasterdataCreated(row, pmsTemplates);
           if (!hasPms) {
             return <span className="text-xs font-semibold text-slate-400">—</span>;
           }
-          const stagesCount = stages.length || row.stagesCount || 0;
+          const matchedTmpl = pmsTemplates.find(
+            (t) =>
+              (t.projectId?._id && String(t.projectId._id) === String(row.projectId || row.id)) ||
+              (t.leadId?._id && String(t.leadId._id) === String(row.leadId)) ||
+              (t.clientName &&
+                row.clientName &&
+                t.clientName.toLowerCase().trim() === row.clientName.toLowerCase().trim())
+          );
+
+          const stages =
+            Array.isArray(row.stages) && row.stages.length > 0
+              ? row.stages
+              : Array.isArray(matchedTmpl?.stages)
+              ? matchedTmpl.stages
+              : [];
+
+          const stagesCount = stages.length || row.stagesCount || matchedTmpl?.stagesCount || 0;
           const worksCount =
             stages.length > 0
               ? stages.reduce((sum, s) => sum + (s.works || []).length, 0)
-              : row.worksCount || 0;
+              : row.worksCount || matchedTmpl?.worksCount || 0;
           const tasksCount =
             stages.length > 0
               ? stages.reduce(
@@ -434,9 +451,26 @@ const ActiveProjectsListComponent = () => {
                     sum + (s.works || []).reduce((wSum, w) => wSum + (w.tasks || []).length, 0),
                   0
                 )
-              : row.tasksCount || 0;
+              : row.tasksCount || matchedTmpl?.tasksCount || 0;
+          const subtasksCount =
+            stages.length > 0
+              ? stages.reduce(
+                  (sum, s) =>
+                    sum +
+                    (s.works || []).reduce(
+                      (wSum, w) =>
+                        wSum +
+                        (w.tasks || []).reduce(
+                          (tSum, t) => tSum + (t.subtasks || []).length,
+                          0
+                        ),
+                      0
+                    ),
+                  0
+                )
+              : row.subtasksCount || row.totalSubtasks || matchedTmpl?.subtasksCount || 0;
 
-          if (stagesCount === 0 && worksCount === 0 && tasksCount === 0) {
+          if (stagesCount === 0 && worksCount === 0 && tasksCount === 0 && subtasksCount === 0) {
             return <span className="text-xs font-semibold text-slate-400">—</span>;
           }
 
@@ -450,6 +484,9 @@ const ActiveProjectsListComponent = () => {
               </span>
               <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 whitespace-nowrap">
                 {tasksCount} {tasksCount === 1 ? "Task" : "Tasks"}
+              </span>
+              <span className="px-2 py-0.5 rounded text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">
+                {subtasksCount} {subtasksCount === 1 ? "Subtask" : "Subtasks"}
               </span>
             </div>
           );
