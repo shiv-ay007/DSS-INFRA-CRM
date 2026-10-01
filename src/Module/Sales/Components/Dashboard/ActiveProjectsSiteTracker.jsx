@@ -1,51 +1,56 @@
-import React, { useMemo, useRef } from "react";
-import { Link } from "react-router-dom";
+import React, { useMemo } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
   FaHardHat,
-  FaBuilding,
   FaUserTie,
   FaMapMarkerAlt,
   FaTools,
-  FaTasks,
   FaArrowRight,
-  FaChevronLeft,
-  FaChevronRight
+  FaEye
 } from "react-icons/fa";
+import Table from "../../../../Common/Components/Table";
+import { useAuth } from "../../../../context/AuthContext";
 
-const ActiveProjectsSiteTracker = ({ activeProjects = [], wbsStagesCount = 25 }) => {
-  const scrollContainerRef = useRef(null);
-
-  const scroll = (direction) => {
-    if (scrollContainerRef.current) {
-      const scrollAmount = 380;
-      scrollContainerRef.current.scrollBy({
-        left: direction === "left" ? -scrollAmount : scrollAmount,
-        behavior: "smooth"
-      });
-    }
-  };
+const ActiveProjectsSiteTracker = ({
+  activeProjects = [],
+  wbsStagesCount = 25,
+  isLoading = false
+}) => {
+  const navigate = useNavigate();
+  const { role, isObserver } = useAuth();
+  const currentRole = role || "Worker";
+  const isUserObserver =
+    isObserver || String(currentRole).toLowerCase().trim() === "observer";
 
   const displayProjects = useMemo(() => {
     if (!Array.isArray(activeProjects)) return [];
 
     return activeProjects.map((p, idx) => {
       const rawId = String(p.id || p._id || "");
-      // Clean short code (e.g. PRJ-2A9B) instead of long 24-char raw MongoDB hex hash
-      const cleanCode = p.projectCode || p.leadId || (rawId && !rawId.match(/^[0-9a-fA-F]{24}$/) ? rawId : `PRJ-${rawId.slice(-4).toUpperCase() || (101 + idx)}`);
+      const cleanCode =
+        p.projectCode ||
+        p.leadId ||
+        (rawId && !rawId.match(/^[0-9a-fA-F]{24}$/)
+          ? rawId
+          : `PRJ-${rawId.slice(-4).toUpperCase() || 101 + idx}`);
 
       const stages = Array.isArray(p.stages) ? p.stages : [];
       const totalStages = stages.length || wbsStagesCount || 25;
-      
+
       const completedStages = stages.filter(
         (s) => s.status === "Completed" || (s.progress && Number(s.progress) >= 100)
       ).length;
 
-      const currentActiveStage = stages.find(
-        (s) => s.status === "In Progress" || (s.progress && Number(s.progress) > 0 && Number(s.progress) < 100)
-      ) || stages[completedStages] || {
-        stage_code: `S${Math.min(completedStages + 1, totalStages)}`,
-        stage_name: "Active Site Work"
-      };
+      const currentActiveStage =
+        stages.find(
+          (s) =>
+            s.status === "In Progress" ||
+            (s.progress && Number(s.progress) > 0 && Number(s.progress) < 100)
+        ) ||
+        stages[completedStages] || {
+          stage_code: `S${Math.min(completedStages + 1, totalStages)}`,
+          stage_name: "Active Site Work"
+        };
 
       let progress = Number(p.progress || p.overallProgress || 0);
       if (!progress && totalStages > 0) {
@@ -53,15 +58,15 @@ const ActiveProjectsSiteTracker = ({ activeProjects = [], wbsStagesCount = 25 })
       }
 
       let statusLabel = "On Track";
-      let statusColor = "bg-emerald-50 text-emerald-700 border-emerald-200";
+      let statusColor = "bg-emerald-50 text-emerald-700 border-emerald-300";
       let dotColor = "bg-emerald-500";
       if (progress >= 100) {
         statusLabel = "Completed";
-        statusColor = "bg-blue-50 text-blue-700 border-blue-200";
+        statusColor = "bg-blue-50 text-blue-700 border-blue-300";
         dotColor = "bg-blue-500";
       } else if (p.isDelayed) {
         statusLabel = "Delayed";
-        statusColor = "bg-rose-50 text-rose-700 border-rose-200";
+        statusColor = "bg-rose-50 text-rose-700 border-rose-300";
         dotColor = "bg-rose-500";
       }
 
@@ -83,12 +88,155 @@ const ActiveProjectsSiteTracker = ({ activeProjects = [], wbsStagesCount = 25 })
     });
   }, [activeProjects, wbsStagesCount]);
 
+  const columnConfig = useMemo(
+    () => ({
+      // 1. Action (Placed at front right after Sr. No)
+      actions: {
+        label: "Action",
+        align: "center",
+        headerClass: "w-24 min-w-[96px]",
+        render: (_, row) => (
+          <div className="flex items-center justify-center gap-1.5">
+            {/* View Details */}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                navigate(`/sales/active-projects/${row.id}?mode=view`);
+              }}
+              title="View Site Details"
+              aria-label="View Details"
+              className="p-1.5 rounded-none text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 transition-all cursor-pointer shadow-2xs"
+            >
+              <FaEye className="w-3.5 h-3.5" />
+            </button>
+
+            {/* Execute / Track Site Work (Hidden for Observer) */}
+            {!isUserObserver && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate(`/sales/active-projects/${row.id}?mode=edit`);
+                }}
+                title="Open Site Execution"
+                aria-label="Open Site Execution"
+                className="p-1.5 rounded-none text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-300 transition-all cursor-pointer shadow-2xs"
+              >
+                <FaTools className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+        )
+      },
+
+      // 2. Project Name & Code
+      project: {
+        label: "Project & Code",
+        align: "left",
+        headerClass: "min-w-[180px]",
+        render: (_, row) => (
+          <div className="flex flex-col items-start gap-1 py-1 text-left">
+            <span
+              onClick={() => navigate(`/sales/active-projects/${row.id}?mode=view`)}
+              className="font-bold text-slate-900 text-xs hover:text-orange-600 transition-colors cursor-pointer truncate max-w-[200px]"
+              title={row.name}
+            >
+              {row.name}
+            </span>
+            <span className="inline-block px-1.5 py-0.5 rounded-none bg-slate-100 text-slate-700 font-mono text-[10px] font-bold border border-slate-300">
+              {row.cleanCode}
+            </span>
+          </div>
+        )
+      },
+
+      // 3. Client & Location
+      client: {
+        label: "Client & Location",
+        align: "left",
+        headerClass: "min-w-[160px]",
+        render: (_, row) => (
+          <div className="flex flex-col items-start gap-0.5 py-1 text-left">
+            <span className="font-bold text-slate-800 text-xs flex items-center gap-1.5 truncate max-w-[170px]" title={row.clientName}>
+              <FaUserTie className="w-3 h-3 text-indigo-500 shrink-0" />
+              {row.clientName}
+            </span>
+            <span className="text-[11px] text-slate-500 flex items-center gap-1.5 truncate max-w-[170px]" title={row.city}>
+              <FaMapMarkerAlt className="w-2.5 h-2.5 text-rose-500 shrink-0" />
+              {row.city}
+            </span>
+          </div>
+        )
+      },
+
+      // 4. Current Stage
+      currentStage: {
+        label: "Current Stage",
+        align: "left",
+        headerClass: "min-w-[180px]",
+        render: (_, row) => (
+          <div className="flex items-center gap-2 py-1 text-left">
+            <span className="w-6 h-6 rounded-none bg-orange-600 text-white font-mono font-black text-[10px] flex items-center justify-center shrink-0">
+              {row.currentStageCode}
+            </span>
+            <div className="min-w-0">
+              <span className="block font-bold text-slate-800 text-xs truncate max-w-[160px]" title={row.currentStageName}>
+                {row.currentStageName}
+              </span>
+              <span className="block text-[10px] text-slate-500 font-medium">
+                {row.completedStages}/{row.totalStages} Stages
+              </span>
+            </div>
+          </div>
+        )
+      },
+
+      // 5. Completion Progress
+      progress: {
+        label: "Completion %",
+        align: "center",
+        headerClass: "min-w-[130px]",
+        render: (_, row) => (
+          <div className="w-full max-w-[120px] mx-auto py-1 space-y-1">
+            <div className="flex items-center justify-between text-[11px] font-mono font-bold text-slate-800">
+              <span className="text-slate-500">Progress</span>
+              <span>{row.progress}%</span>
+            </div>
+            <div className="w-full h-2 rounded-none bg-slate-100 border border-slate-300 overflow-hidden">
+              <div
+                className="h-full rounded-none bg-gradient-to-r from-orange-500 to-amber-500 transition-all duration-300"
+                style={{ width: `${Math.max(4, Math.min(100, row.progress))}%` }}
+              />
+            </div>
+          </div>
+        )
+      },
+
+      // 6. Status
+      status: {
+        label: "Status",
+        align: "center",
+        headerClass: "min-w-[110px]",
+        render: (_, row) => (
+          <span
+            className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-none font-mono text-[10px] font-bold border ${row.statusColor}`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-none ${row.dotColor}`} />
+            <span>{row.statusLabel}</span>
+          </span>
+        )
+      }
+    }),
+    [navigate, isUserObserver]
+  );
+
   return (
-    <div className="w-full h-full bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 sm:p-5 flex flex-col">
-      {/* Clean Minimal Header with Slider Controls */}
+    <div className="w-full h-full bg-white rounded-none border border-slate-200/90 shadow-2xs p-4 flex flex-col">
+      {/* Clean Minimal Header */}
       <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-orange-50 text-orange-600 border border-orange-200/90 flex items-center justify-center text-sm shadow-2xs">
+          <div className="w-9 h-9 rounded-none bg-orange-50 text-orange-600 border border-orange-200/90 flex items-center justify-center text-sm shadow-2xs">
             <FaHardHat className="text-base" />
           </div>
           <div>
@@ -96,7 +244,7 @@ const ActiveProjectsSiteTracker = ({ activeProjects = [], wbsStagesCount = 25 })
               <h2 className="text-sm sm:text-base font-extrabold text-slate-900 tracking-tight">
                 Active Construction Sites
               </h2>
-              <span className="px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 text-xs font-mono font-bold border border-orange-200">
+              <span className="px-2 py-0.5 rounded-none bg-orange-50 text-orange-700 text-xs font-mono font-bold border border-orange-200">
                 {displayProjects.length} Running
               </span>
             </div>
@@ -106,32 +254,11 @@ const ActiveProjectsSiteTracker = ({ activeProjects = [], wbsStagesCount = 25 })
           </div>
         </div>
 
-        {/* Right Actions: Slider Controls & All Sites Link */}
+        {/* Right Action: All Sites Link */}
         <div className="flex items-center gap-2">
-          {displayProjects.length > 1 && (
-            <div className="flex items-center gap-1 bg-slate-100/80 p-0.5 rounded-lg border border-slate-200">
-              <button
-                type="button"
-                onClick={() => scroll("left")}
-                className="w-6 h-6 rounded-md bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 flex items-center justify-center text-[10px] shadow-2xs transition-all cursor-pointer"
-                title="Previous Sites"
-              >
-                <FaChevronLeft />
-              </button>
-              <button
-                type="button"
-                onClick={() => scroll("right")}
-                className="w-6 h-6 rounded-md bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 flex items-center justify-center text-[10px] shadow-2xs transition-all cursor-pointer"
-                title="Next Sites"
-              >
-                <FaChevronRight />
-              </button>
-            </div>
-          )}
-
           <Link
             to="/sales/active-projects"
-            className="text-xs font-bold text-slate-600 hover:text-orange-600 transition-colors flex items-center gap-1.5 ml-1"
+            className="text-xs font-bold text-slate-600 hover:text-orange-600 transition-colors flex items-center gap-1.5"
           >
             <span>All Sites</span>
             <FaArrowRight className="text-[10px]" />
@@ -139,128 +266,14 @@ const ActiveProjectsSiteTracker = ({ activeProjects = [], wbsStagesCount = 25 })
         </div>
       </div>
 
-      {/* Projects Slider / Empty State Container Centered Vertically */}
-      <div className="flex-1 flex flex-col justify-center my-auto w-full">
-        {displayProjects.length === 0 ? (
-          <div className="py-10 px-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 flex flex-col items-center justify-center text-center my-auto">
-            <div className="w-10 h-10 rounded-xl bg-orange-100/70 text-orange-600 flex items-center justify-center text-base mb-2">
-              <FaHardHat />
-            </div>
-            <h3 className="text-sm font-bold text-slate-800 mb-3">
-              No Active Construction Sites Launched Yet
-            </h3>
-            <Link
-              to="/sales/active-projects/create"
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold transition-all shadow-2xs cursor-pointer"
-            >
-              <span>Launch Site</span>
-              <FaArrowRight className="text-[9px]" />
-            </Link>
-          </div>
-        ) : (
-          <div
-            ref={scrollContainerRef}
-            className="flex items-stretch gap-4 overflow-x-auto pb-1 scroll-smooth snap-x"
-            style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-          >
-            {displayProjects.map((p) => (
-              <div
-                key={p.id}
-                className={`group p-4 rounded-xl border border-slate-200/90 bg-gradient-to-br from-white via-slate-50/30 to-white hover:border-orange-300 hover:shadow-md transition-all flex flex-col justify-between snap-start shrink-0 ${
-                  displayProjects.length === 1 ? "w-full" : "min-w-[320px] sm:min-w-[360px] md:min-w-[380px] max-w-[420px] flex-1"
-                }`}
-              >
-                <div>
-                  {/* Top Bar: Icon, Title, ID & Status Badge */}
-                  <div className="flex items-start justify-between gap-2 mb-2.5">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                      <div className="w-9 h-9 rounded-xl bg-orange-50 text-orange-600 border border-orange-200/80 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform shadow-2xs">
-                        <FaBuilding className="text-sm" />
-                      </div>
-                      <div className="min-w-0">
-                        <h4 className="text-sm sm:text-base font-extrabold text-slate-900 capitalize truncate" title={p.name}>
-                          {p.name}
-                        </h4>
-                      </div>
-                    </div>
-
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full font-mono text-[11px] font-bold border shrink-0 ${p.statusColor}`}>
-                      <span className={`w-1.5 h-1.5 rounded-full ${p.dotColor} animate-pulse`} />
-                      <span>{p.statusLabel}</span>
-                    </span>
-                  </div>
-
-                  {/* Client & City with React Icons */}
-                  <div className="grid grid-cols-2 gap-2 text-xs text-slate-600 mb-2.5 bg-slate-50/80 p-2 rounded-lg border border-slate-100">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <FaUserTie className="text-slate-400 text-xs shrink-0" />
-                      <span className="font-semibold text-slate-800 truncate" title={p.clientName}>
-                        {p.clientName}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <FaMapMarkerAlt className="text-rose-400 text-xs shrink-0" />
-                      <span className="text-slate-600 truncate" title={p.city}>
-                        {p.city}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Current Stage Indicator */}
-                  <div className="mb-2.5 p-2 rounded-xl bg-white border border-slate-200/80 flex items-center justify-between text-xs">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="w-5 h-5 rounded-md bg-orange-500 text-white font-mono font-black text-[9px] flex items-center justify-center shrink-0">
-                        {p.currentStageCode}
-                      </span>
-                      <div className="min-w-0">
-                        <span className="block text-[9px] text-slate-400 font-bold uppercase tracking-wider">
-                          Current Stage
-                        </span>
-                        <span className="font-bold text-slate-800 truncate block text-[11px]" title={p.currentStageName}>
-                          {p.currentStageName}
-                        </span>
-                      </div>
-                    </div>
-                    <span className="text-[10px] font-mono text-slate-500 font-bold bg-slate-100 px-2 py-0.5 rounded-md shrink-0 ml-1">
-                      {p.completedStages}/{p.totalStages} Stages
-                    </span>
-                  </div>
-
-                  {/* Site Progress Bar */}
-                  <div className="space-y-1 mb-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="flex items-center gap-1 text-[11px] text-slate-500 font-medium">
-                        <FaTasks className="text-slate-400 text-[10px]" />
-                        <span>Site Completion</span>
-                      </span>
-                      <span className="font-mono font-black text-slate-900 text-xs">
-                        {p.progress}%
-                      </span>
-                    </div>
-                    <div className="w-full h-1.5 rounded-full bg-slate-100 overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-gradient-to-r from-orange-500 to-amber-500 transition-all duration-500"
-                        style={{ width: `${Math.max(4, Math.min(100, p.progress))}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Card Action Link */}
-                <Link
-                  to={`/sales/active-projects/${p.id}`}
-                  className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-orange-600 hover:text-orange-700 transition-colors"
-                >
-                  <span className="flex items-center gap-1.5">
-                    <FaTools className="text-orange-500 text-[10px]" />
-                    <span>Open Site Execution</span>
-                  </span>
-                  <FaArrowRight className="text-[9px] group-hover:translate-x-1 transition-transform" />
-                </Link>
-              </div>
-            ))}
-          </div>
-        )}
+      {/* Standard Table with No Radius */}
+      <div className="w-full flex-1 overflow-hidden rounded-none border border-slate-200">
+        <Table
+          data={displayProjects}
+          columnConfig={columnConfig}
+          showSrNo={true}
+          isLoading={isLoading}
+        />
       </div>
     </div>
   );

@@ -56,33 +56,49 @@ const Salesdash = () => {
         console.warn("Active projects fetch error:", err);
       }
 
-      // 2. Fetch Dynamic WBS Stages count from Master
-      try {
-        const wbsRes = await pmsWbsService.getAllWbsData();
-        if (wbsRes?.data?.stages && Array.isArray(wbsRes.data.stages)) {
-          setWbsStagesCount(wbsRes.data.stages.length);
-        } else if (Array.isArray(wbsRes?.data?.data?.stages)) {
-          setWbsStagesCount(wbsRes.data.data.stages.length);
-        }
-      } catch (err) {
-        console.warn("WBS master fetch error:", err);
-      }
-
-      // 3. Fetch All Leads from API
+      // Fetch WBS Master, Leads, and Counts in Parallel (Concurrent 1-roundtrip fetch)
       try {
         if (!hasCachedLeads) {
           setIsLoading(true);
         }
-        const [leadsRes] = await Promise.allSettled([
-          getAllLeadsApi({ limit: 1000 })
+
+        const [wbsSettled, leadsSettled, closedSettled, lostSettled] = await Promise.allSettled([
+          pmsWbsService.getAllWbsData(),
+          getAllLeadsApi({ limit: 1000 }),
+          getAllLeadProjectsApi({ isClosed: "true" }),
+          getAllLeadsApi({ intrestedStatus: "Not Intersted", limit: 1000 })
         ]);
 
-        if (leadsRes.status === "fulfilled" && leadsRes.value && leadsRes.value.success && leadsRes.value.data?.leads) {
-          const apiLeads = leadsRes.value.data.leads.map((backendLead) => {
-            const dateObj = new Date(backendLead.createdAt || Date.now());
-            const formattedDate = dateObj.toLocaleDateString("en-GB", { day: '2-digit', month: 'short', year: 'numeric' });
+        // 1. Process WBS Master stages count
+        if (wbsSettled.status === "fulfilled" && wbsSettled.value) {
+          const wbsRes = wbsSettled.value;
+          if (wbsRes?.data?.stages && Array.isArray(wbsRes.data.stages)) {
+            setWbsStagesCount(wbsRes.data.stages.length);
+          } else if (Array.isArray(wbsRes?.data?.data?.stages)) {
+            setWbsStagesCount(wbsRes.data.data.stages.length);
+          }
+        }
 
-            const cleanLeadId = backendLead.leadId || (backendLead._id && !String(backendLead._id).match(/^[0-9a-fA-F]{24}$/) ? backendLead._id : `LD-${String(backendLead._id).slice(-4).toUpperCase()}`);
+        // 2. Process Leads
+        if (
+          leadsSettled.status === "fulfilled" &&
+          leadsSettled.value &&
+          leadsSettled.value.success &&
+          leadsSettled.value.data?.leads
+        ) {
+          const apiLeads = leadsSettled.value.data.leads.map((backendLead) => {
+            const dateObj = new Date(backendLead.createdAt || Date.now());
+            const formattedDate = dateObj.toLocaleDateString("en-GB", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric"
+            });
+
+            const cleanLeadId =
+              backendLead.leadId ||
+              (backendLead._id && !String(backendLead._id).match(/^[0-9a-fA-F]{24}$/)
+                ? backendLead._id
+                : `LD-${String(backendLead._id).slice(-4).toUpperCase()}`);
 
             return {
               ...backendLead,
@@ -104,7 +120,11 @@ const Salesdash = () => {
               projectDetail: backendLead.projectDetail || backendLead.requirement || "Project Inquiry",
               nextFollowupDate: backendLead.nextFollowupDate || backendLead.nextFollowupDateRaw || "",
               nextFollowupTime: backendLead.nextFollowupTime || backendLead.followupTime || "",
-              workType: Array.isArray(backendLead.workType) ? backendLead.workType : (backendLead.workType ? [backendLead.workType] : []),
+              workType: Array.isArray(backendLead.workType)
+                ? backendLead.workType
+                : backendLead.workType
+                ? [backendLead.workType]
+                : [],
               workCategory: backendLead.workCategory || "Design"
             };
           });
@@ -113,49 +133,44 @@ const Salesdash = () => {
           setCachedData(cacheKey, apiLeads);
         }
 
-        // 4. Fetch Completed Projects & Lost/Drop Projects from API
-        try {
-          const [closedRes, lostRes] = await Promise.allSettled([
-            getAllLeadProjectsApi({ isClosed: "true" }),
-            getAllLeadsApi({ intrestedStatus: "Not Intersted", limit: 1000 })
-          ]);
+        // 3. Process Completed & Lost Counts
+        let cCount = 0;
+        let lCount = 0;
 
-          let cCount = 0;
-          let lCount = 0;
+        // Local active projects (100% completed)
+        const activePrjs = activeProjectService.getAllActiveProjects() || [];
+        const completedActive = activePrjs.filter(
+          (p) => p.projectStatus === "Completed" || Number(p.overallProgress || 0) >= 100
+        ).length;
+        cCount += completedActive;
 
-          // From Local Active Projects (100% completed)
-          const activePrjs = activeProjectService.getAllActiveProjects() || [];
-          const completedActive = activePrjs.filter(
-            (p) => p.projectStatus === "Completed" || Number(p.overallProgress || 0) >= 100
-          ).length;
-          cCount += completedActive;
-
-          // From Lead Projects collection
-          if (closedRes.status === "fulfilled" && closedRes.value?.data) {
-            const rawPrjs = closedRes.value.data.projects || closedRes.value.data || [];
-            if (Array.isArray(rawPrjs)) {
-              rawPrjs.forEach((bp) => {
-                const status = String(bp.status || "").toUpperCase();
-                const closureStatus = String(bp.closureStatus || "").toLowerCase();
-                if (bp.isCompleted === true || status === "COMPLETED" || closureStatus.includes("converted")) {
-                  cCount++;
-                } else {
-                  lCount++;
-                }
-              });
-            }
+        // From Lead Projects collection
+        if (closedSettled.status === "fulfilled" && closedSettled.value?.data) {
+          const rawPrjs = closedSettled.value.data.projects || closedSettled.value.data || [];
+          if (Array.isArray(rawPrjs)) {
+            rawPrjs.forEach((bp) => {
+              const status = String(bp.status || "").toUpperCase();
+              const closureStatus = String(bp.closureStatus || "").toLowerCase();
+              if (
+                bp.isCompleted === true ||
+                status === "COMPLETED" ||
+                closureStatus.includes("converted")
+              ) {
+                cCount++;
+              } else {
+                lCount++;
+              }
+            });
           }
-
-          // From Lost Leads API
-          if (lostRes.status === "fulfilled" && lostRes.value?.data?.leads) {
-            lCount += lostRes.value.data.leads.length;
-          }
-
-          setCompletedCount(cCount);
-          setLostCount(lCount);
-        } catch (cntErr) {
-          console.warn("Counts fetch warning:", cntErr);
         }
+
+        // From Lost Leads API
+        if (lostSettled.status === "fulfilled" && lostSettled.value?.data?.leads) {
+          lCount += lostSettled.value.data.leads.length;
+        }
+
+        setCompletedCount(cCount);
+        setLostCount(lCount);
       } catch (e) {
         console.error("Dashboard fetch error:", e);
       } finally {
@@ -304,6 +319,7 @@ const Salesdash = () => {
               <ActiveProjectsSiteTracker
                 activeProjects={activeProjects}
                 wbsStagesCount={wbsStagesCount}
+                isLoading={isLoading}
               />
             </div>
             <div className="lg:col-span-4 flex flex-col">
