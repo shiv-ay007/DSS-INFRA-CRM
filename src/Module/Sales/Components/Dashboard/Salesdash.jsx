@@ -2,14 +2,17 @@ import React, { useState, useEffect, useMemo } from "react";
 import { Link } from "react-router-dom";
 import { FaTrashRestore } from "react-icons/fa";
 import PageHeader from "../../../../Common/Components/PageHeader";
+import Loader from "../../../../Common/Components/Loader";
 import DashboardMetrics from "./DashboardMetrics";
 import ExecutiveKpiBar from "./ExecutiveKpiBar";
 import LeadStatusBreakdown from "./LeadStatusBreakdown";
 import RevenueAndLeadTrendsChart from "./RevenueAndLeadTrendsChart";
 import LeadSourceDistributionChart from "./LeadSourceDistributionChart";
 import ActiveProjectsSiteTracker from "./ActiveProjectsSiteTracker";
+import ExecutionKpiCards from "./ExecutionKpiCards";
 import { metricsData as defaultMetrics, statusBreakdownData as defaultStatus } from "../../data/dashboardData";
 import { getAllLeadsApi } from "../../services/totalLeads.api";
+import { getAllLeadProjectsApi } from "../../services/leadProject.api";
 import { activeProjectService } from "../../services/activeProjectService";
 import { pmsWbsService } from "../../services/pmsWbsService";
 import {
@@ -26,6 +29,8 @@ const Salesdash = () => {
   const { getCachedData, setCachedData } = useLeadContext();
   const [leads, setLeads] = useState([]);
   const [activeProjects, setActiveProjects] = useState([]);
+  const [completedCount, setCompletedCount] = useState(0);
+  const [lostCount, setLostCount] = useState(0);
   const [wbsStagesCount, setWbsStagesCount] = useState(25);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -33,9 +38,12 @@ const Salesdash = () => {
     const fetchBackendData = async () => {
       const cacheKey = "dashboard_leads_all";
       const cached = getCachedData(cacheKey);
-      if (cached && Array.isArray(cached.data) && cached.data.length > 0) {
+      const hasCachedLeads = cached && Array.isArray(cached.data) && cached.data.length > 0;
+      if (hasCachedLeads) {
         setLeads(cached.data);
         setIsLoading(false);
+      } else {
+        setIsLoading(true);
       }
 
       // 1. Fetch Active Construction Projects from Local Execution Service
@@ -62,7 +70,9 @@ const Salesdash = () => {
 
       // 3. Fetch All Leads from API
       try {
-        setIsLoading(true);
+        if (!hasCachedLeads) {
+          setIsLoading(true);
+        }
         const [leadsRes] = await Promise.allSettled([
           getAllLeadsApi({ limit: 1000 })
         ]);
@@ -101,6 +111,50 @@ const Salesdash = () => {
 
           setLeads(apiLeads);
           setCachedData(cacheKey, apiLeads);
+        }
+
+        // 4. Fetch Completed Projects & Lost/Drop Projects from API
+        try {
+          const [closedRes, lostRes] = await Promise.allSettled([
+            getAllLeadProjectsApi({ isClosed: "true" }),
+            getAllLeadsApi({ intrestedStatus: "Not Intersted", limit: 1000 })
+          ]);
+
+          let cCount = 0;
+          let lCount = 0;
+
+          // From Local Active Projects (100% completed)
+          const activePrjs = activeProjectService.getAllActiveProjects() || [];
+          const completedActive = activePrjs.filter(
+            (p) => p.projectStatus === "Completed" || Number(p.overallProgress || 0) >= 100
+          ).length;
+          cCount += completedActive;
+
+          // From Lead Projects collection
+          if (closedRes.status === "fulfilled" && closedRes.value?.data) {
+            const rawPrjs = closedRes.value.data.projects || closedRes.value.data || [];
+            if (Array.isArray(rawPrjs)) {
+              rawPrjs.forEach((bp) => {
+                const status = String(bp.status || "").toUpperCase();
+                const closureStatus = String(bp.closureStatus || "").toLowerCase();
+                if (bp.isCompleted === true || status === "COMPLETED" || closureStatus.includes("converted")) {
+                  cCount++;
+                } else {
+                  lCount++;
+                }
+              });
+            }
+          }
+
+          // From Lost Leads API
+          if (lostRes.status === "fulfilled" && lostRes.value?.data?.leads) {
+            lCount += lostRes.value.data.leads.length;
+          }
+
+          setCompletedCount(cCount);
+          setLostCount(lCount);
+        } catch (cntErr) {
+          console.warn("Counts fetch warning:", cntErr);
         }
       } catch (e) {
         console.error("Dashboard fetch error:", e);
@@ -207,42 +261,57 @@ const Salesdash = () => {
         />
       </div>
 
-      {/* ROW 1: PRIMARY METRICS (TOTAL LEADS, HOT, WARM, COLD) */}
-      <DashboardMetrics metrics={dynamicMetrics} />
-
-      {/* ROW 2: EXECUTIVE 360° KPI BAR (MINIMALIST STYLE MATCHING ROW 1) */}
-      <ExecutiveKpiBar
-        leads={leads}
-        activeProjectsCount={activeProjects.length}
-        wbsStagesCount={wbsStagesCount}
-      />
-
-      {/* ROW 3: REVENUE & PIPELINE TRENDS (8 COLS) + STATUS DISTRIBUTION (4 COLS) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
-        <div className="lg:col-span-8 flex flex-col">
-          <RevenueAndLeadTrendsChart leads={leads} />
+      {isLoading ? (
+        <div className="flex flex-col items-center justify-center min-h-[460px] bg-white rounded-2xl border border-slate-200/80 shadow-2xs py-20">
+          <Loader text="Loading dashboard insights..." size={40} color="text-emerald-600" />
         </div>
-        <div className="lg:col-span-4 flex flex-col">
-          <LeadStatusBreakdown
-            statusBreakdown={statusBreakdown}
-            totalLeads={totalLeadsCount}
-            conversionRate={conversionRate}
-          />
-        </div>
-      </div>
+      ) : (
+        <>
+          {/* ROW 1: PRIMARY METRICS (TOTAL LEADS, HOT, WARM, COLD) */}
+          <DashboardMetrics metrics={dynamicMetrics} />
 
-      {/* ROW 4: ACTIVE CONSTRUCTION SITES TRACKER (8 COLS) + LEAD ACQUISITION CHANNELS (4 COLS) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
-        <div className="lg:col-span-8 flex flex-col">
-          <ActiveProjectsSiteTracker
-            activeProjects={activeProjects}
+          {/* ROW 2: EXECUTIVE 360° KPI BAR (MINIMALIST STYLE MATCHING ROW 1) */}
+          <ExecutiveKpiBar
+            leads={leads}
+            activeProjectsCount={activeProjects.length}
             wbsStagesCount={wbsStagesCount}
           />
-        </div>
-        <div className="lg:col-span-4 flex flex-col">
-          <LeadSourceDistributionChart leads={leads} />
-        </div>
-      </div>
+
+          {/* ROW 3: ACTIVE EXECUTION & PROJECT STATS (DESIGN, ONLY CONST, COMPLETED, LOST/DROP) */}
+          <ExecutionKpiCards
+            activeProjects={activeProjects}
+            completedCount={completedCount}
+            lostCount={lostCount}
+          />
+
+          {/* ROW 4: REVENUE & PIPELINE TRENDS (8 COLS) + STATUS DISTRIBUTION (4 COLS) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
+            <div className="lg:col-span-8 flex flex-col">
+              <RevenueAndLeadTrendsChart leads={leads} />
+            </div>
+            <div className="lg:col-span-4 flex flex-col">
+              <LeadStatusBreakdown
+                statusBreakdown={statusBreakdown}
+                totalLeads={totalLeadsCount}
+                conversionRate={conversionRate}
+              />
+            </div>
+          </div>
+
+          {/* ROW 5: ACTIVE CONSTRUCTION SITES TRACKER (8 COLS) + LEAD ACQUISITION CHANNELS (4 COLS) */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-stretch">
+            <div className="lg:col-span-8 flex flex-col">
+              <ActiveProjectsSiteTracker
+                activeProjects={activeProjects}
+                wbsStagesCount={wbsStagesCount}
+              />
+            </div>
+            <div className="lg:col-span-4 flex flex-col">
+              <LeadSourceDistributionChart leads={leads} />
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };

@@ -84,7 +84,7 @@ const ActiveProjectsSiteTracker = ({ activeProjects = [], wbsStagesCount = 25 })
   }, [activeProjects, wbsStagesCount]);
 
   return (
-    <div className="w-full h-full bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 sm:p-5 flex flex-col justify-between">
+    <div className="w-full h-full bg-white rounded-2xl border border-slate-200/90 shadow-2xs p-4 sm:p-5 flex flex-col">
       {/* Clean Minimal Header with Slider Controls */}
       <div className="flex items-center justify-between pb-3 mb-3 border-b border-slate-100">
         <div className="flex items-center gap-2.5">
@@ -139,19 +139,16 @@ const ActiveProjectsSiteTracker = ({ activeProjects = [], wbsStagesCount = 25 })
         </div>
       </div>
 
-      {/* Projects Slider Container (Shifted Up, No Add Box) */}
-      <div className="pt-0.5">
+      {/* Projects Slider / Empty State Container Centered Vertically */}
+      <div className="flex-1 flex flex-col justify-center my-auto w-full">
         {displayProjects.length === 0 ? (
-          <div className="py-10 px-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 flex flex-col items-center justify-center text-center">
+          <div className="py-10 px-4 rounded-xl border border-dashed border-slate-200 bg-slate-50/50 flex flex-col items-center justify-center text-center my-auto">
             <div className="w-10 h-10 rounded-xl bg-orange-100/70 text-orange-600 flex items-center justify-center text-base mb-2">
               <FaHardHat />
             </div>
-            <h3 className="text-sm font-bold text-slate-800">
+            <h3 className="text-sm font-bold text-slate-800 mb-3">
               No Active Construction Sites Launched Yet
             </h3>
-            <p className="text-xs text-slate-500 mt-0.5 mb-3 max-w-sm">
-              Convert your leads to start on-ground site execution tracking across 23 WBS construction stages.
-            </p>
             <Link
               to="/sales/active-projects/create"
               className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-700 text-white text-xs font-bold transition-all shadow-2xs cursor-pointer"
