@@ -977,12 +977,22 @@ export const activeProjectService = {
         const closureStatus = String(bp.closureStatus || leadObj.closureStatus || "").toLowerCase();
         const presaleStatus = String(bp.presaleStatus || leadObj.presaleStatus || "").toLowerCase();
 
+        const isStage11Signed = Boolean(
+          bp.stagesData?.[11]?.finalContractSignDate ||
+          bp.stagesData?.["11"]?.finalContractSignDate ||
+          (bp.stagesData?.[11] && Object.keys(bp.stagesData[11]).length > 0) ||
+          (bp.stagesData?.["11"] && Object.keys(bp.stagesData["11"]).length > 0) ||
+          Number(bp.currentStageId) >= 11 ||
+          bp.currentStageId === "11"
+        );
+
         const isPromotedToActive =
           projStatus === "ACTIVE_PROJECT" ||
           projStatus === "ACTIVE" ||
           projStatus === "CONVERTED" ||
           closureStatus.includes("converted") ||
-          presaleStatus.includes("converted");
+          presaleStatus.includes("converted") ||
+          isStage11Signed;
 
         // Find PMS template if available (matches finalized template only)
         let matchedTmpl = null;
@@ -1031,9 +1041,8 @@ export const activeProjectService = {
           return false;
         });
 
-        // Only include projects that are promoted to active AND have a finalized (non-draft) PMS template.
-        // If template is missing or still in Draft, do NOT display in Active Projects.
-        if (!isPromotedToActive || !matchedTmpl) {
+        // Only include projects that are promoted to active (or completed Stage 11 Contract)
+        if (!isPromotedToActive) {
           if (existingIdx !== -1) {
             list.splice(existingIdx, 1);
             changed = true;
@@ -1129,7 +1138,7 @@ export const activeProjectService = {
           if (matchedTmpl && Array.isArray(matchedTmpl.stages) && matchedTmpl.stages.length > 0) {
             stagesToUse = mapPmsStagesToExecutionStages(matchedTmpl.stages, wbsData, []);
           } else {
-            // Keep empty until PMS template is created
+            // Stages will be populated once PMS template is created
             stagesToUse = [];
           }
 
@@ -1187,13 +1196,6 @@ export const activeProjectService = {
           changed = true;
         }
       });
-
-      // Ensure any lingering projects in list without a finalized PMS template are cleaned up
-      const beforeCleanupLen = list.length;
-      list = list.filter((p) => isPmsMasterdataCreated(p, finalizedPmsTemplates));
-      if (list.length !== beforeCleanupLen) {
-        changed = true;
-      }
 
       if (changed) {
         localStorage.setItem(ACTIVE_PROJECTS_STORAGE_KEY, JSON.stringify(list));

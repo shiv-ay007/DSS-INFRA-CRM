@@ -163,10 +163,10 @@ const ActiveProjectsListComponent = () => {
     setCurrentPage(1);
   }, [searchQuery, selectedClient, selectedCategory, selectedWorkType]);
 
-  // Active finalized projects only (Tareeqa 2: Only show projects whose PMS template is finalized, not draft)
+  // Active projects (Promoted from Presales / Created for site execution)
   const activeFinalizedProjects = useMemo(() => {
-    return projects.filter((p) => isPmsMasterdataCreated(p, pmsTemplates));
-  }, [projects, pmsTemplates]);
+    return projects;
+  }, [projects]);
 
   // KPI Metrics
   const metrics = useMemo(() => {
@@ -298,8 +298,8 @@ const ActiveProjectsListComponent = () => {
                 <FaEye className="w-3.5 h-3.5" />
               </button>
 
-              {/* Edit (only if PMS exists AND not viewer) */}
-              {hasPms && !isViewerOnly ? (
+              {/* Edit (ONLY if PMS exists AND not viewer) */}
+              {hasPms && !isViewerOnly && (
                 <button
                   type="button"
                   onClick={(e) => {
@@ -309,21 +309,6 @@ const ActiveProjectsListComponent = () => {
                   title="Edit & Track Daily Execution"
                   aria-label="Edit Details"
                   className="p-1.5 rounded-md text-amber-600 bg-amber-50 hover:bg-amber-100 hover:text-amber-700 border border-amber-200 transition-all cursor-pointer shadow-2xs hover:scale-105"
-                >
-                  <FaEdit className="w-3.5 h-3.5" />
-                </button>
-              ) : (
-                <button
-                  type="button"
-                  disabled
-                  onClick={(e) => e.stopPropagation()}
-                  title={
-                    isViewerOnly
-                      ? "Read-only mode. Editing is disabled for Observers."
-                      : "PMS masterdata not created yet. Please create PMS template first to enable editing."
-                  }
-                  aria-label="Edit Disabled"
-                  className="p-1.5 rounded-md text-slate-300 bg-slate-100 border border-slate-200 cursor-not-allowed opacity-60 shadow-2xs"
                 >
                   <FaEdit className="w-3.5 h-3.5" />
                 </button>
@@ -347,8 +332,8 @@ const ActiveProjectsListComponent = () => {
                   title="PMS Masterdata not created yet. Click to configure PMS template"
                   className="px-2 py-1 rounded text-[10px] font-bold bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-300 transition-all flex items-center gap-1 shadow-2xs hover:scale-105 whitespace-nowrap cursor-pointer"
                 >
-                  <FaPlus className="w-2 h-2 text-amber-600" />
-                  <span>+ Add PMS</span>
+                  <FaPlus className="w-2.5 h-2.5 text-amber-600" />
+                  <span>Add PMS</span>
                 </button>
               )}
             </div>
@@ -437,8 +422,6 @@ const ActiveProjectsListComponent = () => {
           if (!hasPms) {
             return <span className="text-xs font-semibold text-slate-400">—</span>;
           }
-
-          const stages = row.stages || [];
           const stagesCount = stages.length || row.stagesCount || 0;
           const worksCount =
             stages.length > 0
@@ -623,16 +606,6 @@ const ActiveProjectsListComponent = () => {
                 {filteredProjects.length} Projects
               </span>
 
-              {!isViewerOnly && (
-                <button
-                  type="button"
-                  onClick={() => navigate("/sales/active-projects/create")}
-                  className="px-3.5 py-2 bg-gradient-to-r from-cyan-500 to-blue-600 hover:from-cyan-400 hover:to-blue-500 text-white font-bold rounded-lg shadow-md shadow-cyan-500/30 transition-all duration-200 flex items-center gap-2 cursor-pointer transform hover:-translate-y-0.5 active:scale-95 text-xs w-fit"
-                >
-                  <FaPlus className="w-3.5 h-3.5" />
-                  <span>Create Active Project</span>
-                </button>
-              )}
             </div>
           </div>
         </div>

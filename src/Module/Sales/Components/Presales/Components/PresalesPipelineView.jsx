@@ -616,13 +616,20 @@ const PresalesPipelineView = ({
       }
 
       // 2. Save stage data to Presales collection
+      const isStage11 = Number(activeStageId) === 11;
+      const hasFinalContract = Boolean(finalStageData.finalContractSignDate);
+
+      // If Stage 11 is completed or contract is signed, promote to Active Project!
+      const statusToSave = (isStage11 && hasFinalContract) ? "ACTIVE_PROJECT" : projectStatus;
+      const closureToSave = (isStage11 && hasFinalContract) ? "Converted to Construction" : undefined;
+
       const response = await savePresaleStageApi({
         projectId: targetId,
         stageId: activeStageId,
         stageData: finalStageData,
         isCompleted: true,
         engagementScope: normalizeEngagementScope(engagementScope),
-        projectStatus: projectStatus,
+        projectStatus: statusToSave,
         projectSubStatus: projectSubStatus,
         activePerson: activePerson,
         userName: currentUser || "Admin"
@@ -631,6 +638,18 @@ const PresalesPipelineView = ({
       if (response?.success === false) {
         toast.error(response.message || "Failed to save stage");
         return false;
+      }
+
+      if (isStage11 && hasFinalContract) {
+        try {
+          await updateLeadProjectApi(targetId, {
+            status: "ACTIVE_PROJECT",
+            closureStatus: "Converted to Construction",
+            contractSignedDate: finalStageData.finalContractSignDate
+          });
+        } catch (upErr) {
+          console.warn("Failed to update status to ACTIVE_PROJECT:", upErr);
+        }
       }
 
       const savedPresale = response?.data;
@@ -672,12 +691,15 @@ const PresalesPipelineView = ({
         currentStageId: nextStageId,
         subStatus: `Stage ${activeStageId}: ${activeStageConfig.name}`,
         presaleStatus: savedPresale?.presaleStatus || currentProject.presaleStatus,
-        closureStatus: isClosedNow ? savedPresale?.closureReason : currentProject.closureStatus
+        status: (isStage11 && hasFinalContract) ? "ACTIVE_PROJECT" : currentProject.status,
+        closureStatus: isClosedNow ? savedPresale?.closureReason : ((isStage11 && hasFinalContract) ? "Converted to Construction" : currentProject.closureStatus)
       };
 
       if (isClosedNow) {
         setClosureStatus(savedPresale.closureReason || "Closed by Client Response");
         toast.warning(`Presale has been CLOSED due to Client Rejection!`);
+      } else if (isStage11 && hasFinalContract) {
+        toast.success(`🎉 Contract signed! ${currentProject.projectName || currentProject.clientName} has been moved to Active Projects!`);
       } else if (isEditingCompletedStage) {
         toast.success(`Stage ${activeStageId} (${activeStageConfig.name}) details updated successfully! ✨`);
       } else {

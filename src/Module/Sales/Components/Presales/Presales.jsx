@@ -407,10 +407,19 @@ const Presales = () => {
     const newStageId = Math.max(currentPresale.currentStageId || 1, activeStageId);
 
     setSavingStage(true);
+    const isStage11 = Number(activeStageId) === 11;
+    const hasContractDate = Boolean(stageFormData.finalContractSignDate);
+
     setPresalesList((prev) =>
       prev.map((item) => {
         if (item.id === currentPresale.id) {
-          return { ...item, stagesData: updatedStages, currentStageId: newStageId };
+          return {
+            ...item,
+            stagesData: updatedStages,
+            currentStageId: newStageId,
+            status: (isStage11 && hasContractDate) ? "ACTIVE_PROJECT" : item.status,
+            closureStatus: (isStage11 && hasContractDate) ? "Converted to Construction" : item.closureStatus
+          };
         }
         return item;
       })
@@ -420,10 +429,19 @@ const Presales = () => {
       if (targetId) {
         await updateLeadProjectApi(targetId, {
           stagesData: updatedStages,
-          currentStageId: newStageId
+          currentStageId: newStageId,
+          ...(isStage11 && hasContractDate ? {
+            status: "ACTIVE_PROJECT",
+            closureStatus: "Converted to Construction",
+            contractSignedDate: stageFormData.finalContractSignDate
+          } : {})
         });
       }
-      toast.success(`Stage ${activeStageId} (${activeStageConfig.name}) saved successfully! 🚀`);
+      if (isStage11 && hasContractDate) {
+        toast.success(`🎉 Contract signed! ${currentPresale.clientName || "Client"} moved to Active Projects!`);
+      } else {
+        toast.success(`Stage ${activeStageId} (${activeStageConfig.name}) saved successfully! 🚀`);
+      }
     } catch (err) {
       console.error("Error saving stage:", err);
       toast.error("Failed to save stage details on server");
