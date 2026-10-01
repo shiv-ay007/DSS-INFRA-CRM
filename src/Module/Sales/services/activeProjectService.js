@@ -1,3 +1,7 @@
+import { getAllLeadProjectsApi, updateLeadProjectApi } from "./leadProject.api";
+import pmsTemplateService from "./pmsTemplateService";
+import { pmsWbsService } from "./pmsWbsService";
+
 export const ACTIVE_PROJECTS_STORAGE_KEY = "dss_active_projects_data";
 
 // Standard 23 Major Construction Stages (Module 4 Master Blueprint)
@@ -596,6 +600,109 @@ export const mapPmsStagesToExecutionStages = (pmsStages = [], wbsData = null, pr
 };
 
 /**
+ * Synchronizes stage/work/task/subtask statuses from MongoDB executionTracking records
+ */
+export const applyExecutionTrackingToStages = (stages = [], latestTracking = null) => {
+  if (!latestTracking || !Array.isArray(stages) || stages.length === 0) {
+    return stages;
+  }
+
+  const completedStageSet = new Set(latestTracking.completedStageIds || []);
+  const completedWorkSet = new Set(latestTracking.completedWorkIds || []);
+  const completedTaskSet = new Set(latestTracking.completedTaskIds || []);
+  const completedSubtaskSet = new Set(latestTracking.completedSubtaskIds || []);
+
+  const runningStageId = latestTracking.runningStageId || "";
+  const runningWorkId = latestTracking.runningWorkId || "";
+  const runningTaskId = latestTracking.runningTaskId || "";
+  const runningSubtaskId = latestTracking.runningSubtaskId || "";
+
+  return stages.map((stg) => {
+    const isStageCompleted = completedStageSet.has(stg.stageId);
+    const isStageRunning = stg.stageId === runningStageId;
+
+    const updatedWorks = (stg.works || []).map((w) => {
+      const isWorkCompleted = isStageCompleted || completedWorkSet.has(w.workId);
+      const isWorkRunning = isStageRunning && w.workId === runningWorkId;
+
+      const updatedTasks = (w.tasks || []).map((t) => {
+        const isTaskCompleted = isWorkCompleted || completedTaskSet.has(t.taskId);
+        const isTaskRunning = isWorkRunning && t.taskId === runningTaskId;
+
+        const updatedSubtasks = (t.subtasks || []).map((st) => {
+          let stStatus = st.status || "Not Started";
+          if (isTaskCompleted || completedSubtaskSet.has(st.subtaskId)) {
+            stStatus = "Completed";
+          } else if (isTaskRunning && st.subtaskId === runningSubtaskId) {
+            stStatus = "In Progress";
+          }
+          return {
+            ...st,
+            status: stStatus
+          };
+        });
+
+        let taskStatus = t.status || "Not Started";
+        if (isTaskCompleted) {
+          taskStatus = "Completed";
+        } else if (isTaskRunning) {
+          taskStatus = "In Progress";
+        } else if (
+          updatedSubtasks.length > 0 &&
+          updatedSubtasks.every((st) => st.status === "Completed")
+        ) {
+          taskStatus = "Completed";
+        } else if (
+          updatedSubtasks.some((st) => st.status === "In Progress" || st.status === "Completed")
+        ) {
+          taskStatus = "In Progress";
+        }
+
+        return {
+          ...t,
+          status: taskStatus,
+          subtasks: updatedSubtasks
+        };
+      });
+
+      let workStatus = "Not Started";
+      if (isWorkCompleted) {
+        workStatus = "Completed";
+      } else if (isWorkRunning) {
+        workStatus = "In Progress";
+      } else if (
+        updatedTasks.some((t) => t.status === "In Progress" || t.status === "Completed")
+      ) {
+        workStatus = "In Progress";
+      }
+
+      return {
+        ...w,
+        status: workStatus,
+        tasks: updatedTasks
+      };
+    });
+
+    let stageStatus = "Not Started";
+    if (isStageCompleted) {
+      stageStatus = "Completed";
+    } else if (isStageRunning) {
+      stageStatus = "In Progress";
+    } else if (
+      updatedWorks.some((w) => w.status === "In Progress" || w.status === "Completed")
+    ) {
+      stageStatus = "In Progress";
+    }
+
+    return {
+      ...stg,
+      status: stageStatus,
+      works: updatedWorks
+    };
+  });
+};
+
+/**
  * Repairs existing active project stages that were saved with raw ObjectIds
  */
 export const repairCorruptedStages = (stages = [], wbsData = null) => {
@@ -824,6 +931,34 @@ export const activeProjectService = {
 
     list[targetIdx] = updatedProject;
     localStorage.setItem(ACTIVE_PROJECTS_STORAGE_KEY, JSON.stringify(list));
+
+    // Asynchronously sync with backend in background
+    try {
+      const trackingPayload = {
+        projectStatus: updatedProject.projectStatus || "On Track",
+        completedStageIds: updatedProject.completedStageIds || [],
+        runningStageId: updatedProject.runningStageId || "",
+        completedWorkIds: updatedProject.completedWorkIds || [],
+        runningWorkId: updatedProject.runningWorkId || "",
+        completedTaskIds: updatedProject.completedTaskIds || [],
+        runningTaskId: updatedProject.runningTaskId || "",
+        completedSubtaskIds: updatedProject.completedSubtaskIds || [],
+        runningSubtaskId: updatedProject.runningSubtaskId || "",
+        finalTrackingRemark: updatedProject.finalTrackingRemark || updatedProject.overallRemark || "",
+        progressPercent: updatedProject.overallProgress || 0,
+        completedTasksCount: updatedProject.completedTasks || 0,
+        totalTasksCount: updatedProject.totalTasks || 0,
+        completedSubtasksCount: updatedProject.completedSubtasksCount || 0,
+        totalSubtasksCount: updatedProject.subtasksCount || 0,
+        leadId: updatedProject.leadId,
+        projectId: updatedProject.projectId || updatedProject.id,
+        stages: updatedProject.stages || []
+      };
+      const targetId = updatedProject.projectId || updatedProject.id || projectId;
+      pmsTemplateService.saveExecutionTracking(targetId, trackingPayload).catch(() => {});
+      updateLeadProjectApi(targetId, { status: "ACTIVE_PROJECT" }).catch(() => {});
+    } catch (e) {}
+
     return updatedProject;
   },
 
@@ -1060,7 +1195,8 @@ export const activeProjectService = {
           projStatus === "CONVERTED" ||
           closureStatus.includes("converted") ||
           presaleStatus.includes("converted") ||
-          isStage11Signed;
+          isStage11Signed ||
+          Boolean(matchedTmpl);
 
         // Find PMS template if available (matches finalized template only)
         let matchedTmpl = null;
@@ -1117,6 +1253,13 @@ export const activeProjectService = {
           }
           return;
         }
+
+        // Extract latest execution tracking from MongoDB pms_templates
+        const trackingList = Array.isArray(matchedTmpl?.executionTracking)
+          ? matchedTmpl.executionTracking
+          : [];
+        const latestTracking =
+          trackingList.length > 0 ? trackingList[trackingList.length - 1] : null;
 
         if (existingIdx !== -1) {
           // Existing active project: keep user-modified stages, but update any blank metadata & populate fields
@@ -1185,12 +1328,48 @@ export const activeProjectService = {
           // Stage & Task Repair / Synchronization with PMS Template (including fieldData)
           if (matchedTmpl && Array.isArray(matchedTmpl.stages) && matchedTmpl.stages.length > 0) {
             existing.stages = mapPmsStagesToExecutionStages(matchedTmpl.stages, wbsData, existing.stages);
-            updatedItem = true;
-          } else if (!matchedTmpl && !existing.trackerData) {
-            if (Array.isArray(existing.stages) && existing.stages.length > 0) {
-              existing.stages = [];
-              updatedItem = true;
+            if (latestTracking) {
+              existing.stages = applyExecutionTrackingToStages(existing.stages, latestTracking);
+              existing.completedStageIds = latestTracking.completedStageIds || [];
+              existing.runningStageId = latestTracking.runningStageId || "";
+              existing.completedWorkIds = latestTracking.completedWorkIds || [];
+              existing.runningWorkId = latestTracking.runningWorkId || "";
+              existing.completedTaskIds = latestTracking.completedTaskIds || [];
+              existing.runningTaskId = latestTracking.runningTaskId || "";
+              existing.completedSubtaskIds = latestTracking.completedSubtaskIds || [];
+              existing.runningSubtaskId = latestTracking.runningSubtaskId || "";
+              if (latestTracking.finalTrackingRemark) {
+                existing.overallRemark = latestTracking.finalTrackingRemark;
+                existing.finalTrackingRemark = latestTracking.finalTrackingRemark;
+              }
+              if (latestTracking.projectStatus) {
+                existing.projectStatus = latestTracking.projectStatus;
+              }
             }
+            updatedItem = true;
+          } else if (latestTracking) {
+            if (Array.isArray(existing.stages) && existing.stages.length > 0) {
+              existing.stages = applyExecutionTrackingToStages(existing.stages, latestTracking);
+            }
+            existing.completedStageIds = latestTracking.completedStageIds || [];
+            existing.runningStageId = latestTracking.runningStageId || "";
+            existing.completedWorkIds = latestTracking.completedWorkIds || [];
+            existing.runningWorkId = latestTracking.runningWorkId || "";
+            existing.completedTaskIds = latestTracking.completedTaskIds || [];
+            existing.runningTaskId = latestTracking.runningTaskId || "";
+            existing.completedSubtaskIds = latestTracking.completedSubtaskIds || [];
+            existing.runningSubtaskId = latestTracking.runningSubtaskId || "";
+            if (latestTracking.finalTrackingRemark) {
+              existing.overallRemark = latestTracking.finalTrackingRemark;
+              existing.finalTrackingRemark = latestTracking.finalTrackingRemark;
+            }
+            if (latestTracking.projectStatus) {
+              existing.projectStatus = latestTracking.projectStatus;
+            }
+            updatedItem = true;
+          } else if (!matchedTmpl && (!existing.stages || existing.stages.length === 0)) {
+            existing.stages = cloneChecklistFromMaster();
+            updatedItem = true;
           } else if (hasCorruptedStageIds(existing.stages)) {
             existing.stages = repairCorruptedStages(existing.stages, wbsData);
             updatedItem = true;
@@ -1206,8 +1385,12 @@ export const activeProjectService = {
           if (matchedTmpl && Array.isArray(matchedTmpl.stages) && matchedTmpl.stages.length > 0) {
             stagesToUse = mapPmsStagesToExecutionStages(matchedTmpl.stages, wbsData, []);
           } else {
-            // Stages will be populated once PMS template is created
-            stagesToUse = [];
+            // Initialize with complete 23-26 Stages checklist from master blueprint
+            stagesToUse = cloneChecklistFromMaster();
+          }
+
+          if (latestTracking && Array.isArray(stagesToUse) && stagesToUse.length > 0) {
+            stagesToUse = applyExecutionTrackingToStages(stagesToUse, latestTracking);
           }
 
           const phone = bp.phoneNumber || bp.contactNo || bp.whatsappNumber || leadObj.phoneNumber || "";
@@ -1253,9 +1436,18 @@ export const activeProjectService = {
             revenue: revVal > 0 ? `₹ ${revVal.toLocaleString("en-IN")}` : "₹ 0",
             activePerson: bp.assignedTo || bp.salesPerson || leadObj.salesPerson || "Admin",
             contractSignedDate: bp.createdAt ? new Date(bp.createdAt).toISOString().split("T")[0] : new Date().toISOString().split("T")[0],
-            projectStatus: "On Track",
+            projectStatus: latestTracking?.projectStatus || "On Track",
             projectSubStatus: "Site Handover",
-            overallRemark: bp.transferRemark || bp.salesRemarks || "Presales project synchronized for execution tracking.",
+            overallRemark: latestTracking?.finalTrackingRemark || bp.transferRemark || bp.salesRemarks || "Presales project synchronized for execution tracking.",
+            finalTrackingRemark: latestTracking?.finalTrackingRemark || "",
+            completedStageIds: latestTracking?.completedStageIds || [],
+            runningStageId: latestTracking?.runningStageId || "",
+            completedWorkIds: latestTracking?.completedWorkIds || [],
+            runningWorkId: latestTracking?.runningWorkId || "",
+            completedTaskIds: latestTracking?.completedTaskIds || [],
+            runningTaskId: latestTracking?.runningTaskId || "",
+            completedSubtaskIds: latestTracking?.completedSubtaskIds || [],
+            runningSubtaskId: latestTracking?.runningSubtaskId || "",
             stages: stagesToUse,
             createdAt: bp.createdAt || new Date().toISOString()
           });
@@ -1272,6 +1464,43 @@ export const activeProjectService = {
       return list.map((p) => calculateProjectRollup(p));
     } catch (err) {
       console.error("Error syncing active projects with presales:", err);
+      return activeProjectService.getAllActiveProjects();
+    }
+  },
+
+  // 9. Fetch Live Active Projects directly from MongoDB Backend API
+  fetchAndSyncActiveProjects: async () => {
+    try {
+      const [leadProjectsRes, pmsRes, wbsRes] = await Promise.allSettled([
+        getAllLeadProjectsApi(),
+        pmsTemplateService.getAllTemplates({ limit: 1000 }),
+        pmsWbsService.getAllWbsData()
+      ]);
+
+      let leadProjects = [];
+      if (leadProjectsRes.status === "fulfilled") {
+        const raw =
+          leadProjectsRes.value?.data?.projects ||
+          leadProjectsRes.value?.data?.data?.projects ||
+          leadProjectsRes.value?.projects ||
+          (Array.isArray(leadProjectsRes.value?.data) ? leadProjectsRes.value.data : []);
+        if (Array.isArray(raw)) leadProjects = raw;
+      }
+
+      let pmsList = [];
+      if (pmsRes.status === "fulfilled") {
+        const rawTmpl = pmsRes.value?.data?.data || pmsRes.value?.data || [];
+        if (Array.isArray(rawTmpl)) pmsList = rawTmpl;
+      }
+
+      let wbsData = null;
+      if (wbsRes.status === "fulfilled") {
+        wbsData = wbsRes.value?.data?.data || wbsRes.value?.data || null;
+      }
+
+      return activeProjectService.syncWithPresales(leadProjects, pmsList, wbsData);
+    } catch (err) {
+      console.warn("fetchAndSyncActiveProjects error:", err);
       return activeProjectService.getAllActiveProjects();
     }
   }

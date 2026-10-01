@@ -24,7 +24,7 @@ import {
   FaClipboardList
 } from "react-icons/fa";
 import { HiSparkles } from "react-icons/hi2";
-import { getAllLeadProjectsApi } from "../../services/leadProject.api";
+import { getAllLeadProjectsApi, updateLeadProjectApi } from "../../services/leadProject.api";
 import pmsTemplateService from "../../services/pmsTemplateService";
 import activeProjectService, { cloneChecklistFromMaster, mapPmsStagesToExecutionStages, isObjectId } from "../../services/activeProjectService";
 import { contractorService } from "../../services/contractorService";
@@ -406,7 +406,7 @@ const CreateActiveProjectComponent = () => {
   }, [stagesData, stageFilter, searchQuery]);
 
   // Save Project Execution Tracking
-  const handleSaveActiveProject = (e) => {
+  const handleSaveActiveProject = async (e) => {
     e.preventDefault();
     if (!selectedClientId) {
       toast.error("Please select a Presales Client.");
@@ -431,6 +431,45 @@ const CreateActiveProjectComponent = () => {
           customStages: stagesData
         }
       );
+
+      // Persist status ACTIVE_PROJECT directly to MongoDB leadsproject collection
+      try {
+        await updateLeadProjectApi(selectedProjectId, {
+          status: "ACTIVE_PROJECT",
+          inSalesManagement: true,
+          isSalesTransferred: true
+        });
+      } catch (dbErr) {
+        console.warn("Backend LeadProject status update note:", dbErr);
+      }
+
+      // Persist initial execution tracking record to MongoDB pms_templates collection
+      try {
+        const targetTemplateOrProjectId = currentProjectPmsTemplate?._id || selectedProjectId;
+        const initialTrackingPayload = {
+          projectStatus: projectOverallStatus || "On Track",
+          completedStageIds: stagesData.filter((s) => s.status === "Completed").map((s) => s.stageId),
+          runningStageId: stagesData.find((s) => s.status === "In Progress")?.stageId || stagesData[0]?.stageId || "",
+          completedWorkIds: [],
+          runningWorkId: "",
+          completedTaskIds: [],
+          runningTaskId: "",
+          completedSubtaskIds: [],
+          runningSubtaskId: "",
+          finalTrackingRemark: projectRemarks || "Initialized active site execution.",
+          progressPercent: progressSummary.overallProgress || 0,
+          completedTasksCount: progressSummary.completedTasks || 0,
+          totalTasksCount: progressSummary.totalTasks || 0,
+          completedSubtasksCount: 0,
+          totalSubtasksCount: 0,
+          leadId: currentProject?.leadId?._id || currentProject?.leadId || selectedClientId,
+          projectId: selectedProjectId,
+          stages: stagesData
+        };
+        await pmsTemplateService.saveExecutionTracking(targetTemplateOrProjectId, initialTrackingPayload);
+      } catch (tmplErr) {
+        console.warn("Backend pms_templates tracking note:", tmplErr);
+      }
 
       toast.success(
         res.updated

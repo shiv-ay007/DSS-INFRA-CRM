@@ -157,13 +157,11 @@ const Salse = () => {
   }, [fetchSalesLeads]);
 
   // Filter States
-  const [filterSalesPerson, setFilterSalesPerson] = useState("ALL");
   const [searchTerm, setSearchTerm] = useState("");
   const [showFilters, setShowFilters] = useState(false);
-  const [selectedPriority, setSelectedPriority] = useState("all");
-  const [selectedCity, setSelectedCity] = useState("all");
   const [filterCategory, setFilterCategory] = useState("All");
-  const [filterJobType, setFilterJobType] = useState("All");
+  const [filterLeadType, setFilterLeadType] = useState("All");
+  const [selectedPincode, setSelectedPincode] = useState("All");
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -260,18 +258,7 @@ const Salse = () => {
           );
         }
       },
-      status: {
-        label: "STATUS",
-        align: "center",
-        render: (val, row) => {
-          const s = (val || row.status || "INTERESTED").toUpperCase();
-          return (
-            <span className="px-3 py-0.5 rounded-full text-xs font-extrabold uppercase border bg-emerald-100 text-emerald-800 border-emerald-300 shadow-2xs">
-              {s}
-            </span>
-          );
-        }
-      },
+
       createdAt: {
         label: "CREATED AT",
         align: "center",
@@ -476,48 +463,73 @@ const Salse = () => {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2
     });
+    const freshCount = salesData.filter((d) => {
+      const type = String(d.leadType || d.jobType || "FRESH").toUpperCase();
+      return !type.includes("REPEAT");
+    }).length;
+    const repeatCount = salesData.filter((d) => {
+      const type = String(d.leadType || d.jobType || "").toUpperCase();
+      return type.includes("REPEAT");
+    }).length;
+
     return {
       totalAmountFormatted: `₹${inLakhs} Lakhs`,
       totalAmountRaw: `₹${totalAmt.toLocaleString("en-IN")}`,
       qualified: salesData.length,
-      followedUp: salesData.filter((d) => d.status === "INTERESTED" || d.isInterested).length
+      freshLeads: freshCount,
+      repeatLeads: repeatCount
     };
   }, [salesData]);
 
-  // Cities List for filter
-  const citiesList = useMemo(() => {
-    const set = new Set(salesData.map((d) => d.city).filter((c) => c && c !== "--"));
-    return ["all", ...Array.from(set)];
+  // Dynamic filter lists based on table data
+  const pincodesList = useMemo(() => {
+    const set = new Set(salesData.map((d) => d.pincode).filter((p) => p && p !== "--"));
+    return ["All", ...Array.from(set)];
   }, [salesData]);
 
-  // Filtered Data
+  // Filtered Data based on columns in the table
   const filteredData = useMemo(() => {
     return salesData.filter((item) => {
-      if (selectedPriority !== "all") {
-        const p = (item.priority || item.leadLabel || "").toLowerCase();
-        if (selectedPriority === "high" && p !== "high" && p !== "hot") return false;
-        if (selectedPriority === "medium" && p !== "medium" && p !== "warm") return false;
-        if (selectedPriority === "low" && p !== "low" && p !== "cold") return false;
+      // 1. Work Category Filter (handles array or string)
+      if (filterCategory !== "All") {
+        const catStr = Array.isArray(item.workCategory)
+          ? item.workCategory.join(" ").toLowerCase()
+          : String(item.workCategory || item.businessType || "").toLowerCase();
+        if (!catStr.includes(filterCategory.toLowerCase())) return false;
       }
 
-      if (selectedCity !== "all" && item.city !== selectedCity) return false;
-      if (filterCategory !== "All" && (item.businessType || item.workCategory) !== filterCategory) return false;
-      if (filterJobType !== "All" && item.jobType !== filterJobType) return false;
+      // 2. Lead Type Filter (FRESH, REPEAT)
+      if (filterLeadType !== "All") {
+        const type = String(item.leadType || item.jobType || "FRESH").toUpperCase();
+        if (filterLeadType.toUpperCase() === "REPEAT") {
+          if (!type.includes("REPEAT")) return false;
+        } else if (filterLeadType.toUpperCase() === "FRESH") {
+          if (type.includes("REPEAT")) return false;
+        }
+      }
 
+      // 3. Pincode Filter
+      if (selectedPincode !== "All" && selectedPincode !== "all") {
+        if (String(item.pincode || "").trim() !== String(selectedPincode).trim()) return false;
+      }
+
+      // 4. Search Filter (searches across visible columns: Client Name, Phone, Email, ID, City, Pincode, Requirement, Address)
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase();
         const matches =
           (item.clientName || item.concernPersonName || "").toLowerCase().includes(q) ||
-          (item.clientId || "").toLowerCase().includes(q) ||
-          (item.phoneNumber || "").includes(q) ||
+          (item.clientId || item.leadId || "").toLowerCase().includes(q) ||
+          (item.phoneNumber || item.contact || item.whatsappNumber || "").includes(q) ||
+          (item.emailAddress || item.email || "").toLowerCase().includes(q) ||
           (item.city || "").toLowerCase().includes(q) ||
+          (item.pincode || "").toLowerCase().includes(q) ||
           (item.requirement || "").toLowerCase().includes(q) ||
           (item.address || "").toLowerCase().includes(q);
         if (!matches) return false;
       }
       return true;
     });
-  }, [salesData, selectedPriority, selectedCity, filterCategory, filterJobType, searchTerm]);
+  }, [salesData, filterCategory, filterLeadType, selectedPincode, searchTerm]);
 
   // Paginated Data
   const paginatedData = useMemo(() => {
@@ -527,10 +539,9 @@ const Salse = () => {
 
   const handleResetFilters = () => {
     setSearchTerm("");
-    setSelectedPriority("all");
-    setSelectedCity("all");
     setFilterCategory("All");
-    setFilterJobType("All");
+    setFilterLeadType("All");
+    setSelectedPincode("All");
     setCurrentPage(1);
   };
 
@@ -564,7 +575,7 @@ const Salse = () => {
         />
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         
         {/* Card 1: Total Amount (Light Green Card) */}
         <div
@@ -579,23 +590,33 @@ const Salse = () => {
           </div>
         </div>
 
-        {/* Card 2: Qualified (Light Blue Card) */}
+        {/* Card 2: Total Leads (Light Blue Card) */}
         <div className="p-5 rounded-2xl bg-[#EFF6FF] border border-blue-200 shadow-2xs hover:shadow-xs transition-shadow">
           <div className="text-xs sm:text-sm font-bold text-blue-700 mb-1">
-            Qualified
+            Total Leads
           </div>
           <div className="text-2xl sm:text-3xl font-black text-blue-900 font-mono tracking-tight">
             {stats.qualified}
           </div>
         </div>
 
-        {/* Card 3: Followed Up (Light Purple/Lavender Card) */}
+        {/* Card 3: Fresh Leads (Light Amber Card) */}
+        <div className="p-5 rounded-2xl bg-[#FFFBEB] border border-amber-200 shadow-2xs hover:shadow-xs transition-shadow">
+          <div className="text-xs sm:text-sm font-bold text-amber-700 mb-1">
+            Fresh Leads
+          </div>
+          <div className="text-2xl sm:text-3xl font-black text-amber-900 font-mono tracking-tight">
+            {stats.freshLeads}
+          </div>
+        </div>
+
+        {/* Card 4: Repeat Leads (Light Purple/Lavender Card) */}
         <div className="p-5 rounded-2xl bg-[#FAF5FF] border border-purple-200 shadow-2xs hover:shadow-xs transition-shadow">
           <div className="text-xs sm:text-sm font-bold text-purple-700 mb-1">
-            Followed Up
+            Repeat Leads
           </div>
           <div className="text-2xl sm:text-3xl font-black text-purple-900 font-mono tracking-tight">
-            {stats.followedUp}
+            {stats.repeatLeads}
           </div>
         </div>
 
@@ -652,29 +673,28 @@ const Salse = () => {
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Priority</label>
+              <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Lead Type</label>
               <select
-                value={selectedPriority}
-                onChange={(e) => { setSelectedPriority(e.target.value); setCurrentPage(1); }}
+                value={filterLeadType}
+                onChange={(e) => { setFilterLeadType(e.target.value); setCurrentPage(1); }}
                 className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-orange-500 shadow-2xs cursor-pointer"
               >
-                <option value="all">All Priorities</option>
-                <option value="high">High Priority</option>
-                <option value="medium">Medium Priority</option>
-                <option value="low">Low Priority</option>
+                <option value="All">All Lead Types</option>
+                <option value="FRESH">Fresh</option>
+                <option value="REPEAT">Repeat</option>
               </select>
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">City</label>
+              <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">Pincode</label>
               <select
-                value={selectedCity}
-                onChange={(e) => { setSelectedCity(e.target.value); setCurrentPage(1); }}
+                value={selectedPincode}
+                onChange={(e) => { setSelectedPincode(e.target.value); setCurrentPage(1); }}
                 className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-800 bg-slate-50 focus:bg-white focus:outline-none focus:border-orange-500 shadow-2xs cursor-pointer"
               >
-                <option value="all">All Cities</option>
-                {citiesList.filter((c) => c !== "all").map((c) => (
-                  <option key={c} value={c}>{c}</option>
+                <option value="All">All Pincodes</option>
+                {pincodesList.filter((p) => p !== "All" && p !== "all").map((p) => (
+                  <option key={p} value={p}>{p}</option>
                 ))}
               </select>
             </div>

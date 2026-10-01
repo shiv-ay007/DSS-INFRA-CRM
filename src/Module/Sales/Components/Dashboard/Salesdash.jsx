@@ -15,6 +15,7 @@ import { getAllLeadsApi } from "../../services/totalLeads.api";
 import { getAllLeadProjectsApi } from "../../services/leadProject.api";
 import { activeProjectService } from "../../services/activeProjectService";
 import { pmsWbsService } from "../../services/pmsWbsService";
+import pmsTemplateService from "../../services/pmsTemplateService";
 import {
   useLeadContext,
   subscribeToLeadUpdates
@@ -46,37 +47,78 @@ const Salesdash = () => {
         setIsLoading(true);
       }
 
-      // 1. Fetch Active Construction Projects from Local Execution Service
+      // 1. Fetch Active Construction Projects from Local Execution Service (instant cache render)
       try {
         const prjs = activeProjectService.getAllActiveProjects();
-        if (Array.isArray(prjs)) {
+        if (Array.isArray(prjs) && prjs.length > 0) {
           setActiveProjects(prjs);
         }
       } catch (err) {
         console.warn("Active projects fetch error:", err);
       }
 
-      // Fetch WBS Master, Leads, and Counts in Parallel (Concurrent 1-roundtrip fetch)
+      // Fetch WBS Master, Leads, Active Projects & Counts in Parallel directly from Live Backend API
       try {
         if (!hasCachedLeads) {
           setIsLoading(true);
         }
 
-        const [wbsSettled, leadsSettled, closedSettled, lostSettled] = await Promise.allSettled([
+        const [
+          wbsSettled,
+          leadsSettled,
+          closedSettled,
+          lostSettled,
+          leadProjectsSettled,
+          pmsTemplatesSettled
+        ] = await Promise.allSettled([
           pmsWbsService.getAllWbsData(),
           getAllLeadsApi({ limit: 1000 }),
           getAllLeadProjectsApi({ isClosed: "true" }),
-          getAllLeadsApi({ intrestedStatus: "Not Intersted", limit: 1000 })
+          getAllLeadsApi({ intrestedStatus: "Not Intersted", limit: 1000 }),
+          getAllLeadProjectsApi(),
+          pmsTemplateService.getAllTemplates({ limit: 1000 })
         ]);
 
-        // 1. Process WBS Master stages count
+        // 1. Process WBS Master stages count & master data
+        let wbsMasterData = null;
         if (wbsSettled.status === "fulfilled" && wbsSettled.value) {
           const wbsRes = wbsSettled.value;
+          wbsMasterData = wbsRes?.data?.data || wbsRes?.data || null;
           if (wbsRes?.data?.stages && Array.isArray(wbsRes.data.stages)) {
             setWbsStagesCount(wbsRes.data.stages.length);
           } else if (Array.isArray(wbsRes?.data?.data?.stages)) {
             setWbsStagesCount(wbsRes.data.data.stages.length);
           }
+        }
+
+        // 1b. Process Active Projects Live from MongoDB Database
+        let liveLeadProjects = [];
+        if (leadProjectsSettled.status === "fulfilled") {
+          const raw =
+            leadProjectsSettled.value?.data?.projects ||
+            leadProjectsSettled.value?.data?.data?.projects ||
+            leadProjectsSettled.value?.projects ||
+            (Array.isArray(leadProjectsSettled.value?.data) ? leadProjectsSettled.value.data : []);
+          if (Array.isArray(raw)) liveLeadProjects = raw;
+        }
+
+        let livePmsTemplates = [];
+        if (pmsTemplatesSettled.status === "fulfilled") {
+          const rawT = pmsTemplatesSettled.value?.data?.data || pmsTemplatesSettled.value?.data || [];
+          if (Array.isArray(rawT)) livePmsTemplates = rawT;
+        }
+
+        try {
+          const syncedActive = activeProjectService.syncWithPresales(
+            liveLeadProjects,
+            livePmsTemplates,
+            wbsMasterData
+          );
+          if (Array.isArray(syncedActive)) {
+            setActiveProjects(syncedActive);
+          }
+        } catch (syncErr) {
+          console.warn("Active projects live sync error:", syncErr);
         }
 
         // 2. Process Leads

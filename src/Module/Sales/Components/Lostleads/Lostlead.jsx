@@ -23,6 +23,7 @@ const leadModesList = [
   "Customer to customer"
 ];
 
+import { leadTypesList, workCategoryList, availableWorkTypes } from "../../data/addLeadData";
 import { getAllLeadsApi, updateLeadApi } from "../../services/totalLeads.api";
 import { useLeadContext, subscribeToLeadUpdates, getStoredLeads } from "../../../../context/LeadContext";
 import { useAuth } from "../../../../context/AuthContext";

@@ -322,7 +322,6 @@ const Presales = () => {
   const [filterPriority, setFilterPriority] = useState("ALL");
   const [filterJobType, setFilterJobType] = useState("ALL");
   const [filterBusinessType, setFilterBusinessType] = useState("ALL");
-  const [filterAssignedTo, setFilterAssignedTo] = useState("ALL");
   const [filterCity, setFilterCity] = useState("ALL");
   const [currentPage, setCurrentPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -600,11 +599,39 @@ const Presales = () => {
     });
   };
 
-  // Unique options for dropdown filters
+  // Unique options for dropdown filters matching actual table data
+  const prioritiesList = useMemo(() => {
+    const set = new Set();
+    presalesList.forEach((p) => {
+      const pr = p.priority;
+      if (pr && pr !== "--") set.add(String(pr).trim());
+    });
+    if (set.size === 0) return ["High", "Medium", "Low"];
+    return Array.from(set).sort();
+  }, [presalesList]);
+
+  const jobTypesList = useMemo(() => {
+    const set = new Set();
+    presalesList.forEach((p) => {
+      const j = p.jobType || p.leadType;
+      if (j && j !== "--") set.add(String(j).toUpperCase().trim());
+    });
+    if (set.size === 0) return ["NEW"];
+    return Array.from(set).sort();
+  }, [presalesList]);
+
   const businessTypesList = useMemo(() => {
     const set = new Set();
     presalesList.forEach((p) => {
-      if (p.businessType) set.add(p.businessType);
+      const raw = p.businessType || p.workCategory;
+      if (Array.isArray(raw)) {
+        raw.forEach((r) => r && set.add(r.trim()));
+      } else if (typeof raw === "string" && raw.trim() && raw !== "--") {
+        raw.split(",").forEach((part) => {
+          const trimmed = part.trim();
+          if (trimmed && trimmed !== "--") set.add(trimmed);
+        });
+      }
     });
     return Array.from(set).sort();
   }, [presalesList]);
@@ -613,7 +640,7 @@ const Presales = () => {
     const set = new Set();
     presalesList.forEach((p) => {
       const name = p.assignedTo || p.activePerson;
-      if (name) set.add(name);
+      if (name && name !== "--") set.add(String(name).trim());
     });
     return Array.from(set).sort();
   }, [presalesList]);
@@ -621,7 +648,8 @@ const Presales = () => {
   const citiesList = useMemo(() => {
     const set = new Set();
     presalesList.forEach((p) => {
-      if (p.city) set.add(p.city);
+      const c = p.city && p.city !== "--" ? p.city : (p.address && p.address !== "--" ? p.address : null);
+      if (c && c !== "--") set.add(String(c).trim());
     });
     return Array.from(set).sort();
   }, [presalesList]);
@@ -633,10 +661,9 @@ const Presales = () => {
     if (filterPriority !== "ALL") count++;
     if (filterJobType !== "ALL") count++;
     if (filterBusinessType !== "ALL") count++;
-    if (filterAssignedTo !== "ALL") count++;
     if (filterCity !== "ALL") count++;
     return count;
-  }, [searchTerm, filterPriority, filterJobType, filterBusinessType, filterAssignedTo, filterCity]);
+  }, [searchTerm, filterPriority, filterJobType, filterBusinessType, filterCity]);
 
   const hasActiveFilters = activeFiltersCount > 0;
 
@@ -645,7 +672,6 @@ const Presales = () => {
     setFilterPriority("ALL");
     setFilterJobType("ALL");
     setFilterBusinessType("ALL");
-    setFilterAssignedTo("ALL");
     setFilterCity("ALL");
     setCurrentPage(1);
   };
@@ -671,36 +697,32 @@ const Presales = () => {
       const matchPriority =
         filterPriority === "ALL" ||
         itemPriority === filterPriority.toUpperCase() ||
-        (filterPriority === "HIGH" && itemPriority === "HOT") ||
-        (filterPriority === "MEDIUM" && itemPriority === "WARM");
+        (filterPriority === "HIGH" && (itemPriority === "HIGH" || itemPriority === "HOT")) ||
+        (filterPriority === "MEDIUM" && (itemPriority === "MEDIUM" || itemPriority === "WARM"));
 
       const itemJobType = String(item.jobType || "NEW").toUpperCase();
       const matchJobType =
         filterJobType === "ALL" ||
         itemJobType === filterJobType.toUpperCase();
 
+      const itemBusinessType = String(item.businessType || item.workCategory || "").toLowerCase();
       const matchBusinessType =
         filterBusinessType === "ALL" ||
-        String(item.businessType || "").toLowerCase() === filterBusinessType.toLowerCase();
+        itemBusinessType.includes(filterBusinessType.toLowerCase());
 
-      const itemAssigned = item.assignedTo || item.activePerson || "";
-      const matchAssignedTo =
-        filterAssignedTo === "ALL" ||
-        itemAssigned.toLowerCase() === filterAssignedTo.toLowerCase();
-
-      const itemCity = item.city || "";
+      const itemLocation = `${item.city || ""} ${item.address || ""}`.toLowerCase();
       const matchCity =
         filterCity === "ALL" ||
-        itemCity.toLowerCase() === filterCity.toLowerCase();
+        itemLocation.includes(filterCity.toLowerCase());
 
-      return matchSearch && matchPriority && matchJobType && matchBusinessType && matchAssignedTo && matchCity;
+      return matchSearch && matchPriority && matchJobType && matchBusinessType && matchCity;
     });
-  }, [presalesList, searchTerm, filterPriority, filterJobType, filterBusinessType, filterAssignedTo, filterCity]);
+  }, [presalesList, searchTerm, filterPriority, filterJobType, filterBusinessType, filterCity]);
 
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, filterPriority, filterJobType, filterBusinessType, filterAssignedTo, filterCity, rowsPerPage]);
+  }, [searchTerm, filterPriority, filterJobType, filterBusinessType, filterCity, rowsPerPage]);
 
   // Pagination calculations
   const totalItems = filteredPresales.length;
@@ -1406,24 +1428,6 @@ const Presales = () => {
                 )}
               </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  if (presalesList.length > 0) {
-                    const target = presalesList[0];
-                    setActivePipelinePresale(target);
-                    navigate(`/sales/presales/${target.id}`, { state: { presale: target } });
-                  } else {
-                    toast.info("No presale records available yet.");
-                  }
-                }}
-                className="px-3 py-1.5 rounded-lg text-xs font-bold bg-cyan-400 hover:bg-cyan-300 text-slate-950 transition-all flex items-center gap-1.5 shadow-xs cursor-pointer active:scale-95"
-                title="Open 11-Stage Design Pipeline"
-              >
-                <FaStream className="w-3.5 h-3.5 text-slate-950" />
-                <span className="hidden sm:inline">11-Stage Pipeline</span>
-              </button>
-
               <span className="px-3 py-1 rounded-lg text-xs font-bold bg-white/10 text-white border border-white/15">
                 {presalesList.length} Active Records
               </span>
@@ -1529,7 +1533,7 @@ const Presales = () => {
           </div>
 
           {/* Bottom Row: Dropdown Filters Matching Table Columns */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 pt-2 border-t border-slate-100 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 pt-2 border-t border-slate-100 text-xs">
             {/* 1. Priority Filter (Column: PRIORITY) */}
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
@@ -1545,9 +1549,11 @@ const Presales = () => {
                 }`}
               >
                 <option value="ALL">All Priorities</option>
-                <option value="HIGH">High / Hot</option>
-                <option value="MEDIUM">Medium / Warm</option>
-                <option value="LOW">Low</option>
+                {prioritiesList.map((pr) => (
+                  <option key={pr} value={pr.toUpperCase()}>
+                    {pr}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -1566,9 +1572,11 @@ const Presales = () => {
                 }`}
               >
                 <option value="ALL">All Job Types</option>
-                <option value="NEW">New</option>
-                <option value="EXISTING">Existing</option>
-                <option value="UPGRADE">Upgrade</option>
+                {jobTypesList.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
               </select>
             </div>
 
@@ -1595,30 +1603,7 @@ const Presales = () => {
               </select>
             </div>
 
-            {/* 4. Assigned To Filter (Column: ASSIGNED TO) */}
-            <div>
-              <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
-                Assigned To
-              </label>
-              <select
-                value={filterAssignedTo}
-                onChange={(e) => setFilterAssignedTo(e.target.value)}
-                className={`w-full px-2.5 py-1.5 rounded-lg border text-xs font-semibold cursor-pointer transition-colors focus:outline-none focus:ring-1 focus:ring-indigo-500 truncate ${
-                  filterAssignedTo !== "ALL"
-                    ? "bg-indigo-50 text-indigo-800 border-indigo-300 font-bold"
-                    : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-white"
-                }`}
-              >
-                <option value="ALL">All Executives</option>
-                {assignedToList.map((person) => (
-                  <option key={person} value={person}>
-                    {person}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* 5. Location / City Filter (Column: LOCATION) */}
+            {/* 4. Location / City Filter (Column: LOCATION) */}
             <div>
               <label className="block text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-1">
                 Location / City

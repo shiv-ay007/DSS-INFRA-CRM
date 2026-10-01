@@ -20,7 +20,7 @@ import {
   FaFileAlt,
   FaDownload,
   FaExternalLinkAlt,
-  FaTrashRestore,
+  FaUndo,
   FaSpinner,
   FaStar,
   FaClipboardList,
@@ -372,12 +372,12 @@ const CompleteProjectDetailsComponent = () => {
         );
         activeProjectService.saveActiveProjects(updated);
       }
-      toast.success("Project successfully restored back to active pipeline! 🚀");
+      toast.success("Project successfully reopened back to active pipeline! 🚀");
       setIsRestoreModalOpen(false);
       navigate("/sales/complete-projects");
     } catch (err) {
-      console.error("Error restoring project:", err);
-      toast.error("Failed to restore project.");
+      console.error("Error reopening project:", err);
+      toast.error("Failed to reopen project.");
     } finally {
       setIsRestoring(false);
     }
@@ -499,10 +499,10 @@ const CompleteProjectDetailsComponent = () => {
                   type="button"
                   onClick={() => setIsRestoreModalOpen(true)}
                   className="px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-bold transition-all flex items-center gap-1.5 shadow-2xs bg-emerald-600 hover:bg-emerald-700 text-white cursor-pointer active:scale-95"
-                  title="Restore Project"
+                  title="Reopen Project"
                 >
-                  <FaTrashRestore className="text-xs" />
-                  <span>Restore Project</span>
+                  <FaUndo className="text-xs" />
+                  <span>Reopen Project</span>
                 </button>
               )}
 
@@ -992,18 +992,18 @@ const CompleteProjectDetailsComponent = () => {
       </div>
 
       {/* ──────────────────────────────────────────────────────────────────
-          6. RESTORE CONFIRMATION MODAL
+          6. REOPEN CONFIRMATION MODAL
       ────────────────────────────────────────────────────────────────── */}
       {isRestoreModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
           <div className="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-xl shrink-0">
-                <FaTrashRestore />
+                <FaUndo />
               </div>
               <div>
                 <h3 className="text-base font-black text-slate-900">
-                  Restore Project?
+                  Reopen Project?
                 </h3>
                 <p className="text-xs text-slate-500 font-medium">
                   This project will be reopened back to the active Presales pipeline.
@@ -1052,12 +1052,12 @@ const CompleteProjectDetailsComponent = () => {
                 {isRestoring ? (
                   <>
                     <FaSpinner className="animate-spin text-xs" />
-                    <span>Restoring...</span>
+                    <span>Reopening...</span>
                   </>
                 ) : (
                   <>
-                    <FaTrashRestore className="text-xs" />
-                    <span>Confirm Restore</span>
+                    <FaUndo className="text-xs" />
+                    <span>Confirm Reopen</span>
                   </>
                 )}
               </button>

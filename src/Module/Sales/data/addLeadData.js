@@ -24,9 +24,7 @@ export const channelsList = [
 
 export const leadTypesList = [
   "FRESH",
-  "REPEAT",
-  "OLD",
-  "RE-ENGAGED"
+  "REPEAT"
 ];
 
 export const workCategoryList = [

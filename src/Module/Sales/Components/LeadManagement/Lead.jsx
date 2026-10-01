@@ -321,8 +321,8 @@ const Lead = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [filterStatus, setFilterStatus] = useState("All");
   const [filterLeadType, setFilterLeadType] = useState("All");
-  const [filterJobType, setFilterJobType] = useState("All");
-  const [filterLeadLabel, setFilterLeadLabel] = useState("All");
+  const [filterLeadMode, setFilterLeadMode] = useState("All");
+  const [filterWorkCategory, setFilterWorkCategory] = useState("All");
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
 
@@ -1234,24 +1234,47 @@ const Lead = () => {
         ["LOSS", "LOST", "CLOSED_LOST", "CLOSED_LOSS"].includes(String(lead.status || "").toUpperCase());
       if (isLost) return false;
 
-      if (filterStatus !== "All" && lead.status !== filterStatus) return false;
-      if (filterLeadType !== "All" && lead.leadType !== filterLeadType) return false;
-      if (filterJobType !== "All" && lead.jobType !== filterJobType) return false;
-      if (filterLeadLabel !== "All" && lead.leadLabel !== filterLeadLabel) return false;
+      // 1. Status Filter (HOT, WARM, COLD, NEW)
+      if (filterStatus !== "All") {
+        const curStatus = String(lead.leadStatus || lead.status || "").toUpperCase();
+        if (curStatus !== filterStatus.toUpperCase()) return false;
+      }
+
+      // 2. Lead Type Filter (FRESH, REPEAT)
+      if (filterLeadType !== "All") {
+        const curType = String(lead.leadType || "").toUpperCase();
+        if (curType !== filterLeadType.toUpperCase()) return false;
+      }
+
+      // 3. Lead Mode Filter
+      if (filterLeadMode !== "All") {
+        const curMode = String(lead.leadMode || lead.leadSource || "").toLowerCase();
+        if (!curMode.includes(filterLeadMode.toLowerCase())) return false;
+      }
+
+      // 4. Work Category Filter
+      if (filterWorkCategory !== "All") {
+        const curCat = Array.isArray(lead.workCategory)
+          ? lead.workCategory.join(" ").toLowerCase()
+          : String(lead.workCategory || "").toLowerCase();
+        if (!curCat.includes(filterWorkCategory.toLowerCase())) return false;
+      }
 
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase();
         const matches =
           (lead.concernPersonName || "").toLowerCase().includes(q) ||
+          (lead.clientName || "").toLowerCase().includes(q) ||
           (lead.phoneNumber || "").includes(q) ||
           (lead.emailAddress || "").toLowerCase().includes(q) ||
           (lead.requirement || "").toLowerCase().includes(q) ||
-          (lead.leadSource || "").toLowerCase().includes(q);
+          (lead.leadSource || "").toLowerCase().includes(q) ||
+          (lead.leadMode || "").toLowerCase().includes(q);
         if (!matches) return false;
       }
       return true;
     }).sort((a, b) => getLeadTime(b) - getLeadTime(a));
-  }, [leads, filterStatus, filterLeadType, filterJobType, filterLeadLabel, searchTerm]);
+  }, [leads, filterStatus, filterLeadType, filterLeadMode, filterWorkCategory, searchTerm]);
 
   // 3. Paginated Leads
   const paginatedLeads = useMemo(() => {
@@ -1467,8 +1490,8 @@ const Lead = () => {
     setSearchTerm("");
     setFilterStatus("All");
     setFilterLeadType("All");
-    setFilterJobType("All");
-    setFilterLeadLabel("All");
+    setFilterLeadMode("All");
+    setFilterWorkCategory("All");
     setCurrentPage(1);
   };
 
@@ -1577,9 +1600,10 @@ const Lead = () => {
                 className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 cursor-pointer shadow-2xs hover:border-slate-300"
               >
                 <option value="All">All Status</option>
-                <option value="INTERESTED">Interested</option>
-                <option value="CONVERTED">Converted</option>
-                <option value="LOST">Lost</option>
+                <option value="HOT">Hot</option>
+                <option value="WARM">Warm</option>
+                <option value="COLD">Cold</option>
+                <option value="NEW">New</option>
               </select>
 
               <select
@@ -1590,17 +1614,32 @@ const Lead = () => {
                 <option value="All">All Lead Types</option>
                 <option value="FRESH">Fresh</option>
                 <option value="REPEAT">Repeat</option>
-                <option value="RENEWAL">Renewal</option>
               </select>
 
               <select
-                value={filterJobType}
-                onChange={(e) => { setFilterJobType(e.target.value); setCurrentPage(1); }}
+                value={filterLeadMode}
+                onChange={(e) => { setFilterLeadMode(e.target.value); setCurrentPage(1); }}
                 className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 cursor-pointer shadow-2xs hover:border-slate-300"
               >
-                <option value="All">All Job Types</option>
-                <option value="NEW">New</option>
-                <option value="EXISTING">Existing</option>
+                <option value="All">All Lead Modes</option>
+                <option value="Business networking">Business Networking</option>
+                <option value="By Sales team">By Sales Team</option>
+                <option value="By freelancer">By Freelancer</option>
+                <option value="Customer to customer">Customer to Customer</option>
+              </select>
+
+              <select
+                value={filterWorkCategory}
+                onChange={(e) => { setFilterWorkCategory(e.target.value); setCurrentPage(1); }}
+                className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-800 cursor-pointer shadow-2xs hover:border-slate-300"
+              >
+                <option value="All">All Categories</option>
+                <option value="Design">Design</option>
+                <option value="Construction">Construction</option>
+                <option value="Interior">Interior</option>
+                <option value="Full Furnished">Full Furnished</option>
+                <option value="Fabrication">Fabrication</option>
+                <option value="Other">Other</option>
               </select>
 
               <button

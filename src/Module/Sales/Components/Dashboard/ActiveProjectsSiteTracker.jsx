@@ -49,7 +49,9 @@ const ActiveProjectsSiteTracker = ({
         ) ||
         stages[completedStages] || {
           stage_code: `S${Math.min(completedStages + 1, totalStages)}`,
-          stage_name: "Active Site Work"
+          stageId: `S${Math.min(completedStages + 1, totalStages)}`,
+          stage_name: "Active Site Work",
+          stageName: "Active Site Work"
         };
 
       let progress = Number(p.progress || p.overallProgress || 0);
@@ -77,8 +79,16 @@ const ActiveProjectsSiteTracker = ({
         clientName: p.clientName || "Client",
         city: p.city || p.location || p.address || "Main Site Location",
         progress,
-        currentStageCode: currentActiveStage.stage_code || `S${idx + 1}`,
-        currentStageName: currentActiveStage.stage_name || "Structural Execution",
+        currentStageCode:
+          currentActiveStage.stage_code ||
+          currentActiveStage.stageId ||
+          currentActiveStage.code ||
+          `S${idx + 1}`,
+        currentStageName:
+          currentActiveStage.stage_name ||
+          currentActiveStage.stageName ||
+          currentActiveStage.name ||
+          "Structural Execution",
         totalStages,
         completedStages,
         statusLabel,

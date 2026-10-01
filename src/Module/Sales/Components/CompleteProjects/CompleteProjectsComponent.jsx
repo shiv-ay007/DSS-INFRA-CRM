@@ -21,8 +21,7 @@ import {
   FaInfoCircle,
   FaStream,
   FaUndo,
-  FaSpinner,
-  FaTrashRestore
+  FaSpinner
 } from "react-icons/fa";
 import { HiSparkles } from "react-icons/hi2";
 import { toast } from "react-toastify";
@@ -32,8 +31,15 @@ import activeProjectService from "../../services/activeProjectService";
 import { useAuth } from "../../../../context/AuthContext";
 
 // KPI Card Component matching DSS CRM standard
-const KpiCard = ({ gradient, label, value, subtitle, icon, IconBg }) => (
-  <div className={`relative overflow-hidden rounded-xl p-4 text-white shadow-sm transition-all duration-200 ${gradient}`}>
+const KpiCard = ({ gradient, label, value, subtitle, icon, IconBg, active, onClick }) => (
+  <div
+    onClick={onClick}
+    className={`relative overflow-hidden rounded-xl p-4 text-white shadow-sm transition-all duration-200 cursor-pointer select-none ${gradient} ${
+      active
+        ? "ring-4 ring-offset-2 ring-emerald-500 scale-[1.02] shadow-md"
+        : "hover:scale-[1.01] hover:shadow"
+    }`}
+  >
     <div className="absolute right-0 bottom-0 translate-x-3 translate-y-3 opacity-10 pointer-events-none text-white">
       {IconBg}
     </div>
@@ -59,7 +65,8 @@ const CompleteProjectsComponent = () => {
   const [loading, setLoading] = useState(true);
   const [closedProjects, setClosedProjects] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterType, setFilterType] = useState("ALL");
+  const [filterType, setFilterType] = useState("ALL"); // "ALL" | "COMPLETE" | "LOST"
+  const [completeSubFilter, setCompleteSubFilter] = useState("ALL"); // "ALL" | "CONSULTANCY" | "DESIGN" | "CONSTRUCTION"
   const [filterPriority, setFilterPriority] = useState("ALL");
   const [showFilters, setShowFilters] = useState(true);
 
@@ -71,10 +78,10 @@ const CompleteProjectsComponent = () => {
   const [selectedProject, setSelectedProject] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  // Restore Confirmation Modal State
-  const [projectToRestore, setProjectToRestore] = useState(null);
-  const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
-  const [isRestoring, setIsRestoring] = useState(false);
+  // Reopen Confirmation Modal State
+  const [projectToReopen, setProjectToReopen] = useState(null);
+  const [isReopenModalOpen, setIsReopenModalOpen] = useState(false);
+  const [isReopening, setIsReopening] = useState(false);
 
   // Load Closed & Completed Projects
   const fetchCompletedProjects = async () => {
@@ -193,19 +200,19 @@ const CompleteProjectsComponent = () => {
     fetchCompletedProjects();
   }, []);
 
-  // Handle Restore Action
-  const handleConfirmRestore = async () => {
+  // Handle Reopen Action
+  const handleConfirmReopen = async () => {
     if (isUserObserver) {
       toast.info("Observer Mode: Action is disabled.");
       return;
     }
-    if (!projectToRestore) return;
-    setIsRestoring(true);
+    if (!projectToReopen) return;
+    setIsReopening(true);
     try {
-      const targetId = projectToRestore.id || projectToRestore._id;
+      const targetId = projectToReopen.id || projectToReopen._id;
 
       // 1. If from presale, call reopen API
-      if (projectToRestore.source === "Presales Pipeline") {
+      if (projectToReopen.source === "Presales Pipeline") {
         try {
           await reopenPresaleApi(targetId);
         } catch (apiErr) {
@@ -221,7 +228,7 @@ const CompleteProjectsComponent = () => {
           });
         }
       } else {
-        // Active construction restore
+        // Active construction reopen
         const list = activeProjectService.getAllActiveProjects();
         const updated = list.map((p) =>
           String(p.id) === String(targetId) ? { ...p, projectStatus: "On Track" } : p
@@ -229,21 +236,21 @@ const CompleteProjectsComponent = () => {
         localStorage.setItem("dss_active_projects_data", JSON.stringify(updated));
       }
 
-      toast.success(`Project "${projectToRestore.projectName}" restored back to active pipeline! 🎉`);
-      setIsRestoreModalOpen(false);
-      setProjectToRestore(null);
+      toast.success(`Project "${projectToReopen.projectName}" reopened back to active pipeline! 🎉`);
+      setIsReopenModalOpen(false);
+      setProjectToReopen(null);
       await fetchCompletedProjects();
     } catch (err) {
-      console.error("Error restoring project:", err);
-      toast.error(err?.response?.data?.message || "Failed to restore project");
+      console.error("Error reopening project:", err);
+      toast.error(err?.response?.data?.message || "Failed to reopen project");
     } finally {
-      setIsRestoring(false);
+      setIsReopening(false);
     }
   };
 
   // Filtered Records
   const filteredList = useMemo(() => {
-    return closedProjects.filter((item) => {
+    const list = closedProjects.filter((item) => {
       const q = searchQuery.toLowerCase().trim();
       const matchSearch =
         !q ||
@@ -255,12 +262,24 @@ const CompleteProjectsComponent = () => {
         item.city.toLowerCase().includes(q) ||
         item.closureReason.toLowerCase().includes(q);
 
-      const matchType =
-        filterType === "ALL" ||
-        (filterType === "LOST" && item.closureCategory === "LOST") ||
-        (filterType === "CONSULTANCY" && item.closureCategory === "CONSULTANCY") ||
-        (filterType === "DESIGN" && item.closureCategory === "DESIGN") ||
-        (filterType === "CONSTRUCTION" && item.closureCategory === "CONSTRUCTION_COMPLETED");
+      const isItemLost = item.closureCategory === "LOST";
+
+      let matchType = true;
+      if (filterType === "LOST") {
+        matchType = isItemLost;
+      } else if (filterType === "COMPLETE") {
+        if (isItemLost) {
+          matchType = false;
+        } else if (completeSubFilter === "CONSULTANCY") {
+          matchType = item.closureCategory === "CONSULTANCY";
+        } else if (completeSubFilter === "DESIGN") {
+          matchType = item.closureCategory === "DESIGN";
+        } else if (completeSubFilter === "CONSTRUCTION") {
+          matchType = item.closureCategory === "CONSTRUCTION_COMPLETED";
+        } else {
+          matchType = true; // All Complete
+        }
+      }
 
       const matchPriority =
         filterPriority === "ALL" ||
@@ -268,7 +287,9 @@ const CompleteProjectsComponent = () => {
 
       return matchSearch && matchType && matchPriority;
     });
-  }, [closedProjects, searchQuery, filterType, filterPriority]);
+
+    return list;
+  }, [closedProjects, searchQuery, filterType, completeSubFilter, filterPriority]);
 
   // Metrics
   const metrics = useMemo(() => {
@@ -278,6 +299,7 @@ const CompleteProjectsComponent = () => {
     const consultancyCount = closedProjects.filter((c) => c.closureCategory === "CONSULTANCY").length;
     const designCount = closedProjects.filter((c) => c.closureCategory === "DESIGN").length;
     const constructionCount = closedProjects.filter((c) => c.closureCategory === "CONSTRUCTION_COMPLETED").length;
+    const completeCount = consultancyCount + designCount + constructionCount;
 
     return {
       total,
@@ -286,7 +308,8 @@ const CompleteProjectsComponent = () => {
       lostCount,
       consultancyCount,
       designCount,
-      constructionCount
+      constructionCount,
+      completeCount
     };
   }, [closedProjects]);
 
@@ -370,6 +393,9 @@ const CompleteProjectsComponent = () => {
       {/* ──────────────────────────────────────────────────────────────────
           2. COMPACT KPI METRIC SUMMARY CARDS
       ────────────────────────────────────────────────────────────────── */}
+      {/* ──────────────────────────────────────────────────────────────────
+          2. COMPACT KPI METRIC SUMMARY CARDS
+      ────────────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <KpiCard
             gradient="bg-gradient-to-br from-slate-800 to-slate-900"
@@ -378,6 +404,11 @@ const CompleteProjectsComponent = () => {
             subtitle={metrics.totalValRaw}
             icon={<FaLayerGroup className="w-5 h-5 text-white" />}
             IconBg={<FaLayerGroup className="w-20 h-20" />}
+            active={filterType === "ALL"}
+            onClick={() => {
+              setFilterType("ALL");
+              setCurrentPage(1);
+            }}
           />
           <KpiCard
             gradient="bg-gradient-to-br from-rose-600 to-red-700"
@@ -386,6 +417,11 @@ const CompleteProjectsComponent = () => {
             subtitle="Stopped before contract"
             icon={<FaTimesCircle className="w-5 h-5 text-white" />}
             IconBg={<FaTimesCircle className="w-20 h-20" />}
+            active={filterType === "LOST"}
+            onClick={() => {
+              setFilterType("LOST");
+              setCurrentPage(1);
+            }}
           />
           <KpiCard
             gradient="bg-gradient-to-br from-indigo-600 to-purple-700"
@@ -394,6 +430,12 @@ const CompleteProjectsComponent = () => {
             subtitle="Completed Scope Stage 2 / 10"
             icon={<FaFileAlt className="w-5 h-5 text-white" />}
             IconBg={<FaFileAlt className="w-20 h-20" />}
+            active={filterType === "COMPLETE" && (completeSubFilter === "CONSULTANCY" || completeSubFilter === "DESIGN")}
+            onClick={() => {
+              setFilterType("COMPLETE");
+              setCompleteSubFilter("ALL");
+              setCurrentPage(1);
+            }}
           />
           <KpiCard
             gradient="bg-gradient-to-br from-emerald-600 to-teal-700"
@@ -402,6 +444,12 @@ const CompleteProjectsComponent = () => {
             subtitle="100% Handover & Snagged"
             icon={<FaCheckCircle className="w-5 h-5 text-white" />}
             IconBg={<FaCheckCircle className="w-20 h-20" />}
+            active={filterType === "COMPLETE" && completeSubFilter === "CONSTRUCTION"}
+            onClick={() => {
+              setFilterType("COMPLETE");
+              setCompleteSubFilter("CONSTRUCTION");
+              setCurrentPage(1);
+            }}
           />
         </div>
 
@@ -410,6 +458,7 @@ const CompleteProjectsComponent = () => {
         ────────────────────────────────────────────────────────────────── */}
         {showFilters && (
           <div className="bg-white rounded-xl p-3 sm:p-4 shadow-xs border border-slate-200 space-y-3 animate-in fade-in slide-in-from-top-2 duration-200">
+            {/* Top Row: Search Box + Priority Filter */}
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5">
               {/* Search Box */}
               <div className="relative flex-1 max-w-lg">
@@ -435,32 +484,141 @@ const CompleteProjectsComponent = () => {
                 )}
               </div>
 
-              {/* Category Quick Filter Pills */}
-              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
-                {[
-                  { id: "ALL", label: "All Records" },
-                  { id: "LOST", label: "Lost / Dropped" },
-                  { id: "CONSULTANCY", label: "Consultancy" },
-                  { id: "DESIGN", label: "Design Only" },
-                  { id: "CONSTRUCTION", label: "Construction" }
-                ].map((tab) => (
+              {/* Priority Filter */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                <span className="text-[11px] font-bold text-slate-500">Priority:</span>
+                {["ALL", "HIGH", "MEDIUM", "LOW"].map((p) => (
                   <button
-                    key={tab.id}
+                    key={p}
                     type="button"
                     onClick={() => {
-                      setFilterType(tab.id);
+                      setFilterPriority(p);
                       setCurrentPage(1);
                     }}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all cursor-pointer ${
-                      filterType === tab.id
-                        ? "bg-slate-900 text-white shadow-xs"
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-bold transition-all cursor-pointer ${
+                      filterPriority === p
+                        ? "bg-slate-900 text-white shadow-2xs"
                         : "bg-slate-100 hover:bg-slate-200 text-slate-600"
                     }`}
                   >
-                    {tab.label}
+                    {p}
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Bottom Row: SEPARATE TABS: COMPLETE PROJECTS vs LOSS / DROPPED */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-100">
+              {/* Primary Segments */}
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+                {/* Complete Projects Tab */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterType("COMPLETE");
+                    setCompleteSubFilter("ALL");
+                    setCurrentPage(1);
+                  }}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-2 cursor-pointer shadow-2xs border ${
+                    filterType === "COMPLETE"
+                      ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                      : "bg-emerald-50/80 hover:bg-emerald-100 text-emerald-800 border-emerald-200"
+                  }`}
+                >
+                  <FaCheckCircle className="text-xs" />
+                  <span>Complete Projects</span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                      filterType === "COMPLETE"
+                        ? "bg-white/25 text-white"
+                        : "bg-emerald-200/80 text-emerald-900"
+                    }`}
+                  >
+                    {metrics.completeCount}
+                  </span>
+                </button>
+
+                {/* Loss / Dropped Tab */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterType("LOST");
+                    setCurrentPage(1);
+                  }}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-black transition-all flex items-center gap-2 cursor-pointer shadow-2xs border ${
+                    filterType === "LOST"
+                      ? "bg-rose-600 text-white border-rose-600 shadow-sm"
+                      : "bg-rose-50/80 hover:bg-rose-100 text-rose-800 border-rose-200"
+                  }`}
+                >
+                  <FaTimesCircle className="text-xs" />
+                  <span>Loss / Dropped</span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-black ${
+                      filterType === "LOST"
+                        ? "bg-white/25 text-white"
+                        : "bg-rose-200/80 text-rose-900"
+                    }`}
+                  >
+                    {metrics.lostCount}
+                  </span>
+                </button>
+
+                {/* All Records Tab */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFilterType("ALL");
+                    setCurrentPage(1);
+                  }}
+                  className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs border ${
+                    filterType === "ALL"
+                      ? "bg-slate-900 text-white border-slate-900 shadow-sm"
+                      : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200"
+                  }`}
+                >
+                  <FaLayerGroup className="text-xs" />
+                  <span>All Records</span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                      filterType === "ALL"
+                        ? "bg-white/25 text-white"
+                        : "bg-slate-200 text-slate-800"
+                    }`}
+                  >
+                    {metrics.total}
+                  </span>
+                </button>
+              </div>
+
+              {/* Sub-filters when Complete Projects is active */}
+              {filterType === "COMPLETE" && (
+                <div className="flex items-center gap-1.5 overflow-x-auto text-xs shrink-0">
+                  <span className="text-[10px] font-bold uppercase text-slate-400">Scope:</span>
+                  {[
+                    { id: "ALL", label: `All (${metrics.completeCount})` },
+                    { id: "CONSULTANCY", label: `Consultancy (${metrics.consultancyCount})` },
+                    { id: "DESIGN", label: `Design (${metrics.designCount})` },
+                    { id: "CONSTRUCTION", label: `Construction (${metrics.constructionCount})` }
+                  ].map((sub) => (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      onClick={() => {
+                        setCompleteSubFilter(sub.id);
+                        setCurrentPage(1);
+                      }}
+                      className={`px-2 py-0.5 rounded text-[11px] font-bold transition-all cursor-pointer border ${
+                        completeSubFilter === sub.id
+                          ? "bg-emerald-700 text-white border-emerald-700"
+                          : "bg-slate-50 hover:bg-slate-100 text-slate-600 border-slate-200"
+                      }`}
+                    >
+                      {sub.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -469,6 +627,51 @@ const CompleteProjectsComponent = () => {
             4. CRM STANDARD TABLE VIEW (BLACK HEADER & ACTIONS AT FRONT)
         ────────────────────────────────────────────────────────────────── */}
         <div className="w-full bg-white border border-slate-200/90 shadow-xs overflow-hidden rounded-none">
+          {/* Active Category Header Bar */}
+          <div
+            className={`px-4 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs font-bold border-b transition-colors ${
+              filterType === "COMPLETE"
+                ? "bg-emerald-50 text-emerald-950 border-emerald-200"
+                : filterType === "LOST"
+                ? "bg-rose-50 text-rose-950 border-rose-200"
+                : "bg-slate-100 text-slate-800 border-slate-200"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {filterType === "COMPLETE" && (
+                <span className="p-1 rounded-md bg-emerald-600 text-white">
+                  <FaCheckCircle className="text-xs" />
+                </span>
+              )}
+              {filterType === "LOST" && (
+                <span className="p-1 rounded-md bg-rose-600 text-white">
+                  <FaTimesCircle className="text-xs" />
+                </span>
+              )}
+              {filterType === "ALL" && (
+                <span className="p-1 rounded-md bg-slate-800 text-white">
+                  <FaLayerGroup className="text-xs" />
+                </span>
+              )}
+              <span className="text-xs sm:text-sm font-black">
+                {filterType === "COMPLETE"
+                  ? `Completed Projects Archive (${filteredList.length})`
+                  : filterType === "LOST"
+                  ? `Loss / Dropped Projects Archive (${filteredList.length})`
+                  : `All Closed & Completed Projects (${filteredList.length} total • ${metrics.completeCount} Complete, ${metrics.lostCount} Lost)`}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-3 text-xs">
+              <span className="text-slate-500 font-medium">
+                Value:{" "}
+                <span className="font-bold text-slate-900 font-mono">
+                  ₹{filteredList.reduce((acc, c) => acc + (c.expectedBusiness || 0), 0).toLocaleString("en-IN")}
+                </span>
+              </span>
+            </div>
+          </div>
+
           <div className="w-full overflow-x-auto">
             <table className="w-full text-xs text-left border-collapse">
               <thead>
@@ -570,18 +773,18 @@ const CompleteProjectsComponent = () => {
                               <FaEye className="text-xs" />
                             </button>
 
-                            {/* RESTORE PROJECT BUTTON (Worker only) */}
+                            {/* REOPEN PROJECT BUTTON (Worker only) */}
                             {!isUserObserver && (
                               <button
                                 type="button"
                                 onClick={() => {
-                                  setProjectToRestore(item);
-                                  setIsRestoreModalOpen(true);
+                                  setProjectToReopen(item);
+                                  setIsReopenModalOpen(true);
                                 }}
                                 className="w-7 h-7 rounded-lg border border-emerald-300 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 flex items-center justify-center transition-all cursor-pointer shadow-2xs active:scale-95"
-                                title="Restore / Reopen Project to Presales"
+                                title="Reopen Project"
                               >
-                                <FaTrashRestore className="text-xs" />
+                                <FaUndo className="text-xs" />
                               </button>
                             )}
                           </div>
@@ -883,13 +1086,13 @@ const CompleteProjectsComponent = () => {
                       type="button"
                       onClick={() => {
                         setIsModalOpen(false);
-                        setProjectToRestore(selectedProject);
-                        setIsRestoreModalOpen(true);
+                        setProjectToReopen(selectedProject);
+                        setIsReopenModalOpen(true);
                       }}
                       className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all cursor-pointer shadow-xs flex items-center gap-1.5"
                     >
-                      <FaTrashRestore className="text-xs" />
-                      <span>Restore Project</span>
+                      <FaUndo className="text-xs" />
+                      <span>Reopen Project</span>
                     </button>
                   )}
                   {selectedProject.source === "Presales Pipeline" && (
@@ -921,18 +1124,18 @@ const CompleteProjectsComponent = () => {
         )}
 
         {/* ──────────────────────────────────────────────────────────────────
-            6. MODAL: RESTORE CONFIRMATION DIALOG
+            6. MODAL: REOPEN CONFIRMATION DIALOG
         ────────────────────────────────────────────────────────────────── */}
-        {isRestoreModalOpen && projectToRestore && (
+        {isReopenModalOpen && projectToReopen && (
           <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-150">
             <div className="bg-white border border-slate-200 rounded-3xl max-w-md w-full p-6 shadow-2xl space-y-4 animate-in zoom-in-95 duration-150">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-2xl bg-emerald-100 text-emerald-600 flex items-center justify-center text-xl shrink-0">
-                  <FaTrashRestore />
+                  <FaUndo />
                 </div>
                 <div>
                   <h3 className="text-base font-black text-slate-900">
-                    Restore Project?
+                    Reopen Project?
                   </h3>
                   <p className="text-xs text-slate-500 font-medium">
                     This project will be reopened back to the active Presales pipeline.
@@ -943,22 +1146,22 @@ const CompleteProjectsComponent = () => {
               <div className="p-3.5 rounded-xl border border-slate-200 bg-slate-50 space-y-1.5 text-xs">
                 <div className="flex justify-between">
                   <span className="text-slate-500 font-semibold">Project Name:</span>
-                  <span className="font-bold text-slate-900">{projectToRestore.projectName}</span>
+                  <span className="font-bold text-slate-900">{projectToReopen.projectName}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500 font-semibold">Client:</span>
-                  <span className="font-bold text-slate-900">{projectToRestore.clientName}</span>
+                  <span className="font-bold text-slate-900">{projectToReopen.clientName}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500 font-semibold">Value:</span>
                   <span className="font-bold font-mono text-emerald-700">
-                    ₹{Number(projectToRestore.expectedBusiness || 0).toLocaleString("en-IN")}
+                    ₹{Number(projectToReopen.expectedBusiness || 0).toLocaleString("en-IN")}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-slate-500 font-semibold">Previous Reason:</span>
                   <span className="font-semibold text-rose-700 truncate max-w-[200px]">
-                    {projectToRestore.closureReason}
+                    {projectToReopen.closureReason}
                   </span>
                 </div>
               </div>
@@ -966,10 +1169,10 @@ const CompleteProjectsComponent = () => {
               <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-slate-100">
                 <button
                   type="button"
-                  disabled={isRestoring}
+                  disabled={isReopening}
                   onClick={() => {
-                    setIsRestoreModalOpen(false);
-                    setProjectToRestore(null);
+                    setIsReopenModalOpen(false);
+                    setProjectToReopen(null);
                   }}
                   className="px-4 py-2 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-bold cursor-pointer disabled:opacity-50"
                 >
@@ -977,19 +1180,19 @@ const CompleteProjectsComponent = () => {
                 </button>
                 <button
                   type="button"
-                  disabled={isRestoring}
-                  onClick={handleConfirmRestore}
+                  disabled={isReopening}
+                  onClick={handleConfirmReopen}
                   className="px-5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold shadow-md cursor-pointer transition-all flex items-center gap-2 disabled:opacity-50"
                 >
-                  {isRestoring ? (
+                  {isReopening ? (
                     <>
                       <FaSpinner className="animate-spin text-xs" />
-                      <span>Restoring...</span>
+                      <span>Reopening...</span>
                     </>
                   ) : (
                     <>
-                      <FaTrashRestore className="text-xs" />
-                      <span>Confirm Restore</span>
+                      <FaUndo className="text-xs" />
+                      <span>Confirm Reopen</span>
                     </>
                   )}
                 </button>

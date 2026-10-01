@@ -18,7 +18,7 @@ import activeProjectService, {
   isObjectId,
   mapPmsStagesToExecutionStages
 } from "../../services/activeProjectService";
-import { getAllLeadProjectsApi } from "../../services/leadProject.api";
+import { getAllLeadProjectsApi, updateLeadProjectApi } from "../../services/leadProject.api";
 import pmsTemplateService from "../../services/pmsTemplateService";
 import { pmsWbsService } from "../../services/pmsWbsService";
 import { ReactSelectMulti } from "../Master/PmsTemplate/ReactSelectMulti";
@@ -670,7 +670,10 @@ const ActiveProjectExecutionComponent = () => {
         completedTasksCount,
         totalTasksCount,
         completedSubtasksCount,
-        totalSubtasksCount
+        totalSubtasksCount,
+        leadId: project?.leadId,
+        projectId: project?.projectId || project?.id,
+        stages: updatedStages
       };
 
       // 2. Persist to MongoDB pms_templates collection
@@ -686,6 +689,21 @@ const ActiveProjectExecutionComponent = () => {
       } catch (apiErr) {
         if (process.env.NODE_ENV !== "production") {
           console.warn("Backend pms_templates save note:", apiErr);
+        }
+      }
+
+      // 3. Ensure LeadProject status is ACTIVE_PROJECT in MongoDB
+      if (project?.projectId || project?.id) {
+        try {
+          await updateLeadProjectApi(project.projectId || project.id, {
+            status: "ACTIVE_PROJECT",
+            inSalesManagement: true,
+            isSalesTransferred: true
+          });
+        } catch (dbErr) {
+          if (process.env.NODE_ENV !== "production") {
+            console.warn("Backend LeadProject status note:", dbErr);
+          }
         }
       }
 
