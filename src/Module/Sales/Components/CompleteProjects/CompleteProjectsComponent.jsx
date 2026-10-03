@@ -228,12 +228,18 @@ const CompleteProjectsComponent = () => {
           });
         }
       } else {
-        // Active construction reopen
         const list = activeProjectService.getAllActiveProjects();
         const updated = list.map((p) =>
           String(p.id) === String(targetId) ? { ...p, projectStatus: "On Track" } : p
         );
-        localStorage.setItem("dss_active_projects_data", JSON.stringify(updated));
+        activeProjectService.saveActiveProjects(updated);
+        try {
+          updateLeadProjectApi(targetId, {
+            status: "ACTIVE_PROJECT",
+            isCompleted: false,
+            isClosed: false
+          }).catch(() => {});
+        } catch (e) {}
       }
 
       toast.success(`Project "${projectToReopen.projectName}" reopened back to active pipeline! 🎉`);

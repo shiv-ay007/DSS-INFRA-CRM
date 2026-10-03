@@ -619,9 +619,8 @@ const PresalesPipelineView = ({
       const isStage11 = Number(activeStageId) === 11;
       const hasFinalContract = Boolean(finalStageData.finalContractSignDate);
 
-      // If Stage 11 is completed or contract is signed, promote to Active Project!
-      const statusToSave = (isStage11 && hasFinalContract) ? "ACTIVE_PROJECT" : projectStatus;
-      const closureToSave = (isStage11 && hasFinalContract) ? "Converted to Construction" : undefined;
+      // Presale operational status is "On Track", "Hold", etc.
+      const presaleProjectStatus = projectStatus || "On Track";
 
       const response = await savePresaleStageApi({
         projectId: targetId,
@@ -629,7 +628,7 @@ const PresalesPipelineView = ({
         stageData: finalStageData,
         isCompleted: true,
         engagementScope: normalizeEngagementScope(engagementScope),
-        projectStatus: statusToSave,
+        projectStatus: presaleProjectStatus,
         projectSubStatus: projectSubStatus,
         activePerson: activePerson,
         userName: currentUser || "Admin"
@@ -762,7 +761,8 @@ const PresalesPipelineView = ({
       onUpdatePresale?.(updatedPresale);
 
       await updateLeadProjectApi(targetId, {
-        status: "CONVERTED"
+        status: "ACTIVE_PROJECT",
+        closureStatus: "Converted to Construction"
       });
 
       toast.success(`🎉 ${currentProject.projectName || currentProject.clientName} successfully moved to Active Project!`);

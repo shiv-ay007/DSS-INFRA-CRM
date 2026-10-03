@@ -4,6 +4,16 @@ import { pmsWbsService } from "./pmsWbsService";
 
 export const ACTIVE_PROJECTS_STORAGE_KEY = "dss_active_projects_data";
 
+// In-memory runtime cache for Active Projects (no localStorage dependency)
+let activeProjectsStore = [];
+
+// Clean up any stale localStorage data once on load
+try {
+  if (typeof window !== "undefined" && window.localStorage) {
+    window.localStorage.removeItem(ACTIVE_PROJECTS_STORAGE_KEY);
+  }
+} catch (e) {}
+
 // Standard 23 Major Construction Stages (Module 4 Master Blueprint)
 export const DEFAULT_23_STAGES = [
   { stage_code: "S1", stage_name: "Site Survey, Soil Testing & Benchmarking" },
@@ -781,22 +791,9 @@ export const activeProjectService = {
   // 1. Get All Active Projects with roll-up computations
   getAllActiveProjects: (wbsData = null) => {
     try {
-      const stored = localStorage.getItem(ACTIVE_PROJECTS_STORAGE_KEY);
-      let list = [];
-      if (stored) {
-        try {
-          list = JSON.parse(stored);
-        } catch (e) {
-          list = [];
-        }
-      }
-
-      if (!Array.isArray(list)) {
-        list = [];
-      }
+      let list = Array.isArray(activeProjectsStore) ? activeProjectsStore : [];
 
       // Automatically purge any dummy seed data so the system only holds real projects
-      const initialLength = list.length;
       list = list.filter(
         (p) =>
           !["PRJ-ACT-101", "PRJ-ACT-102", "PRJ-ACT-103"].includes(p?.id) &&
@@ -806,10 +803,8 @@ export const activeProjectService = {
       );
 
       // Auto-repair any projects with raw MongoDB ObjectIds in stages
-      let repairedAny = false;
       list = list.map((p) => {
         if (hasCorruptedStageIds(p?.stages)) {
-          repairedAny = true;
           return {
             ...p,
             stages: repairCorruptedStages(p.stages, wbsData)
@@ -818,9 +813,7 @@ export const activeProjectService = {
         return p;
       });
 
-      if (list.length !== initialLength || repairedAny) {
-        localStorage.setItem(ACTIVE_PROJECTS_STORAGE_KEY, JSON.stringify(list));
-      }
+      activeProjectsStore = list;
 
       // Return each with recalculated roll-up
       return list.map((p) => calculateProjectRollup(p));
@@ -848,7 +841,7 @@ export const activeProjectService = {
       const targetIdx = list.findIndex((p) => String(p.id) === String(found.id));
       if (targetIdx !== -1) {
         list[targetIdx] = found;
-        localStorage.setItem(ACTIVE_PROJECTS_STORAGE_KEY, JSON.stringify(list));
+        activeProjectsStore = list;
       }
     }
 
@@ -889,48 +882,7 @@ export const activeProjectService = {
     });
 
     list[targetIdx] = updatedProject;
-    localStorage.setItem(ACTIVE_PROJECTS_STORAGE_KEY, JSON.stringify(list));
-    return updatedProject;
-  },
-
-  // 4. Update Project Header / Core Metadata (Editor only)
-  updateProjectMetadata: (projectId, { activePerson, projectStatus, projectSubStatus, overallRemark }) => {
-    const list = activeProjectService.getAllActiveProjects();
-    const targetIdx = list.findIndex((p) => String(p.id) === String(projectId));
-    if (targetIdx === -1) return null;
-
-    const project = list[targetIdx];
-    const updatedProject = calculateProjectRollup({
-      ...project,
-      activePerson: activePerson !== undefined ? activePerson : project.activePerson,
-      projectStatus: projectStatus !== undefined ? projectStatus : project.projectStatus,
-      projectSubStatus: projectSubStatus !== undefined ? projectSubStatus : project.projectSubStatus,
-      overallRemark: overallRemark !== undefined ? overallRemark : project.overallRemark,
-      updatedAt: new Date().toISOString()
-    });
-
-    list[targetIdx] = updatedProject;
-    localStorage.setItem(ACTIVE_PROJECTS_STORAGE_KEY, JSON.stringify(list));
-    return updatedProject;
-  },
-
-  // 4b. Save Full Active Project state (Single-page unified form submission)
-  saveFullProject: (projectId, fullData) => {
-    const list = activeProjectService.getAllActiveProjects();
-    const targetIdx = list.findIndex(
-      (p) => String(p.id) === String(projectId) || String(p.projectId) === String(projectId)
-    );
-    if (targetIdx === -1) return null;
-
-    const project = list[targetIdx];
-    const updatedProject = calculateProjectRollup({
-      ...project,
-      ...fullData,
-      updatedAt: new Date().toISOString()
-    });
-
-    list[targetIdx] = updatedProject;
-    localStorage.setItem(ACTIVE_PROJECTS_STORAGE_KEY, JSON.stringify(list));
+    activeProjectsStore = list;
 
     // Asynchronously sync with backend in background
     try {
@@ -952,7 +904,8 @@ export const activeProjectService = {
         totalSubtasksCount: updatedProject.subtasksCount || 0,
         leadId: updatedProject.leadId,
         projectId: updatedProject.projectId || updatedProject.id,
-        stages: updatedProject.stages || []
+        stages: updatedProject.stages || [],
+        dailyLogs: updatedProject.dailyLogs || []
       };
       const targetId = updatedProject.projectId || updatedProject.id || projectId;
       pmsTemplateService.saveExecutionTracking(targetId, trackingPayload).catch(() => {});
@@ -962,7 +915,94 @@ export const activeProjectService = {
     return updatedProject;
   },
 
-  // 4c. Alias to save active project
+  // 4. Update Project Header / Core Metadata (Editor only)
+  updateProjectMetadata: (projectId, { activePerson, projectStatus, projectSubStatus, overallRemark }) => {
+    const list = activeProjectService.getAllActiveProjects();
+    const targetIdx = list.findIndex((p) => String(p.id) === String(projectId));
+    if (targetIdx === -1) return null;
+
+    const project = list[targetIdx];
+    const updatedProject = calculateProjectRollup({
+      ...project,
+      activePerson: activePerson !== undefined ? activePerson : project.activePerson,
+      projectStatus: projectStatus !== undefined ? projectStatus : project.projectStatus,
+      projectSubStatus: projectSubStatus !== undefined ? projectSubStatus : project.projectSubStatus,
+      overallRemark: overallRemark !== undefined ? overallRemark : project.overallRemark,
+      updatedAt: new Date().toISOString()
+    });
+
+    list[targetIdx] = updatedProject;
+    activeProjectsStore = list;
+
+    try {
+      const targetId = updatedProject.projectId || updatedProject.id || projectId;
+      updateLeadProjectApi(targetId, {
+        status: "ACTIVE_PROJECT",
+        projectStatus: updatedProject.projectStatus
+      }).catch(() => {});
+    } catch (e) {}
+
+    return updatedProject;
+  },
+
+  // 4b. Save Full Active Project state (Single-page unified form submission)
+  saveFullProject: (projectId, fullData) => {
+    const list = activeProjectService.getAllActiveProjects();
+    const targetIdx = list.findIndex(
+      (p) => String(p.id) === String(projectId) || String(p.projectId) === String(projectId)
+    );
+    if (targetIdx === -1) return null;
+
+    const project = list[targetIdx];
+    const updatedProject = calculateProjectRollup({
+      ...project,
+      ...fullData,
+      updatedAt: new Date().toISOString()
+    });
+
+    list[targetIdx] = updatedProject;
+    activeProjectsStore = list;
+
+    // Asynchronously sync with backend in background
+    try {
+      const trackingPayload = {
+        projectStatus: updatedProject.projectStatus || "On Track",
+        completedStageIds: updatedProject.completedStageIds || [],
+        runningStageId: updatedProject.runningStageId || "",
+        completedWorkIds: updatedProject.completedWorkIds || [],
+        runningWorkId: updatedProject.runningWorkId || "",
+        completedTaskIds: updatedProject.completedTaskIds || [],
+        runningTaskId: updatedProject.runningTaskId || "",
+        completedSubtaskIds: updatedProject.completedSubtaskIds || [],
+        runningSubtaskId: updatedProject.runningSubtaskId || "",
+        finalTrackingRemark: updatedProject.finalTrackingRemark || updatedProject.overallRemark || "",
+        progressPercent: updatedProject.overallProgress || 0,
+        completedTasksCount: updatedProject.completedTasks || 0,
+        totalTasksCount: updatedProject.totalTasks || 0,
+        completedSubtasksCount: updatedProject.completedSubtasksCount || 0,
+        totalSubtasksCount: updatedProject.subtasksCount || 0,
+        leadId: updatedProject.leadId,
+        projectId: updatedProject.projectId || updatedProject.id,
+        stages: updatedProject.stages || [],
+        dailyLogs: updatedProject.dailyLogs || []
+      };
+      const targetId = updatedProject.projectId || updatedProject.id || projectId;
+      pmsTemplateService.saveExecutionTracking(targetId, trackingPayload).catch(() => {});
+      updateLeadProjectApi(targetId, { status: "ACTIVE_PROJECT" }).catch(() => {});
+    } catch (e) {}
+
+    return updatedProject;
+  },
+
+  // 4c. Save Active Projects array in memory
+  saveActiveProjects: (list) => {
+    if (Array.isArray(list)) {
+      activeProjectsStore = list;
+    }
+    return activeProjectsStore;
+  },
+
+  // 4d. Alias to save active project
   saveActiveProject: (fullData) => {
     if (!fullData || !fullData.id) return null;
     return activeProjectService.saveFullProject(fullData.id, fullData);
@@ -1001,7 +1041,7 @@ export const activeProjectService = {
     });
 
     const updatedList = [newProject, ...list];
-    localStorage.setItem(ACTIVE_PROJECTS_STORAGE_KEY, JSON.stringify(updatedList));
+    activeProjectsStore = updatedList;
     return { project: newProject, alreadyExists: false };
   },
 
@@ -1030,7 +1070,7 @@ export const activeProjectService = {
         updatedAt: new Date().toISOString()
       });
       list[existingIdx] = updated;
-      localStorage.setItem(ACTIVE_PROJECTS_STORAGE_KEY, JSON.stringify(list));
+      activeProjectsStore = list;
       return { project: updated, alreadyExists: false, updated: true };
     } else if (existingIdx !== -1) {
       return { project: list[existingIdx], alreadyExists: true };
@@ -1080,7 +1120,7 @@ export const activeProjectService = {
     });
 
     const updatedList = [newProject, ...list];
-    localStorage.setItem(ACTIVE_PROJECTS_STORAGE_KEY, JSON.stringify(updatedList));
+    activeProjectsStore = updatedList;
     return { project: newProject, alreadyExists: false };
   },
 
@@ -1114,23 +1154,25 @@ export const activeProjectService = {
       updatedAt: new Date().toISOString()
     });
     list[targetIdx] = updatedProject;
-    localStorage.setItem(ACTIVE_PROJECTS_STORAGE_KEY, JSON.stringify(list));
+    activeProjectsStore = list;
+
+    try {
+      const targetId = updatedProject.projectId || updatedProject.id || projectId;
+      pmsTemplateService.saveExecutionTracking(targetId, {
+        dailyLogs: updatedProject.dailyLogs,
+        stages: updatedProject.stages,
+        projectStatus: updatedProject.projectStatus,
+        progressPercent: updatedProject.overallProgress || 0
+      }).catch(() => {});
+    } catch (e) {}
+
     return updatedProject;
   },
 
   // 8. Synchronize all projects from Presales into Active Projects
   syncWithPresales: (presaleProjects = [], pmsTemplates = [], wbsData = null) => {
     try {
-      const stored = localStorage.getItem(ACTIVE_PROJECTS_STORAGE_KEY);
-      let list = [];
-      if (stored) {
-        try {
-          list = JSON.parse(stored);
-        } catch (e) {
-          list = [];
-        }
-      }
-      if (!Array.isArray(list)) list = [];
+      let list = Array.isArray(activeProjectsStore) ? [...activeProjectsStore] : [];
 
       // Always strip out any dummy seed projects
       list = list.filter(
@@ -1180,7 +1222,17 @@ export const activeProjectService = {
         const closureStatus = String(bp.closureStatus || leadObj.closureStatus || "").toLowerCase();
         const presaleStatus = String(bp.presaleStatus || leadObj.presaleStatus || "").toLowerCase();
 
+        // Find PMS template if available (matches finalized template only)
+        let matchedTmpl = null;
+        if (pmsMap.has(projId)) matchedTmpl = pmsMap.get(projId);
+        else if (bp.leadId && pmsMap.has(String(typeof bp.leadId === "object" ? bp.leadId._id : bp.leadId))) {
+          matchedTmpl = pmsMap.get(String(typeof bp.leadId === "object" ? bp.leadId._id : bp.leadId));
+        } else if (bp.clientName && pmsMap.has(bp.clientName.toLowerCase().trim())) {
+          matchedTmpl = pmsMap.get(bp.clientName.toLowerCase().trim());
+        }
+
         const isStage11Signed = Boolean(
+          bp.contractSignedDate ||
           bp.stagesData?.[11]?.finalContractSignDate ||
           bp.stagesData?.["11"]?.finalContractSignDate ||
           (bp.stagesData?.[11] && Object.keys(bp.stagesData[11]).length > 0) ||
@@ -1197,15 +1249,6 @@ export const activeProjectService = {
           presaleStatus.includes("converted") ||
           isStage11Signed ||
           Boolean(matchedTmpl);
-
-        // Find PMS template if available (matches finalized template only)
-        let matchedTmpl = null;
-        if (pmsMap.has(projId)) matchedTmpl = pmsMap.get(projId);
-        else if (bp.leadId && pmsMap.has(String(typeof bp.leadId === "object" ? bp.leadId._id : bp.leadId))) {
-          matchedTmpl = pmsMap.get(String(typeof bp.leadId === "object" ? bp.leadId._id : bp.leadId));
-        } else if (bp.clientName && pmsMap.has(bp.clientName.toLowerCase().trim())) {
-          matchedTmpl = pmsMap.get(bp.clientName.toLowerCase().trim());
-        }
 
         const clientName = bp.clientName || bp.concernPersonName || leadObj.clientName || leadObj.concernPersonName || "Unnamed Client";
         const tmplProjName = matchedTmpl?.projectName || (typeof matchedTmpl?.projectId === "object" ? matchedTmpl?.projectId?.projectName : null);
@@ -1326,7 +1369,28 @@ export const activeProjectService = {
           }
 
           // Stage & Task Repair / Synchronization with PMS Template (including fieldData)
-          if (matchedTmpl && Array.isArray(matchedTmpl.stages) && matchedTmpl.stages.length > 0) {
+          if (latestTracking && Array.isArray(latestTracking.stages) && latestTracking.stages.length > 0) {
+            existing.stages = latestTracking.stages;
+            if (latestTracking.completedStageIds) existing.completedStageIds = latestTracking.completedStageIds;
+            if (latestTracking.runningStageId) existing.runningStageId = latestTracking.runningStageId;
+            if (latestTracking.completedWorkIds) existing.completedWorkIds = latestTracking.completedWorkIds;
+            if (latestTracking.runningWorkId) existing.runningWorkId = latestTracking.runningWorkId;
+            if (latestTracking.completedTaskIds) existing.completedTaskIds = latestTracking.completedTaskIds;
+            if (latestTracking.runningTaskId) existing.runningTaskId = latestTracking.runningTaskId;
+            if (latestTracking.completedSubtaskIds) existing.completedSubtaskIds = latestTracking.completedSubtaskIds;
+            if (latestTracking.runningSubtaskId) existing.runningSubtaskId = latestTracking.runningSubtaskId;
+            if (latestTracking.finalTrackingRemark) {
+              existing.overallRemark = latestTracking.finalTrackingRemark;
+              existing.finalTrackingRemark = latestTracking.finalTrackingRemark;
+            }
+            if (latestTracking.projectStatus) {
+              existing.projectStatus = latestTracking.projectStatus;
+            }
+            if (Array.isArray(latestTracking.dailyLogs)) {
+              existing.dailyLogs = latestTracking.dailyLogs;
+            }
+            updatedItem = true;
+          } else if (matchedTmpl && Array.isArray(matchedTmpl.stages) && matchedTmpl.stages.length > 0) {
             existing.stages = mapPmsStagesToExecutionStages(matchedTmpl.stages, wbsData, existing.stages);
             if (latestTracking) {
               existing.stages = applyExecutionTrackingToStages(existing.stages, latestTracking);
@@ -1344,6 +1408,9 @@ export const activeProjectService = {
               }
               if (latestTracking.projectStatus) {
                 existing.projectStatus = latestTracking.projectStatus;
+              }
+              if (Array.isArray(latestTracking.dailyLogs)) {
+                existing.dailyLogs = latestTracking.dailyLogs;
               }
             }
             updatedItem = true;
@@ -1366,6 +1433,9 @@ export const activeProjectService = {
             if (latestTracking.projectStatus) {
               existing.projectStatus = latestTracking.projectStatus;
             }
+            if (Array.isArray(latestTracking.dailyLogs)) {
+              existing.dailyLogs = latestTracking.dailyLogs;
+            }
             updatedItem = true;
           } else if (!matchedTmpl && (!existing.stages || existing.stages.length === 0)) {
             existing.stages = cloneChecklistFromMaster();
@@ -1382,7 +1452,9 @@ export const activeProjectService = {
         } else {
           // Not in list yet: create new active project entry
           let stagesToUse = [];
-          if (matchedTmpl && Array.isArray(matchedTmpl.stages) && matchedTmpl.stages.length > 0) {
+          if (latestTracking && Array.isArray(latestTracking.stages) && latestTracking.stages.length > 0) {
+            stagesToUse = latestTracking.stages;
+          } else if (matchedTmpl && Array.isArray(matchedTmpl.stages) && matchedTmpl.stages.length > 0) {
             stagesToUse = mapPmsStagesToExecutionStages(matchedTmpl.stages, wbsData, []);
           } else {
             // Initialize with complete 23-26 Stages checklist from master blueprint
@@ -1448,6 +1520,7 @@ export const activeProjectService = {
             runningTaskId: latestTracking?.runningTaskId || "",
             completedSubtaskIds: latestTracking?.completedSubtaskIds || [],
             runningSubtaskId: latestTracking?.runningSubtaskId || "",
+            dailyLogs: (latestTracking && Array.isArray(latestTracking.dailyLogs)) ? latestTracking.dailyLogs : [],
             stages: stagesToUse,
             createdAt: bp.createdAt || new Date().toISOString()
           });
@@ -1457,9 +1530,7 @@ export const activeProjectService = {
         }
       });
 
-      if (changed) {
-        localStorage.setItem(ACTIVE_PROJECTS_STORAGE_KEY, JSON.stringify(list));
-      }
+      activeProjectsStore = list;
 
       return list.map((p) => calculateProjectRollup(p));
     } catch (err) {

@@ -98,19 +98,6 @@ const ActiveProjectExecutionComponent = () => {
         if (Array.isArray(rawTmpl)) pmsList = [...rawTmpl];
       }
 
-      try {
-        const storedTasks = localStorage.getItem("dss_pms_tasks_master_data");
-        if (storedTasks) {
-          const parsed = JSON.parse(storedTasks);
-          if (Array.isArray(parsed)) pmsList = [...pmsList, ...parsed];
-        }
-        const storedTemplates = localStorage.getItem("dss_pms_templates_data");
-        if (storedTemplates) {
-          const parsedT = JSON.parse(storedTemplates);
-          if (Array.isArray(parsedT)) pmsList = [...pmsList, ...parsedT];
-        }
-      } catch (e) {}
-
       const dedupMap = new Map();
       pmsList.forEach((t) => {
         const key = t?._id
