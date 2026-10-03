@@ -36,7 +36,11 @@ const LeadOverviewCard = ({ lead }) => {
     }
   }
 
-  const assignTo = lead?.assignTo || lead?.salesPerson || "Admin";
+  const assignTo =
+    lead?.salesPerson ||
+    lead?.assignTo ||
+    (typeof lead?.assignedTo === "object" ? lead.assignedTo?.name : lead?.assignedTo) ||
+    "--";
 
   const getStatusBadge = (s) => {
     if (s.includes("HOT")) return "bg-rose-100 text-rose-800 border-rose-300 font-extrabold";

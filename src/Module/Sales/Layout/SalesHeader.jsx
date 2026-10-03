@@ -148,16 +148,12 @@ const SalesHeader = ({
     // 2. Close popover
     setIsNotifOpen(false);
 
-    // 3. Smart redirection to correct Lead Details page
-    const targetLeadId = notif.leadId || notif.metadata?.leadId;
-    if (targetLeadId) {
-      navigate(`/sales/leads/details/${targetLeadId}`, {
-        state: { from: "leadManagement" }
-      });
-    } else if (notif.link) {
-      // Normalize link (in case backend sent /sales/lead-details/...)
+    // 3. Smart redirection to correct page
+    if (notif.link) {
       const cleanLink = notif.link.replace("/sales/lead-details/", "/sales/leads/details/");
-      navigate(cleanLink, {
+      navigate(cleanLink);
+    } else if (notif.leadId || notif.metadata?.leadId) {
+      navigate(`/sales/leads/details/${notif.leadId || notif.metadata?.leadId}`, {
         state: { from: "leadManagement" }
       });
     } else {
@@ -221,7 +217,7 @@ const SalesHeader = ({
   const renderNotificationIcon = (type, priority) => {
     if (type === "FOLLOWUP_OVERDUE") {
       return (
-        <div className="w-8 h-8 rounded-xl bg-rose-50 border border-rose-100/80 flex items-center justify-center text-rose-600 shrink-0">
+        <div className="w-8 h-8 rounded-xl bg-rose-50 border border-rose-100/80 flex items-center justify-center text-rose-600 shrink-0" title="Overdue Follow-up">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
           </svg>
@@ -230,16 +226,50 @@ const SalesHeader = ({
     }
     if (type === "FOLLOWUP_DUE") {
       return (
-        <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-100/80 flex items-center justify-center text-amber-600 shrink-0">
+        <div className="w-8 h-8 rounded-xl bg-amber-50 border border-amber-100/80 flex items-center justify-center text-amber-600 shrink-0" title="Follow-up Due Today">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
         </div>
       );
     }
+    if (type === "PAYMENT_RECORDED") {
+      return (
+        <div className="w-8 h-8 rounded-xl bg-emerald-50 border border-emerald-100/80 flex items-center justify-center text-emerald-600 shrink-0 font-extrabold text-sm" title="Payment Recorded">
+          ₹
+        </div>
+      );
+    }
+    if (type === "PRESALE_AGEING") {
+      return (
+        <div className="w-8 h-8 rounded-xl bg-orange-50 border border-orange-100/80 flex items-center justify-center text-orange-600 shrink-0" title="Presale Stage Ageing">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+      );
+    }
+    if (type === "TASK_OVERDUE") {
+      return (
+        <div className="w-8 h-8 rounded-xl bg-rose-50 border border-rose-100/80 flex items-center justify-center text-rose-600 shrink-0" title="Task Overdue">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3 21v-4m0 0V5a2 2 0 012-2h6.5l1 1H21l-3 6 3 6h-8.5l-1-1H5a2 2 0 00-2 2zm9-13.5V9" />
+          </svg>
+        </div>
+      );
+    }
+    if (type === "MATERIAL_REQUEST") {
+      return (
+        <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100/80 flex items-center justify-center text-indigo-600 shrink-0" title="Material Request">
+          <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+          </svg>
+        </div>
+      );
+    }
     if (type === "NEW_LEAD") {
       return (
-        <div className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-100/80 flex items-center justify-center text-blue-600 shrink-0">
+        <div className="w-8 h-8 rounded-xl bg-blue-50 border border-blue-100/80 flex items-center justify-center text-blue-600 shrink-0" title="New Lead">
           <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
           </svg>

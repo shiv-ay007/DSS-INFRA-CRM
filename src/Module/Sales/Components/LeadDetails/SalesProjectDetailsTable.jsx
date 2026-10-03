@@ -524,18 +524,16 @@ const SalesProjectDetailsTable = ({ lead, projects = [], onAddProjectClick }) =>
               </div>
 
               <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
-                <span className="text-slate-400 font-bold block mb-1">Assigned Executive</span>
+                <span className="text-slate-400 font-bold block mb-1">Assigned To Project Coordinator Name</span>
                 <span className="font-bold text-slate-900 text-xs sm:text-sm block">
-                  {selectedProject.assignedTo || "Admin"}
+                  {selectedProject.projectCoordinatorName || selectedProject.nextPersonName || "--"}
                 </span>
               </div>
 
               <div className="p-3 rounded-2xl bg-slate-50 border border-slate-100">
-                <span className="text-slate-400 font-bold block mb-1">Next Concern Person</span>
+                <span className="text-slate-400 font-bold block mb-1">Project Coordinator Designation</span>
                 <span className="font-bold text-slate-900 text-xs sm:text-sm block">
-                  {selectedProject.nextPersonName
-                    ? `${selectedProject.nextPersonName} ${selectedProject.designation ? `(${selectedProject.designation})` : ""}`
-                    : "--"}
+                  {selectedProject.designation || selectedProject.nextPersonDesignation || "--"}
                 </span>
               </div>
             </div>

@@ -65,7 +65,7 @@ const SalesLeadForm = () => {
     clientDesignation: "Managing Director",
     expectedBusiness: "",
     priority: "high",
-    jobType: "NEW",
+    jobType: "NEW Client / Job",
     city: "",
     state: "",
     pincode: "",
@@ -136,8 +136,8 @@ const SalesLeadForm = () => {
       // Client Details fetched from lead
       clientName: leadData.concernPersonName || leadData.clientName || "",
       phoneNumber: leadData.phoneNumber || leadData.contact || leadData.phone || "",
-      alternateNumber: leadData.alternateNumber || "",
-      whatsappNumber: leadData.whatsappNumber || leadData.phoneNumber || leadData.phone || "",
+      alternateNumber: leadData.whatsappNumber || leadData.alternateNumber || leadData.phoneNumber || leadData.phone || "",
+      whatsappNumber: leadData.whatsappNumber || leadData.alternateNumber || leadData.phoneNumber || leadData.phone || "",
       emailAddress: leadData.emailAddress || leadData.email || "",
       clientDesignation: leadData.clientDesignation || "Managing Director",
       clientRating: Number(leadData.clientRating || 4.5),
@@ -156,7 +156,9 @@ const SalesLeadForm = () => {
       businessType: parsedWorkCategory.length > 0 ? parsedWorkCategory : ["Design"],
       expectedBusiness: leadData.expectedBusiness || leadData.budget || "",
       priority: leadData.priority || "high",
-      jobType: leadData.jobType || "NEW",
+      jobType: leadData.jobType === "OLD"
+        ? "Existing Client / New Job"
+        : (leadData.jobType === "NEW" ? "NEW Client / Job" : (leadData.jobType || "NEW Client / Job")),
       projectCoordinatorName: leadData.projectCoordinatorName || "",
       nextPersonName: leadData.nextPersonName || "",
       designation: leadData.designation || "",
@@ -267,10 +269,6 @@ const SalesLeadForm = () => {
       newErrors.whatsappNumber = "Must start with 6, 7, 8, or 9 and be 10 digits";
     }
 
-    if (formData.alternateNumber && formData.alternateNumber.trim() && !phoneRegex.test(formData.alternateNumber.trim())) {
-      newErrors.alternateNumber = "Must start with 6, 7, 8, or 9 and be 10 digits";
-    }
-
     if (formData.emailAddress && formData.emailAddress.trim() && !/\S+@\S+\.\S+/.test(formData.emailAddress.trim())) {
       newErrors.emailAddress = "Please enter a valid email address";
     }
@@ -300,7 +298,6 @@ const SalesLeadForm = () => {
           inputEl.focus();
         }
       }
-      toast.error(newErrors[firstErrorKey]);
       return false;
     }
 
@@ -322,8 +319,8 @@ const SalesLeadForm = () => {
       setFormData({
         clientName: proj.clientName || "",
         phoneNumber: proj.phoneNumber || "",
-        alternateNumber: proj.alternateNumber || "",
-        whatsappNumber: proj.whatsappNumber || proj.phoneNumber || "",
+        alternateNumber: proj.whatsappNumber || proj.alternateNumber || proj.phoneNumber || "",
+        whatsappNumber: proj.whatsappNumber || proj.alternateNumber || proj.phoneNumber || "",
         emailAddress: proj.emailAddress || "",
         companyName: proj.companyName || "",
         projectName: proj.projectName || "",
@@ -333,7 +330,9 @@ const SalesLeadForm = () => {
         clientDesignation: proj.clientDesignation || "Managing Director",
         expectedBusiness: Number(proj.expectedBusiness || 50000),
         priority: proj.priority || "high",
-        jobType: proj.jobType || "NEW",
+        jobType: proj.jobType === "OLD"
+          ? "Existing Client / New Job"
+          : (proj.jobType === "NEW" ? "NEW Client / Job" : (proj.jobType || "NEW Client / Job")),
         city: proj.city || "",
         state: proj.state || "",
         pincode: proj.pincode || "",
@@ -603,10 +602,10 @@ const SalesLeadForm = () => {
       {/* STICKY TOP HEADER BANNER CARD (Styled like AddLead) */}
       <div className="sticky top-0 z-30 bg-[#F8FAFC] pt-1 pb-2">
         <PageHeader
-          title="Sales Management Sheet Form"
+          title="Create Project Form"
           badge="INTERESTED LEAD"
           badgeColor="bg-emerald-100 text-emerald-800 border-emerald-300 font-bold"
-          description="Review and complete detailed client information for Sales Management follow-up."
+          description="Review and complete detailed project and client information for project creation."
           showBackButton={true}
           rightActions={
             <div className="flex items-center gap-2">
@@ -671,7 +670,11 @@ const SalesLeadForm = () => {
               type="tel"
               maxLength={10}
               value={formData.whatsappNumber}
-              onChange={(e) => handleInputChange("whatsappNumber", e.target.value.replace(/\D/g, "").slice(0, 10))}
+              onChange={(e) => {
+                const val = e.target.value.replace(/\D/g, "").slice(0, 10);
+                handleInputChange("whatsappNumber", val);
+                handleInputChange("alternateNumber", val);
+              }}
               placeholder="Enter WhatsApp / Alternate Number"
               className={`w-full px-3 py-2 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium font-mono focus:outline-none transition-all placeholder:text-slate-400 ${
                 errors.whatsappNumber ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500" : "border-black/20 focus:border-black/50"
@@ -681,7 +684,7 @@ const SalesLeadForm = () => {
           </div>
         </div>
 
-        {/* ROW 2: Email Address | Client Designation | Client Rating */}
+        {/* ROW 2: Email Address | Company Name | Client Designation */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-x-3 sm:gap-x-4 gap-y-3 pt-0.5">
           <div id="field-emailAddress">
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
@@ -701,6 +704,19 @@ const SalesLeadForm = () => {
 
           <div>
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
+              Company Name
+            </label>
+            <input
+              type="text"
+              value={formData.companyName}
+              onChange={(e) => handleInputChange("companyName", e.target.value)}
+              placeholder="Enter Company Name"
+              className="w-full px-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
               Client Designation / Role
             </label>
             <input
@@ -710,6 +726,46 @@ const SalesLeadForm = () => {
               placeholder="e.g. Managing Director, Owner"
               className="w-full px-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400"
             />
+          </div>
+        </div>
+
+        {/* ROW 3: Job Type | Expected Business | Client Rating | Lead Priority */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-x-3 sm:gap-x-4 gap-y-3 pt-0.5">
+          <div>
+            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
+              Job Type
+            </label>
+            <select
+              value={
+                formData.jobType === "NEW" ? "NEW Client / Job" :
+                formData.jobType === "OLD" ? "Existing Client / New Job" :
+                formData.jobType || "NEW Client / Job"
+              }
+              onChange={(e) => handleInputChange("jobType", e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all cursor-pointer"
+            >
+              <option value="NEW Client / Job">NEW Client / Job</option>
+              <option value="Existing Client / New Job">Existing Client / New Job</option>
+              <option value="Existing Client / Existing Job">Existing Client / Existing Job</option>
+            </select>
+          </div>
+
+          <div id="field-expectedBusiness">
+            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
+              Expected Business (₹ Amount) <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              required
+              min={0}
+              value={formData.expectedBusiness}
+              onChange={(e) => handleInputChange("expectedBusiness", e.target.value)}
+              placeholder="Enter Amount (₹)"
+              className={`w-full px-3 py-2 rounded-lg border bg-white text-emerald-700 text-xs sm:text-sm font-bold font-mono focus:outline-none transition-all ${
+                errors.expectedBusiness ? "border-red-500 bg-red-50/20 focus:border-red-500" : "border-black/20 focus:border-black/50"
+              }`}
+            />
+            {errors.expectedBusiness && <p className="text-xs text-red-500 font-medium mt-1">{errors.expectedBusiness}</p>}
           </div>
 
           <div>
@@ -728,23 +784,25 @@ const SalesLeadForm = () => {
               <option value={3}>3.0 ★ (Average)</option>
             </select>
           </div>
-        </div>
 
-        {/* ROW 3: Company Name | Work Type | Work Category */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-x-3 sm:gap-x-4 gap-y-3 pt-0.5">
           <div>
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-              Company Name
+              Lead Priority
             </label>
-            <input
-              type="text"
-              value={formData.companyName}
-              onChange={(e) => handleInputChange("companyName", e.target.value)}
-              placeholder="Enter Company Name"
-              className="w-full px-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400"
-            />
+            <select
+              value={formData.priority}
+              onChange={(e) => handleInputChange("priority", e.target.value)}
+              className="w-full px-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all cursor-pointer"
+            >
+              <option value="high">High Priority</option>
+              <option value="medium">Medium Priority</option>
+              <option value="low">Low Priority</option>
+            </select>
           </div>
+        </div>
 
+        {/* ROW 4: Work Type | Work Category */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 sm:gap-x-4 gap-y-3 pt-0.5">
           <div id="field-workType">
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
               Work Type <span className="text-slate-500 font-normal">(Multi-select)</span>
@@ -786,58 +844,29 @@ const SalesLeadForm = () => {
           </div>
         </div>
 
-        {/* ROW 4: Expected Business | Lead Priority | Job Type */}
+        {/* ROW 5: Project Details (Project Name | Project Coordinator Name | Designation) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-x-3 sm:gap-x-4 gap-y-3 pt-0.5">
-          <div id="field-expectedBusiness">
+          <div id="field-projectName">
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-              Expected Business (₹ Amount) <span className="text-red-500">*</span>
+              Project Name <span className="text-red-500">*</span>
             </label>
             <input
-              type="number"
+              type="text"
               required
-              min={0}
-              value={formData.expectedBusiness}
-              onChange={(e) => handleInputChange("expectedBusiness", e.target.value)}
-              placeholder="Enter Amount (₹)"
-              className={`w-full px-3 py-2 rounded-lg border bg-white text-emerald-700 text-xs sm:text-sm font-bold font-mono focus:outline-none transition-all ${
-                errors.expectedBusiness ? "border-red-500 bg-red-50/20 focus:border-red-500" : "border-black/20 focus:border-black/50"
+              value={formData.projectName}
+              onChange={(e) => handleInputChange("projectName", e.target.value)}
+              placeholder="Enter Project Name"
+              className={`w-full px-3 py-2 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400 ${
+                errors.projectName
+                  ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500"
+                  : "border-black/20 focus:border-black/50"
               }`}
             />
-            {errors.expectedBusiness && <p className="text-xs text-red-500 font-medium mt-1">{errors.expectedBusiness}</p>}
+            {errors.projectName && (
+              <p className="text-xs text-red-500 font-medium mt-1">{errors.projectName}</p>
+            )}
           </div>
 
-          <div>
-            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-              Lead Priority
-            </label>
-            <select
-              value={formData.priority}
-              onChange={(e) => handleInputChange("priority", e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all cursor-pointer"
-            >
-              <option value="high">High Priority</option>
-              <option value="medium">Medium Priority</option>
-              <option value="low">Low Priority</option>
-            </select>
-          </div>
-
-          <div>
-            <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-              Job Type
-            </label>
-            <select
-              value={formData.jobType}
-              onChange={(e) => handleInputChange("jobType", e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-black/20 focus:border-black/50 bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all cursor-pointer"
-            >
-              <option value="NEW">NEW Client / Job</option>
-              <option value="OLD">OLD / Repeat Client</option>
-            </select>
-          </div>
-        </div>
-
-        {/* ROW 5: Assigned To Project Coordinator Name | Project Coordinator Designation */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-3 sm:gap-x-4 gap-y-3 pt-0.5">
           <div id="field-projectCoordinatorName">
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
               Assigned To Project Coordinator Name
@@ -877,29 +906,7 @@ const SalesLeadForm = () => {
           </div>
         </div>
 
-        {/* Project Name (Full Width Input ABOVE Pincode | City | State, Mandatory) */}
-        <div id="field-projectName" className="pt-0.5">
-          <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
-            Project Name <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            required
-            value={formData.projectName}
-            onChange={(e) => handleInputChange("projectName", e.target.value)}
-            placeholder="Enter Project Name"
-            className={`w-full px-3 py-2 rounded-lg border bg-white text-slate-800 text-xs sm:text-sm font-medium focus:outline-none transition-all placeholder:text-slate-400 ${
-              errors.projectName
-                ? "border-red-500 bg-red-50/20 text-red-900 focus:border-red-500"
-                : "border-black/20 focus:border-black/50"
-            }`}
-          />
-          {errors.projectName && (
-            <p className="text-xs text-red-500 font-medium mt-1">{errors.projectName}</p>
-          )}
-        </div>
-
-        {/* ROW 6: Pincode | City | State */}
+        {/* ROW 6: Location (Pincode | City | State) */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-x-3 sm:gap-x-4 gap-y-3 pt-0.5">
           <div id="field-pincode">
             <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1 flex items-center justify-between">
@@ -956,7 +963,7 @@ const SalesLeadForm = () => {
           </div>
         </div>
 
-        {/* ROW: Complete Site / Office Address */}
+        {/* ROW 7: Complete Site / Office Address */}
         <div id="field-address" className="pt-0.5">
           <label className="block text-xs sm:text-sm font-semibold text-slate-800 mb-1">
             Complete Site / Office Address

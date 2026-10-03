@@ -9,3 +9,18 @@ export const getDashboardStatsApi = async () => {
     return { success: false, message: error.message };
   }
 };
+
+/**
+ * Module 9 — Dashboards & Reports Summary API
+ * @param {Object} params - { filterType, startDate, endDate }
+ */
+export const getDashboardSummaryApi = async (params = {}) => {
+  try {
+    const res = await apiClient.get("/dashboard/summary", { params });
+    return res;
+  } catch (error) {
+    console.error("API getDashboardSummaryApi error:", error);
+    return { success: false, message: error.message };
+  }
+};
+

@@ -30,6 +30,8 @@ import ActiveProjectDetailsPage from '../Pages/ActiveProjects/ActiveProjectDetai
 import ActiveProjectExecutionPage from '../Pages/ActiveProjects/ActiveProjectExecutionPage'
 import CompleteProjects from '../Pages/CompleteProjects'
 import CompleteProjectDetailsPage from '../Pages/CompleteProjectDetailsPage'
+import PaymentsPage from '../Pages/Payments/PaymentsPage'
+import PaymentDetailsPage from '../Pages/Payments/PaymentDetailsPage'
 
 const SalesRoutes = () => {
   return (
@@ -62,6 +64,10 @@ const SalesRoutes = () => {
           <Route path="active-projects/create" element={<CreateActiveProjectPage />} />
           <Route path="active-projects/details/:id" element={<ActiveProjectDetailsPage />} />
           <Route path="active-projects/:id" element={<ActiveProjectExecutionPage />} />
+          {/* Module 7: Payments / Advance & Token Tracking */}
+          <Route path="payments" element={<PaymentsPage />} />
+          <Route path="payments/details/:projectId" element={<PaymentDetailsPage />} />
+          <Route path="payments/:projectId" element={<PaymentDetailsPage />} />
           {/* Complete / Closed Projects Archive */}
           <Route path="complete-projects" element={<CompleteProjects />} />
           <Route path="completed-projects" element={<CompleteProjects />} />
