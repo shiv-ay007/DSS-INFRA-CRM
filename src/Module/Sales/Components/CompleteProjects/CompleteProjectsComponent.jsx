@@ -87,13 +87,21 @@ const CompleteProjectsComponent = () => {
   const fetchCompletedProjects = async () => {
     setLoading(true);
     try {
-      // 1. Fetch closed & completed lead projects from backend database
+      // 1. Fetch live active projects from MongoDB / PMS templates & presales sync
+      let activeList = [];
+      try {
+        activeList = await activeProjectService.fetchAndSyncActiveProjects();
+      } catch (syncErr) {
+        activeList = activeProjectService.getAllActiveProjects() || [];
+      }
+      if (!Array.isArray(activeList) || activeList.length === 0) {
+        activeList = activeProjectService.getAllActiveProjects() || [];
+      }
+
+      // 2. Fetch closed & completed lead projects from backend database
       const res = await getAllLeadProjectsApi({ isClosed: "true" });
       const backendProjects =
         res?.data?.projects || res?.projects || (Array.isArray(res?.data) ? res.data : []);
-
-      // 2. Fetch local active projects for any 100% completed construction
-      const activeList = activeProjectService.getAllActiveProjects() || [];
 
       const normalizedList = [];
 
@@ -103,6 +111,19 @@ const CompleteProjectsComponent = () => {
         const status = String(bp.status || leadObj.status || "").toUpperCase();
         const closureStatus = String(bp.closureStatus || leadObj.closureStatus || "");
         const presaleStatus = String(bp.presaleStatus || leadObj.presaleStatus || "");
+
+        // ⚠️ CRITICAL: Agar project Construction me convert ho chuka hai (ACTIVE_PROJECT / Converted),
+        // to wo yahan Presales side se Complete Projects me NAHI aayega!
+        // Wo Active Projects me chal raha hai.
+        const isConvertedToConstruction =
+          status === "ACTIVE_PROJECT" ||
+          status === "CONVERTED" ||
+          closureStatus.toLowerCase().includes("converted") ||
+          presaleStatus.toLowerCase().includes("converted");
+
+        if (isConvertedToConstruction) {
+          return; // Skip! Active project me hai, not closed/completed.
+        }
 
         const isClosed =
           bp.isClosed === true ||
@@ -121,8 +142,6 @@ const CompleteProjectsComponent = () => {
             closureCategory = "CONSULTANCY";
           } else if (closureStatus.toLowerCase().includes("design")) {
             closureCategory = "DESIGN";
-          } else if (closureStatus.toLowerCase().includes("converted") || status === "ACTIVE_PROJECT") {
-            closureCategory = "CONVERTED";
           }
 
           normalizedList.push({
@@ -153,9 +172,14 @@ const CompleteProjectsComponent = () => {
         }
       });
 
-      // Process Active Construction Projects (100% Completed / Handed Over)
+      // Process Active Construction Projects (100% Completed OR Closed/Dropped)
       activeList.forEach((ap) => {
-        if (ap.projectStatus === "Completed" || ap.overallProgress === 100) {
+        const pStatus = String(ap.projectStatus || "").trim().toLowerCase();
+        const progress = Number(ap.overallProgress ?? ap.progressPercent ?? 0);
+        const isCompleted = pStatus === "completed" || progress === 100;
+        const isClosed = pStatus === "closed" || pStatus === "dropped" || pStatus === "cancelled" || ap.isClosed === true;
+
+        if (isCompleted) {
           const revNum = Number(String(ap.revenue || "").replace(/[^0-9]/g, "")) || 0;
           normalizedList.push({
             id: ap.id || ap._id,
@@ -168,15 +192,42 @@ const CompleteProjectsComponent = () => {
             companyName: ap.companyName || "--",
             city: ap.city || "--",
             address: ap.address || "",
-            workCategory: ap.engagementScope || "Design + Construction",
+            workCategory: ap.engagementScope || ap.workCategory || "Design + Construction",
             workType: ap.workType || "Full Handover",
             expectedBusiness: revNum,
             priority: "High",
             activePerson: ap.activePerson || "Site Engineer",
             closureCategory: "CONSTRUCTION_COMPLETED",
-            closureReason: "100% Construction Completed & Handed Over",
-            closureRemark: ap.overallRemark || "All 23 stages successfully executed and snagged.",
+            closureReason: ap.closureReason || "100% Construction Completed & Handed Over",
+            closureRemark: ap.overallRemark || ap.finalTrackingRemark || "All stages successfully executed and snagged.",
             closedAtStage: "23 (Handover)",
+            closedAtDate: ap.updatedAt || ap.createdAt || new Date().toISOString(),
+            remarks: ap.dailyLogs || [],
+            source: "Active Construction",
+            raw: ap
+          });
+        } else if (isClosed) {
+          const revNum = Number(String(ap.revenue || "").replace(/[^0-9]/g, "")) || 0;
+          normalizedList.push({
+            id: ap.id || ap._id,
+            _id: ap.id || ap._id,
+            leadId: ap.projectId || ap.presaleId || ap.id,
+            code: ap.id || `PRJ-${String(ap._id || "").slice(-4).toUpperCase()}`,
+            projectName: ap.projectName || "Site Execution Handover",
+            clientName: ap.clientName || "Client",
+            phoneNumber: ap.phone || "--",
+            companyName: ap.companyName || "--",
+            city: ap.city || "--",
+            address: ap.address || "",
+            workCategory: ap.engagementScope || ap.workCategory || "Design + Construction",
+            workType: ap.workType || "Execution Stopped",
+            expectedBusiness: revNum,
+            priority: "Medium",
+            activePerson: ap.activePerson || "Site Engineer",
+            closureCategory: "LOST",
+            closureReason: ap.closureReason || ap.overallRemark || "Construction Closed / Dropped",
+            closureRemark: ap.closureRemark || ap.overallRemark || ap.finalTrackingRemark || "Project closed during site execution.",
+            closedAtStage: ap.runningStageId || ap.currentStageId || "--",
             closedAtDate: ap.updatedAt || ap.createdAt || new Date().toISOString(),
             remarks: ap.dailyLogs || [],
             source: "Active Construction",

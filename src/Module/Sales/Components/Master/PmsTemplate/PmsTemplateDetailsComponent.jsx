@@ -403,46 +403,34 @@ const PmsTemplateDetailsComponent = () => {
             supplierService.getAllSuppliers({ limit: 500 })
           ]);
 
-          const allStages =
-            wbsStagesRes.status === "fulfilled" && wbsStagesRes.value?.data?.data
-              ? wbsStagesRes.value.data.data
-              : [];
-          const allWorks =
-            wbsWorksRes.status === "fulfilled" && wbsWorksRes.value?.data?.data
-              ? wbsWorksRes.value.data.data
-              : [];
-          const allTasks =
-            wbsTasksRes.status === "fulfilled" && wbsTasksRes.value?.data?.data
-              ? wbsTasksRes.value.data.data
-              : [];
-          const allSubtasks =
-            wbsSubtasksRes.status === "fulfilled" && wbsSubtasksRes.value?.data?.data
-              ? wbsSubtasksRes.value.data.data
-              : [];
-          const allProjects =
-            projectsRes.status === "fulfilled" && projectsRes.value?.data
-              ? Array.isArray(projectsRes.value.data)
-              : projectsRes.value.data.data || []
-              ? projectsRes.value.data.data || []
-              : [];
-          const allStatuses =
-            statusesRes.status === "fulfilled" && statusesRes.value?.data
-              ? Array.isArray(statusesRes.value.data)
-                ? statusesRes.value.data
-                : statusesRes.value.data.data || []
-              : [];
-          const allMaterials =
-            materialsRes.status === "fulfilled" && materialsRes.value?.data
-              ? Array.isArray(materialsRes.value.data)
-                ? materialsRes.value.data
-                : materialsRes.value.data.data || []
-              : [];
-          const allSuppliers =
-            suppliersRes.status === "fulfilled" && suppliersRes.value?.data
-              ? Array.isArray(suppliersRes.value.data)
-                ? suppliersRes.value.data
-                : suppliersRes.value.data.data || []
-              : [];
+          const safeExtractArray = (settled, key) => {
+            if (!settled || settled.status !== "fulfilled" || !settled.value) return [];
+            const val = settled.value.data !== undefined ? settled.value.data : settled.value;
+            if (Array.isArray(val)) return val;
+            if (val && typeof val === "object") {
+              if (Array.isArray(val.data)) return val.data;
+              if (key && Array.isArray(val[key])) return val[key];
+              if (val.data && typeof val.data === "object" && key && Array.isArray(val.data[key])) return val.data[key];
+              if (Array.isArray(val.projects)) return val.projects;
+              if (Array.isArray(val.stages)) return val.stages;
+              if (Array.isArray(val.works)) return val.works;
+              if (Array.isArray(val.tasks)) return val.tasks;
+              if (Array.isArray(val.subtasks)) return val.subtasks;
+              if (Array.isArray(val.statuses)) return val.statuses;
+              if (Array.isArray(val.materials)) return val.materials;
+              if (Array.isArray(val.suppliers)) return val.suppliers;
+            }
+            return [];
+          };
+
+          const allStages = safeExtractArray(wbsStagesRes, "stages");
+          const allWorks = safeExtractArray(wbsWorksRes, "works");
+          const allTasks = safeExtractArray(wbsTasksRes, "tasks");
+          const allSubtasks = safeExtractArray(wbsSubtasksRes, "subtasks");
+          const allProjects = safeExtractArray(projectsRes, "projects");
+          const allStatuses = safeExtractArray(statusesRes, "statuses");
+          const allMaterials = safeExtractArray(materialsRes, "materials");
+          const allSuppliers = safeExtractArray(suppliersRes, "suppliers");
 
           allStages.forEach((s) => {
             if (s._id) stageMap.set(String(s._id), s);

@@ -28,7 +28,8 @@ const DEFAULT_PROJECT_STATUSES = [
   "In Progress",
   "Delayed",
   "On Hold",
-  "Completed"
+  "Completed",
+  "Closed"
 ];
 
 const ActiveProjectExecutionComponent = () => {
@@ -743,6 +744,8 @@ const ActiveProjectExecutionComponent = () => {
       ? "bg-rose-50 text-rose-700 border-rose-200"
       : trackingForm.projectStatus === "On Hold"
       ? "bg-amber-50 text-amber-700 border-amber-200"
+      : trackingForm.projectStatus === "Closed"
+      ? "bg-slate-100 text-slate-700 border-slate-300"
       : "bg-indigo-50 text-indigo-700 border-indigo-200";
 
   return (
