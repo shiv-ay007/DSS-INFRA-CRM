@@ -224,7 +224,7 @@ const Salesdash = () => {
       <div className="sticky top-0 z-30 bg-[#F8FAFC] pt-1 pb-2">
         <PageHeader
           title="EXECUTIVE DASHBOARDS & REPORTS"
-          badge="Module 9 • Business 360°"
+          // badge="Module 9 • Business 360°"
           badgeColor="bg-emerald-100/90 text-emerald-800 border-emerald-300"
           description="Read-only executive snapshot aggregated dynamically across Sales, Presale, Construction, and Payments."
           rightActions={
