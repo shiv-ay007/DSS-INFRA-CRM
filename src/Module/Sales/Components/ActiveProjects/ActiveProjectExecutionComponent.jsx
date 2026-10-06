@@ -10,7 +10,8 @@ import {
   FaLayerGroup,
   FaTasks,
   FaHammer,
-  FaCommentDots
+  FaCommentDots,
+  FaEdit
 } from "react-icons/fa";
 import { toast } from "react-toastify";
 import { useAuth } from "../../../../context/AuthContext";
@@ -488,19 +489,32 @@ const ActiveProjectExecutionComponent = () => {
     [stagesData]
   );
 
-  const completedTasksCount = useMemo(
-    () =>
-      stagesData.reduce(
-        (sum, s) =>
-          sum +
-          (s.works || []).reduce(
-            (wSum, w) => wSum + (w.tasks || []).filter((t) => t.status === "Completed").length,
-            0
-          ),
-        0
-      ),
-    [stagesData]
-  );
+  const completedTasksCount = useMemo(() => {
+    const completedStageSet = new Set(trackingForm.completedStageIds || []);
+    const completedWorkSet = new Set(trackingForm.completedWorkIds || []);
+    const completedTaskSet = new Set(trackingForm.completedTaskIds || []);
+
+    return stagesData.reduce((sum, s) => {
+      const isStageDone = completedStageSet.has(s.stageId) || s.status === "Completed";
+      return (
+        sum +
+        (s.works || []).reduce((wSum, w) => {
+          const isWorkDone = isStageDone || completedWorkSet.has(w.workId) || w.status === "Completed";
+          return (
+            wSum +
+            (w.tasks || []).filter(
+              (t) => isWorkDone || completedTaskSet.has(t.taskId) || t.status === "Completed"
+            ).length
+          );
+        }, 0)
+      );
+    }, 0);
+  }, [
+    stagesData,
+    trackingForm.completedStageIds,
+    trackingForm.completedWorkIds,
+    trackingForm.completedTaskIds
+  ]);
 
   const totalSubtasksCount = useMemo(
     () =>
@@ -517,28 +531,116 @@ const ActiveProjectExecutionComponent = () => {
     [stagesData]
   );
 
-  const completedSubtasksCount = useMemo(
-    () =>
-      stagesData.reduce(
-        (sum, s) =>
-          sum +
-          (s.works || []).reduce(
-            (wSum, w) =>
-              wSum +
-              (w.tasks || []).reduce(
-                (tSum, t) =>
-                  tSum + (t.subtasks || []).filter((st) => st.status === "Completed").length,
-                0
-              ),
-            0
-          ),
-        0
-      ),
-    [stagesData]
-  );
+  const completedSubtasksCount = useMemo(() => {
+    const completedStageSet = new Set(trackingForm.completedStageIds || []);
+    const completedWorkSet = new Set(trackingForm.completedWorkIds || []);
+    const completedTaskSet = new Set(trackingForm.completedTaskIds || []);
+    const completedSubtaskSet = new Set(trackingForm.completedSubtaskIds || []);
+
+    return stagesData.reduce((sum, s) => {
+      const isStageDone = completedStageSet.has(s.stageId) || s.status === "Completed";
+      return (
+        sum +
+        (s.works || []).reduce((wSum, w) => {
+          const isWorkDone = isStageDone || completedWorkSet.has(w.workId) || w.status === "Completed";
+          return (
+            wSum +
+            (w.tasks || []).reduce((tSum, t) => {
+              const isTaskDone = isWorkDone || completedTaskSet.has(t.taskId) || t.status === "Completed";
+              return (
+                tSum +
+                (t.subtasks || []).filter(
+                  (st) => isTaskDone || completedSubtaskSet.has(st.subtaskId) || st.status === "Completed"
+                ).length
+              );
+            }, 0)
+          );
+        }, 0)
+      );
+    }, 0);
+  }, [
+    stagesData,
+    trackingForm.completedStageIds,
+    trackingForm.completedWorkIds,
+    trackingForm.completedTaskIds,
+    trackingForm.completedSubtaskIds
+  ]);
 
   const progressPercent =
     totalTasksCount > 0 ? Math.round((completedTasksCount / totalTasksCount) * 100) : 0;
+
+  // Helpers to resolve human-friendly clean labels for view mode
+  const getStageLabel = (stageId) => {
+    if (!stageId) return "";
+    const opt = stageOptions.find((o) => o.value === stageId);
+    if (opt) return opt.label.replace(/\s*\(Completed\)$/, "");
+    const stg = stagesData.find((s) => s.stageId === stageId);
+    if (stg) return stg.stageName || stg.stageId;
+    return stageId;
+  };
+
+  const getWorkLabel = (workId) => {
+    if (!workId) return "";
+    const opt = workOptions.find((o) => o.value === workId);
+    if (opt) return opt.label.replace(/\s*\(Completed\)$/, "");
+    for (const s of stagesData) {
+      const idx = (s.works || []).findIndex((w) => w.workId === workId);
+      if (idx !== -1) {
+        const w = s.works[idx];
+        const cleanCode = isObjectId(w.workId) ? `${s.stageId || "S"}-W${idx + 1}` : w.workId;
+        const cleanName =
+          isObjectId(w.workName) || (w.workName || "").startsWith("6a")
+            ? `Work Package ${cleanCode}`
+            : w.workName;
+        return `${cleanCode} - ${cleanName}`;
+      }
+    }
+    return workId;
+  };
+
+  const getTaskLabel = (taskId) => {
+    if (!taskId) return "";
+    const opt = taskOptions.find((o) => o.value === taskId);
+    if (opt) return opt.label.replace(/\s*\(Completed\)$/, "");
+    for (const s of stagesData) {
+      for (const w of s.works || []) {
+        const idx = (w.tasks || []).findIndex((t) => t.taskId === taskId);
+        if (idx !== -1) {
+          const t = w.tasks[idx];
+          const cleanCode = isObjectId(t.taskId) ? `${w.workId || "W"}-T${idx + 1}` : t.taskId;
+          const cleanName =
+            isObjectId(t.taskName) || (t.taskName || "").startsWith("6a")
+              ? `Task ${cleanCode}`
+              : t.taskName;
+          return `${cleanCode} - ${cleanName}`;
+        }
+      }
+    }
+    return taskId;
+  };
+
+  const getSubtaskLabel = (subtaskId) => {
+    if (!subtaskId) return "";
+    const opt = subtaskOptions.find((o) => o.value === subtaskId);
+    if (opt) return opt.label.replace(/\s*\(Completed\)$/, "");
+    for (const s of stagesData) {
+      for (const w of s.works || []) {
+        for (const t of w.tasks || []) {
+          const idx = (t.subtasks || []).findIndex((st) => st.subtaskId === subtaskId);
+          if (idx !== -1) {
+            const st = t.subtasks[idx];
+            const cleanCode = isObjectId(st.subtaskId) ? `${t.taskId || "T"}-ST${idx + 1}` : st.subtaskId;
+            const cleanName =
+              isObjectId(st.subtaskName) || (st.subtaskName || "").startsWith("6a")
+                ? `Subtask ${cleanCode}`
+                : st.subtaskName;
+            return `${cleanCode} - ${cleanName}`;
+          }
+        }
+      }
+    }
+    return subtaskId;
+  };
 
   // ============================================================
   // SAVE FORM
@@ -802,7 +904,7 @@ const ActiveProjectExecutionComponent = () => {
             </div>
           </div>
 
-          {isEditMode && (
+          {isEditMode ? (
             <div className="flex items-center gap-2.5 self-end sm:self-auto flex-wrap">
               <button
                 type="button"
@@ -830,7 +932,7 @@ const ActiveProjectExecutionComponent = () => {
                 )}
               </button>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -856,55 +958,94 @@ const ActiveProjectExecutionComponent = () => {
               Client & Project Details
             </h3>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 text-xs">
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Client Name</label>
-              <input
-                type="text"
-                readOnly
-                value={project.clientName || ""}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 bg-slate-50"
-              />
+          {isReadOnly ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="bg-slate-50/80 border border-slate-200/90 rounded-xl p-3">
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">
+                  Client Name
+                </span>
+                <span className="text-xs font-black text-slate-800 break-words">
+                  {project.clientName || "—"}
+                </span>
+              </div>
+              <div className="bg-slate-50/80 border border-slate-200/90 rounded-xl p-3">
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">
+                  Contact
+                </span>
+                <span className="text-xs font-bold text-slate-700 font-mono">
+                  {project.phone || "—"}
+                </span>
+              </div>
+              <div className="bg-slate-50/80 border border-slate-200/90 rounded-xl p-3">
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">
+                  Project Name
+                </span>
+                <span className="text-xs font-bold text-slate-800 break-words">
+                  {project.projectName || "Site Workflow"}
+                </span>
+              </div>
+              <div className="bg-slate-50/80 border border-slate-200/90 rounded-xl p-3">
+                <span className="block text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">
+                  Site Location
+                </span>
+                <span className="text-xs font-semibold text-slate-700 break-words">
+                  {project.address || project.city || "—"}
+                </span>
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Contact</label>
-              <input
-                type="text"
-                readOnly
-                value={project.phone || "—"}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-mono bg-slate-50"
-              />
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5 text-xs">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Client Name</label>
+                <input
+                  type="text"
+                  readOnly
+                  value={project.clientName || ""}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 bg-slate-50"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Contact</label>
+                <input
+                  type="text"
+                  readOnly
+                  value={project.phone || "—"}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-mono bg-slate-50"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Project Name</label>
+                <input
+                  type="text"
+                  readOnly
+                  value={project.projectName || "Site Workflow"}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-bold bg-slate-50"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Site Location</label>
+                <input
+                  type="text"
+                  readOnly
+                  value={project.address || project.city || "—"}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-slate-50"
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Project Name</label>
-              <input
-                type="text"
-                readOnly
-                value={project.projectName || "Site Workflow"}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs font-bold bg-slate-50"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">Site Location</label>
-              <input
-                type="text"
-                readOnly
-                value={project.address || project.city || "—"}
-                className="w-full px-3 py-2 border border-slate-200 rounded-lg text-xs bg-slate-50"
-              />
-            </div>
-          </div>
+          )}
         </div>
 
         <hr className="border-slate-200" />
 
-        {/* --- SECTION 2: STREAMLINED TRACKING DDLs --- */}
+        {/* --- SECTION 2: TRACKING STATUS / EDIT DDLs --- */}
         <div className="space-y-4">
           <div className="flex items-center justify-between pb-2 border-b border-slate-100">
             <div className="flex items-center gap-2">
               <FaLayerGroup className="text-indigo-600 w-4 h-4" />
               <h3 className="text-xs font-black text-slate-800 uppercase tracking-wider">
-                Execution Tracking DDL Hierarchy
+                {isReadOnly
+                  ? "Execution Tracking Status & Milestones"
+                  : "Execution Tracking DDL Hierarchy"}
               </h3>
             </div>
             <span className="text-[11px] font-bold text-slate-500">
@@ -912,288 +1053,506 @@ const ActiveProjectExecutionComponent = () => {
             </span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
-            {/* 1. Project Status (DDL - populated from PMS creation) */}
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-slate-700">
-                Project Status <span className="text-rose-500">*</span>
-                <span className="ml-1 text-[10px] font-normal text-slate-500">
-                  (From PMS Blueprint)
+          {isReadOnly ? (
+            /* ================= VIEW MODE: CLEAN BADGES & MILESTONES (NO DDLs) ================= */
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+              {/* 1. Project Status */}
+              <div className="bg-slate-50/70 border border-slate-200/90 rounded-xl p-3.5 space-y-2">
+                <span className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  Project Status
                 </span>
-              </label>
-              <select
-                disabled={isReadOnly}
-                value={trackingForm.projectStatus}
-                onChange={(e) =>
-                  setTrackingForm((prev) => ({ ...prev, projectStatus: e.target.value }))
-                }
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white disabled:bg-slate-50 cursor-pointer shadow-2xs"
-              >
-                {pmsStatusOptions.map((status) => (
-                  <option key={status} value={status}>
-                    {status}
-                  </option>
-                ))}
-              </select>
-            </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black border ${projectStatusBadgeClasses}`}
+                  >
+                    <span className="w-2 h-2 rounded-full bg-current" />
+                    {trackingForm.projectStatus}
+                  </span>
+                  <span className="text-[11px] text-slate-400 font-medium">(From PMS Blueprint)</span>
+                </div>
+              </div>
 
-            {/* 2. Stage Complete (DDL) */}
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-slate-700">
-                Stage Complete
-                <span className="ml-1 text-[10px] font-normal text-emerald-600">
-                  ({trackingForm.completedStageIds?.length || 0} completed)
+              {/* 2. Stage Complete */}
+              <div className="bg-slate-50/70 border border-slate-200/90 rounded-xl p-3.5 space-y-2">
+                <span className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  Stage Complete
                 </span>
-              </label>
-              <ReactSelectMulti
-                isDisabled={isReadOnly}
-                placeholder="Select completed stage(s)..."
-                options={stageOptions}
-                value={trackingForm.completedStageIds}
-                onChange={(vals) => {
-                  const merged = Array.from(new Set([...lockedStageIds, ...vals]));
-                  setTrackingForm((prev) => ({ ...prev, completedStageIds: merged }));
-                }}
-                themeColor="emerald"
-              />
-            </div>
+                <div className="flex flex-wrap gap-1.5 min-h-[34px] items-center">
+                  {trackingForm.completedStageIds?.length > 0 ? (
+                    trackingForm.completedStageIds.map((sId) => (
+                      <span
+                        key={sId}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200"
+                      >
+                        <FaCheckCircle className="w-3 h-3 text-emerald-600 shrink-0" />
+                        <span>{getStageLabel(sId)}</span>
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-xs text-slate-400 italic">None completed yet</span>
+                  )}
+                </div>
+              </div>
 
-            {/* 3. Running Stage (DDL) */}
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-slate-700">
-                Running Stage <span className="text-rose-500">*</span>
-              </label>
-              <select
-                disabled={isReadOnly}
-                value={trackingForm.runningStageId}
-                onChange={(e) => {
-                  const newStageId = e.target.value;
-                  setTrackingForm((prev) => ({
-                    ...prev,
-                    runningStageId: newStageId,
-                    completedWorkIds: [],
-                    runningWorkId: "",
-                    completedTaskIds: [],
-                    runningTaskId: ""
-                  }));
-                }}
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white disabled:bg-slate-50 cursor-pointer shadow-2xs"
-              >
-                <option value="">-- Select Running Stage --</option>
-                {stageOptions.map((s) => (
-                  <option key={s.value} value={s.value} disabled={s.isDisabled}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* 4. Complete Work of Running Stage (DDL) */}
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-slate-700">
-                Complete Work of Running Stage
-                <span className="ml-1 text-[10px] font-normal text-emerald-600">
-                  ({trackingForm.completedWorkIds?.length || 0} completed)
+              {/* 3. Running Stage */}
+              <div className="bg-slate-50/70 border border-slate-200/90 rounded-xl p-3.5 space-y-2">
+                <span className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  Running Stage
                 </span>
-              </label>
-              <ReactSelectMulti
-                isDisabled={isReadOnly || !trackingForm.runningStageId}
-                placeholder={
-                  !trackingForm.runningStageId
-                    ? "Select Running Stage first..."
-                    : "Select completed work(s)..."
-                }
-                options={workOptions}
-                value={trackingForm.completedWorkIds}
-                onChange={(vals) => {
-                  const merged = Array.from(new Set([...lockedWorkIds, ...vals]));
-                  setTrackingForm((prev) => ({ ...prev, completedWorkIds: merged }));
-                }}
-                themeColor="emerald"
-              />
-            </div>
+                <div className="min-h-[34px] flex items-center">
+                  {trackingForm.runningStageId ? (
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-black bg-blue-50 text-blue-800 border border-blue-200">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
+                      </span>
+                      <span>{getStageLabel(trackingForm.runningStageId)}</span>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-slate-400 italic">No running stage selected</span>
+                  )}
+                </div>
+              </div>
 
-            {/* 5. Running Work of Running Stage (DDL) */}
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-slate-700">
-                Running Work of Running Stage
-              </label>
-              <select
-                disabled={isReadOnly || !trackingForm.runningStageId}
-                value={trackingForm.runningWorkId}
-                onChange={(e) => {
-                  const newWorkId = e.target.value;
-                  setTrackingForm((prev) => ({
-                    ...prev,
-                    runningWorkId: newWorkId,
-                    completedTaskIds: [],
-                    runningTaskId: ""
-                  }));
-                }}
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white disabled:bg-slate-50 cursor-pointer shadow-2xs disabled:cursor-not-allowed"
-              >
-                <option value="">
-                  {!trackingForm.runningStageId
-                    ? "-- Select Running Stage First --"
-                    : "-- Select Running Work --"}
-                </option>
-                {workOptions.map((w) => (
-                  <option key={w.value} value={w.value} disabled={w.isDisabled}>
-                    {w.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* 6. Complete Task of Running Work (DDL) */}
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-slate-700">
-                Complete Task of Running Work
-                <span className="ml-1 text-[10px] font-normal text-emerald-600">
-                  ({trackingForm.completedTaskIds?.length || 0} completed)
+              {/* 4. Complete Work of Running Stage */}
+              <div className="bg-slate-50/70 border border-slate-200/90 rounded-xl p-3.5 space-y-2">
+                <span className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  Complete Work of Running Stage
                 </span>
-              </label>
-              <ReactSelectMulti
-                isDisabled={isReadOnly || !trackingForm.runningWorkId}
-                placeholder={
-                  !trackingForm.runningWorkId
-                    ? "Select Running Work first..."
-                    : "Select completed task(s)..."
-                }
-                options={taskOptions}
-                value={trackingForm.completedTaskIds}
-                onChange={(vals) => {
-                  const merged = Array.from(new Set([...lockedTaskIds, ...vals]));
-                  setTrackingForm((prev) => ({ ...prev, completedTaskIds: merged }));
-                }}
-                themeColor="emerald"
-              />
-            </div>
+                <div className="flex flex-wrap gap-1.5 min-h-[34px] items-center">
+                  {trackingForm.completedWorkIds?.length > 0 ? (
+                    trackingForm.completedWorkIds.map((wId) => (
+                      <span
+                        key={wId}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200"
+                      >
+                        <FaCheckCircle className="w-3 h-3 text-emerald-600 shrink-0" />
+                        <span>{getWorkLabel(wId)}</span>
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-xs text-slate-400 italic">None completed yet</span>
+                  )}
+                </div>
+              </div>
 
-            {/* 7. Running Task of Running Work (DDL) */}
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-slate-700">
-                Running Task of Running Work
-              </label>
-              <select
-                disabled={isReadOnly || !trackingForm.runningWorkId}
-                value={trackingForm.runningTaskId}
-                onChange={(e) => {
-                  const newTaskId = e.target.value;
-                  setTrackingForm((prev) => ({
-                    ...prev,
-                    runningTaskId: newTaskId,
-                    completedSubtaskIds: [],
-                    runningSubtaskId: ""
-                  }));
-                }}
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white disabled:bg-slate-50 cursor-pointer shadow-2xs disabled:cursor-not-allowed"
-              >
-                <option value="">
-                  {!trackingForm.runningWorkId
-                    ? "-- Select Running Work First --"
-                    : "-- Select Running Task --"}
-                </option>
-                {taskOptions.map((t) => (
-                  <option key={t.value} value={t.value} disabled={t.isDisabled}>
-                    {t.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            {/* 8. Complete Subtask of Running Task (DDL) */}
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-slate-700">
-                Complete Subtask of Running Task
-                <span className="ml-1 text-[10px] font-normal text-emerald-600">
-                  ({trackingForm.completedSubtaskIds?.length || 0} completed)
+              {/* 5. Running Work of Running Stage */}
+              <div className="bg-slate-50/70 border border-slate-200/90 rounded-xl p-3.5 space-y-2">
+                <span className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  Running Work of Running Stage
                 </span>
-              </label>
-              <ReactSelectMulti
-                isDisabled={isReadOnly || !trackingForm.runningTaskId}
-                placeholder={
-                  !trackingForm.runningTaskId
-                    ? "Select Running Task first..."
-                    : subtaskOptions.length === 0
-                    ? "No subtasks defined for this task"
-                    : "Select completed subtask(s)..."
-                }
-                options={subtaskOptions}
-                value={trackingForm.completedSubtaskIds}
-                onChange={(vals) => {
-                  const merged = Array.from(new Set([...lockedSubtaskIds, ...vals]));
-                  setTrackingForm((prev) => ({ ...prev, completedSubtaskIds: merged }));
-                }}
-                themeColor="emerald"
-              />
-            </div>
+                <div className="min-h-[34px] flex items-center">
+                  {trackingForm.runningWorkId ? (
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-black bg-blue-50 text-blue-800 border border-blue-200">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
+                      </span>
+                      <span>{getWorkLabel(trackingForm.runningWorkId)}</span>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-slate-400 italic">No running work selected</span>
+                  )}
+                </div>
+              </div>
 
-            {/* 9. Running Subtask of Running Task (DDL) */}
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-slate-700">
-                Running Subtask of Running Task
-              </label>
-              <select
-                disabled={isReadOnly || !trackingForm.runningTaskId || subtaskOptions.length === 0}
-                value={trackingForm.runningSubtaskId}
-                onChange={(e) =>
-                  setTrackingForm((prev) => ({ ...prev, runningSubtaskId: e.target.value }))
-                }
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white disabled:bg-slate-50 cursor-pointer shadow-2xs disabled:cursor-not-allowed"
-              >
-                <option value="">
-                  {!trackingForm.runningTaskId
-                    ? "-- Select Running Task First --"
-                    : subtaskOptions.length === 0
-                    ? "-- No Subtasks Defined --"
-                    : "-- Select Running Subtask --"}
-                </option>
-                {subtaskOptions.map((st) => (
-                  <option key={st.value} value={st.value} disabled={st.isDisabled}>
-                    {st.label}
+              {/* 6. Complete Task of Running Work */}
+              <div className="bg-slate-50/70 border border-slate-200/90 rounded-xl p-3.5 space-y-2">
+                <span className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  Complete Task of Running Work
+                </span>
+                <div className="flex flex-wrap gap-1.5 min-h-[34px] items-center">
+                  {trackingForm.completedTaskIds?.length > 0 ? (
+                    trackingForm.completedTaskIds.map((tId) => (
+                      <span
+                        key={tId}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 break-words"
+                      >
+                        <FaCheckCircle className="w-3 h-3 text-emerald-600 shrink-0" />
+                        <span>{getTaskLabel(tId)}</span>
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-xs text-slate-400 italic">None completed yet</span>
+                  )}
+                </div>
+              </div>
+
+              {/* 7. Running Task of Running Work */}
+              <div className="bg-slate-50/70 border border-slate-200/90 rounded-xl p-3.5 space-y-2">
+                <span className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  Running Task of Running Work
+                </span>
+                <div className="min-h-[34px] flex items-center">
+                  {trackingForm.runningTaskId ? (
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-black bg-blue-50 text-blue-800 border border-blue-200 break-words">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
+                      </span>
+                      <span>{getTaskLabel(trackingForm.runningTaskId)}</span>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-slate-400 italic">No running task selected</span>
+                  )}
+                </div>
+              </div>
+
+              {/* 8. Complete Subtask of Running Task */}
+              <div className="bg-slate-50/70 border border-slate-200/90 rounded-xl p-3.5 space-y-2">
+                <span className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  Complete Subtask of Running Task
+                </span>
+                <div className="flex flex-wrap gap-1.5 min-h-[34px] items-center">
+                  {trackingForm.completedSubtaskIds?.length > 0 ? (
+                    trackingForm.completedSubtaskIds.map((stId) => (
+                      <span
+                        key={stId}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-bold bg-emerald-50 text-emerald-800 border border-emerald-200 break-words"
+                      >
+                        <FaCheckCircle className="w-3 h-3 text-emerald-600 shrink-0" />
+                        <span>{getSubtaskLabel(stId)}</span>
+                      </span>
+                    ))
+                  ) : (
+                    <span className="text-xs text-slate-400 italic">None completed</span>
+                  )}
+                </div>
+              </div>
+
+              {/* 9. Running Subtask of Running Task */}
+              <div className="bg-slate-50/70 border border-slate-200/90 rounded-xl p-3.5 space-y-2">
+                <span className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                  Running Subtask of Running Task
+                </span>
+                <div className="min-h-[34px] flex items-center">
+                  {trackingForm.runningSubtaskId ? (
+                    <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-black bg-blue-50 text-blue-800 border border-blue-200 break-words">
+                      <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
+                      </span>
+                      <span>{getSubtaskLabel(trackingForm.runningSubtaskId)}</span>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-slate-400 italic">No running subtask</span>
+                  )}
+                </div>
+              </div>
+
+              {/* 10. Final Tracking Remark */}
+              <div className="space-y-2 md:col-span-2 lg:col-span-3 bg-slate-50/70 border border-slate-200/90 rounded-xl p-3.5">
+                <div className="text-[11px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                  <FaCommentDots className="text-indigo-500 w-3.5 h-3.5" />
+                  <span>Final Tracking Remark</span>
+                </div>
+                {trackingForm.finalTrackingRemark ? (
+                  <div className="p-3 bg-white border border-slate-200 rounded-lg text-xs text-slate-700 leading-relaxed font-medium">
+                    {trackingForm.finalTrackingRemark}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 italic">No tracking remarks added yet.</p>
+                )}
+              </div>
+            </div>
+          ) : (
+            /* ================= EDIT MODE: INTERACTIVE DDLs ================= */
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-xs">
+              {/* 1. Project Status (DDL - populated from PMS creation) */}
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-slate-700">
+                  Project Status <span className="text-rose-500">*</span>
+                  <span className="ml-1 text-[10px] font-normal text-slate-500">
+                    (From PMS Blueprint)
+                  </span>
+                </label>
+                <select
+                  disabled={isReadOnly}
+                  value={trackingForm.projectStatus}
+                  onChange={(e) =>
+                    setTrackingForm((prev) => ({ ...prev, projectStatus: e.target.value }))
+                  }
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white disabled:bg-slate-50 cursor-pointer shadow-2xs"
+                >
+                  {pmsStatusOptions.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 2. Stage Complete (DDL) */}
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-slate-700">
+                  Stage Complete
+                  <span className="ml-1 text-[10px] font-normal text-emerald-600">
+                    ({trackingForm.completedStageIds?.length || 0} completed)
+                  </span>
+                </label>
+                <ReactSelectMulti
+                  isDisabled={isReadOnly}
+                  placeholder="Select completed stage(s)..."
+                  options={stageOptions}
+                  value={trackingForm.completedStageIds}
+                  onChange={(vals) => {
+                    const merged = Array.from(new Set([...lockedStageIds, ...vals]));
+                    setTrackingForm((prev) => ({ ...prev, completedStageIds: merged }));
+                  }}
+                  themeColor="emerald"
+                />
+              </div>
+
+              {/* 3. Running Stage (DDL) */}
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-slate-700">
+                  Running Stage <span className="text-rose-500">*</span>
+                </label>
+                <select
+                  disabled={isReadOnly}
+                  value={trackingForm.runningStageId}
+                  onChange={(e) => {
+                    const newStageId = e.target.value;
+                    setTrackingForm((prev) => ({
+                      ...prev,
+                      runningStageId: newStageId,
+                      completedWorkIds: [],
+                      runningWorkId: "",
+                      completedTaskIds: [],
+                      runningTaskId: ""
+                    }));
+                  }}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white disabled:bg-slate-50 cursor-pointer shadow-2xs"
+                >
+                  <option value="">-- Select Running Stage --</option>
+                  {stageOptions.map((s) => (
+                    <option key={s.value} value={s.value} disabled={s.isDisabled}>
+                      {s.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 4. Complete Work of Running Stage (DDL) */}
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-slate-700">
+                  Complete Work of Running Stage
+                  <span className="ml-1 text-[10px] font-normal text-emerald-600">
+                    ({trackingForm.completedWorkIds?.length || 0} completed)
+                  </span>
+                </label>
+                <ReactSelectMulti
+                  isDisabled={isReadOnly || !trackingForm.runningStageId}
+                  placeholder={
+                    !trackingForm.runningStageId
+                      ? "Select Running Stage first..."
+                      : "Select completed work(s)..."
+                  }
+                  options={workOptions}
+                  value={trackingForm.completedWorkIds}
+                  onChange={(vals) => {
+                    const merged = Array.from(new Set([...lockedWorkIds, ...vals]));
+                    setTrackingForm((prev) => ({ ...prev, completedWorkIds: merged }));
+                  }}
+                  themeColor="emerald"
+                />
+              </div>
+
+              {/* 5. Running Work of Running Stage (DDL) */}
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-slate-700">
+                  Running Work of Running Stage
+                </label>
+                <select
+                  disabled={isReadOnly || !trackingForm.runningStageId}
+                  value={trackingForm.runningWorkId}
+                  onChange={(e) => {
+                    const newWorkId = e.target.value;
+                    setTrackingForm((prev) => ({
+                      ...prev,
+                      runningWorkId: newWorkId,
+                      completedTaskIds: [],
+                      runningTaskId: ""
+                    }));
+                  }}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white disabled:bg-slate-50 cursor-pointer shadow-2xs disabled:cursor-not-allowed"
+                >
+                  <option value="">
+                    {!trackingForm.runningStageId
+                      ? "-- Select Running Stage First --"
+                      : "-- Select Running Work --"}
                   </option>
-                ))}
-              </select>
-            </div>
+                  {workOptions.map((w) => (
+                    <option key={w.value} value={w.value} disabled={w.isDisabled}>
+                      {w.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            {/* 10. Final Tracking Remark */}
-            <div className="space-y-1 md:col-span-2 lg:col-span-3">
-              <label className="block text-xs font-bold text-slate-700">
-                Final Tracking Remark
-              </label>
-              <textarea
-                rows={3}
-                disabled={isReadOnly}
-                value={trackingForm.finalTrackingRemark}
-                onChange={(e) =>
-                  setTrackingForm((prev) => ({ ...prev, finalTrackingRemark: e.target.value }))
-                }
-                placeholder="Enter final site tracking remark, milestone progress or notes..."
-                className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white disabled:bg-slate-50 shadow-2xs"
-              />
+              {/* 6. Complete Task of Running Work (DDL) */}
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-slate-700">
+                  Complete Task of Running Work
+                  <span className="ml-1 text-[10px] font-normal text-emerald-600">
+                    ({trackingForm.completedTaskIds?.length || 0} completed)
+                  </span>
+                </label>
+                <ReactSelectMulti
+                  isDisabled={isReadOnly || !trackingForm.runningWorkId}
+                  placeholder={
+                    !trackingForm.runningWorkId
+                      ? "Select Running Work first..."
+                      : "Select completed task(s)..."
+                  }
+                  options={taskOptions}
+                  value={trackingForm.completedTaskIds}
+                  onChange={(vals) => {
+                    const merged = Array.from(new Set([...lockedTaskIds, ...vals]));
+                    setTrackingForm((prev) => ({ ...prev, completedTaskIds: merged }));
+                  }}
+                  themeColor="emerald"
+                />
+              </div>
+
+              {/* 7. Running Task of Running Work (DDL) */}
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-slate-700">
+                  Running Task of Running Work
+                </label>
+                <select
+                  disabled={isReadOnly || !trackingForm.runningWorkId}
+                  value={trackingForm.runningTaskId}
+                  onChange={(e) => {
+                    const newTaskId = e.target.value;
+                    setTrackingForm((prev) => ({
+                      ...prev,
+                      runningTaskId: newTaskId,
+                      completedSubtaskIds: [],
+                      runningSubtaskId: ""
+                    }));
+                  }}
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white disabled:bg-slate-50 cursor-pointer shadow-2xs disabled:cursor-not-allowed"
+                >
+                  <option value="">
+                    {!trackingForm.runningWorkId
+                      ? "-- Select Running Work First --"
+                      : "-- Select Running Task --"}
+                  </option>
+                  {taskOptions.map((t) => (
+                    <option key={t.value} value={t.value} disabled={t.isDisabled}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 8. Complete Subtask of Running Task (DDL) */}
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-slate-700">
+                  Complete Subtask of Running Task
+                  <span className="ml-1 text-[10px] font-normal text-emerald-600">
+                    ({trackingForm.completedSubtaskIds?.length || 0} completed)
+                  </span>
+                </label>
+                <ReactSelectMulti
+                  isDisabled={isReadOnly || !trackingForm.runningTaskId}
+                  placeholder={
+                    !trackingForm.runningTaskId
+                      ? "Select Running Task first..."
+                      : subtaskOptions.length === 0
+                      ? "No subtasks defined for this task"
+                      : "Select completed subtask(s)..."
+                  }
+                  options={subtaskOptions}
+                  value={trackingForm.completedSubtaskIds}
+                  onChange={(vals) => {
+                    const merged = Array.from(new Set([...lockedSubtaskIds, ...vals]));
+                    setTrackingForm((prev) => ({ ...prev, completedSubtaskIds: merged }));
+                  }}
+                  themeColor="emerald"
+                />
+              </div>
+
+              {/* 9. Running Subtask of Running Task (DDL) */}
+              <div className="space-y-1">
+                <label className="block text-xs font-bold text-slate-700">
+                  Running Subtask of Running Task
+                </label>
+                <select
+                  disabled={
+                    isReadOnly || !trackingForm.runningTaskId || subtaskOptions.length === 0
+                  }
+                  value={trackingForm.runningSubtaskId}
+                  onChange={(e) =>
+                    setTrackingForm((prev) => ({ ...prev, runningSubtaskId: e.target.value }))
+                  }
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white disabled:bg-slate-50 cursor-pointer shadow-2xs disabled:cursor-not-allowed"
+                >
+                  <option value="">
+                    {!trackingForm.runningTaskId
+                      ? "-- Select Running Task First --"
+                      : subtaskOptions.length === 0
+                      ? "-- No Subtasks Defined --"
+                      : "-- Select Running Subtask --"}
+                  </option>
+                  {subtaskOptions.map((st) => (
+                    <option key={st.value} value={st.value} disabled={st.isDisabled}>
+                      {st.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* 10. Final Tracking Remark */}
+              <div className="space-y-1 md:col-span-2 lg:col-span-3">
+                <label className="block text-xs font-bold text-slate-700">
+                  Final Tracking Remark
+                </label>
+                <textarea
+                  rows={3}
+                  disabled={isReadOnly}
+                  value={trackingForm.finalTrackingRemark}
+                  onChange={(e) =>
+                    setTrackingForm((prev) => ({
+                      ...prev,
+                      finalTrackingRemark: e.target.value
+                    }))
+                  }
+                  placeholder="Enter final site tracking remark, milestone progress or notes..."
+                  className="w-full px-3 py-2.5 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white disabled:bg-slate-50 shadow-2xs"
+                />
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <hr className="border-slate-200" />
 
         {/* --- BOTTOM ACTIONS & SUMMARY --- */}
-        <div className="flex items-center justify-between pt-1 flex-wrap gap-3">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-bold text-slate-600">Calculated Execution Progress:</span>
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-indigo-50 text-indigo-700 border border-indigo-200">
-              {completedTasksCount} / {totalTasksCount} Tasks ({progressPercent}%)
-            </span>
-            {totalSubtasksCount > 0 && (
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-amber-50 text-amber-700 border border-amber-200">
-                {completedSubtasksCount} / {totalSubtasksCount} Subtasks
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between pt-1 gap-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full sm:w-auto">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-bold text-slate-600">Calculated Execution:</span>
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-indigo-50 text-indigo-700 border border-indigo-200">
+                {completedTasksCount} / {totalTasksCount} Tasks ({progressPercent}%)
               </span>
-            )}
+              {totalSubtasksCount > 0 && (
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-amber-50 text-amber-700 border border-amber-200">
+                  {completedSubtasksCount} / {totalSubtasksCount} Subtasks
+                </span>
+              )}
+            </div>
+            <div className="w-full sm:w-36 bg-slate-100 rounded-full h-2 border border-slate-200 overflow-hidden">
+              <div
+                className="bg-emerald-500 h-full rounded-full transition-all duration-300"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
           </div>
 
           {isEditMode && (
-            <div className="flex items-center gap-2.5">
+            <div className="flex items-center gap-2.5 self-end sm:self-auto">
               <button
                 type="button"
                 onClick={() => navigate("/sales/active-projects")}

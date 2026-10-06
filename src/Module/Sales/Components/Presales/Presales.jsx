@@ -1400,8 +1400,8 @@ const Presales = () => {
                     Presales Management
                   </h1>
                   <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 flex items-center gap-1">
-                    <HiSparkles className="w-2.5 h-2.5 text-cyan-300" /> Database Live
-                  </span>
+                    <HiSparkles className="w-2.5 h-2.5 text-cyan-300" /> 
+                  </span> 
                 </div>
                 <p className="text-[11px] text-indigo-200/90 mt-0.5 leading-none font-normal">
                   Approved master pipeline of lead projects, proposals & expected business.

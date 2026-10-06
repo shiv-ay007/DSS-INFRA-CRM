@@ -340,7 +340,7 @@ const PaymentsComponent = () => {
         <PageHeader
           title="Payments & Financial Tracking"
           description="Advance, token & milestone payment tracking linked directly with Project Deal Values"
-          badge="Module 7"
+          // badge="Module 7"
           icon={FaRupeeSign}
           iconBgColor="bg-emerald-50"
           iconColor="text-emerald-600"

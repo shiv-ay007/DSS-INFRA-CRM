@@ -585,16 +585,16 @@ const ActiveProjectsListComponent = () => {
                   <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white leading-tight">
                     Active Projects
                   </h1>
-                  <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 flex items-center gap-1">
+                  {/* <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-cyan-500/20 text-cyan-300 border border-cyan-400/30 flex items-center gap-1">
                     <HiSparkles className="w-3 h-3 text-cyan-300" /> Module 3 • Site Tracking
-                  </span>
+                  </span> */}
                   {isViewerOnly ? (
                     <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-amber-500/20 text-amber-300 border border-amber-400/30">
                       <FaLock className="w-2.5 h-2.5" /> Read-Only
                     </span>
                   ) : (
                     <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
-                      Editor Mode
+                      Editor Mode 
                     </span>
                   )}
                 </div>

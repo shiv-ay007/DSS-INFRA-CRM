@@ -7,9 +7,8 @@ import {
 } from "react-icons/fa";
 import {
   ResponsiveContainer,
-  ComposedChart,
+  BarChart,
   Bar,
-  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -21,9 +20,9 @@ const CustomTrackerTooltip = ({ active, payload }) => {
   if (active && payload && payload.length) {
     const data = payload[0].payload;
     return (
-      <div className="bg-slate-900/95 backdrop-blur-md text-white p-3.5 rounded-xl border border-slate-700 shadow-xl text-xs space-y-1.5 min-w-[220px]">
+      <div className="bg-slate-900/95 backdrop-blur-md text-white p-3 rounded-xl border border-slate-700 shadow-xl text-xs space-y-1.5 min-w-[200px]">
         <div className="font-bold text-slate-200 border-b border-slate-700 pb-1">
-          <span className="truncate max-w-[220px] font-bold text-white block">{data.name}</span>
+          <span className="truncate max-w-[200px] font-bold text-white block">{data.name}</span>
         </div>
         <div className="text-slate-300 flex items-center justify-between">
           <span>Client:</span>
@@ -34,19 +33,13 @@ const CustomTrackerTooltip = ({ active, payload }) => {
           <span className="text-slate-200">{data.city}</span>
         </div>
         <div className="text-slate-300 flex items-center justify-between">
-          <span>Current WBS Stage:</span>
+          <span>Stage:</span>
           <span className="text-orange-300 font-semibold truncate max-w-[130px]">
             {data.currentStageCode}: {data.currentStageName}
           </span>
         </div>
         <div className="text-slate-300 flex items-center justify-between pt-1 border-t border-slate-700">
-          <span>Milestone Stages:</span>
-          <span className="font-mono font-bold text-blue-400">
-            {data.completedStages} / {data.totalStages} Stages
-          </span>
-        </div>
-        <div className="text-slate-300 flex items-center justify-between">
-          <span>Overall Progress:</span>
+          <span>Progress:</span>
           <span className="font-mono font-black text-emerald-400 text-sm">
             {data.progress}%
           </span>
@@ -273,7 +266,7 @@ const ActiveProjectsSiteTracker = ({
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
               <FaLayerGroup className="text-orange-500 text-xs" />
-              Live Execution Progress Across {wbsStagesCount || 26} WBS Stages (% &amp; Completed Milestones)
+              Live Execution Progress Across {wbsStagesCount || 26} WBS Stages (% Completion)
             </span>
             <span className="text-[11px] text-slate-500 font-mono">
               Avg Progress: <strong className="text-orange-700 font-bold">{stats.avgProgress}%</strong>
@@ -282,11 +275,11 @@ const ActiveProjectsSiteTracker = ({
 
           <div className="h-[280px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart
+              <BarChart
                 data={displayProjects}
-                margin={{ top: 15, right: 20, left: -15, bottom: 35 }}
+                margin={{ top: 15, right: 15, left: -20, bottom: 35 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
                 <XAxis
                   dataKey="name"
                   tick={{ fontSize: 10, fill: "#64748b" }}
@@ -297,29 +290,18 @@ const ActiveProjectsSiteTracker = ({
                   tickLine={false}
                 />
                 <YAxis
-                  yAxisId="left"
                   domain={[0, 100]}
                   tick={{ fontSize: 11, fill: "#64748b" }}
                   axisLine={false}
                   tickLine={false}
                   tickFormatter={(v) => `${v}%`}
                 />
-                <YAxis
-                  yAxisId="right"
-                  orientation="right"
-                  domain={[0, 26]}
-                  tick={{ fontSize: 11, fill: "#64748b" }}
-                  axisLine={false}
-                  tickLine={false}
-                  tickFormatter={(v) => `S${v}`}
-                />
                 <Tooltip content={<CustomTrackerTooltip />} />
                 <Bar
-                  yAxisId="left"
                   dataKey="progress"
                   name="% Complete"
-                  radius={[6, 6, 0, 0]}
-                  maxBarSize={32}
+                  radius={[5, 5, 0, 0]}
+                  maxBarSize={28}
                 >
                   {displayProjects.map((entry, idx) => {
                     const color =
@@ -331,16 +313,7 @@ const ActiveProjectsSiteTracker = ({
                     return <Cell key={`tracker-${idx}`} fill={color} />;
                   })}
                 </Bar>
-                <Line
-                  yAxisId="right"
-                  type="monotone"
-                  dataKey="completedStages"
-                  name="Stages Done (of 26)"
-                  stroke="#ea580c"
-                  strokeWidth={2.5}
-                  dot={{ r: 3, fill: "#ea580c" }}
-                />
-              </ComposedChart>
+              </BarChart>
             </ResponsiveContainer>
           </div>
         </div>

@@ -179,10 +179,27 @@ const PresalesPipelineView = ({
 
   // Close Confirmation Modal State (with remarks & Cloudinary media)
   const [isCloseModalOpen, setIsCloseModalOpen] = useState(false);
-  const [selectedClosureOption, setSelectedClosureOption] = useState("Lost — Client Dropped / Budget Mismatch");
+  const [closureType, setClosureType] = useState("COMPLETED"); // "COMPLETED" | "LOST"
+  const [selectedClosureOption, setSelectedClosureOption] = useState("Closed — Consultancy Only");
   const [closeRemarkText, setCloseRemarkText] = useState("");
   const [closeAttachments, setCloseAttachments] = useState([]);
   const [isSubmittingClose, setIsSubmittingClose] = useState(false);
+
+  // Helper to open close modal with proper type and pre-selection
+  const handleOpenCloseModal = (type = null) => {
+    const isConsultancy = engagementScope === "Consultancy Only";
+    const isDesign = engagementScope === "Design Only";
+    const resolvedType = type || (isConsultancy || isDesign ? "COMPLETED" : "LOST");
+    setClosureType(resolvedType);
+    if (resolvedType === "COMPLETED") {
+      if (isConsultancy) setSelectedClosureOption("Closed — Consultancy Only");
+      else if (isDesign) setSelectedClosureOption("Closed — Design Only");
+      else setSelectedClosureOption("Closed — Design Only");
+    } else {
+      setSelectedClosureOption("Lost — Client Dropped / Budget Mismatch");
+    }
+    setIsCloseModalOpen(true);
+  };
 
   // Move to Active Project Confirmation Modal State
   const [isMoveModalOpen, setIsMoveModalOpen] = useState(false);
@@ -1384,40 +1401,58 @@ const PresalesPipelineView = ({
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100">
-            {/* Mark as Closed Button */}
+            {/* Mark as Dropped Button */}
             {!readOnly ? (
               <button
                 type="button"
-                onClick={() => setIsCloseModalOpen(true)}
+                onClick={() => handleOpenCloseModal("LOST")}
                 className="px-4 py-2 rounded-xl border border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold transition-all cursor-pointer shadow-2xs"
               >
-                Mark as Closed...
+                Mark as Dropped / Cancel...
               </button>
             ) : (
               <span className="text-xs text-slate-400 italic">Actions disabled in Viewer mode</span>
             )}
 
-            {/* Move to Active Project Button */}
-            {!readOnly && (
-              <button
-                type="button"
-                onClick={handleMoveToActive}
-                disabled={!isMoveToActiveEnabled}
-                className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
-                  isMoveToActiveEnabled
-                    ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-md cursor-pointer hover:scale-105 active:scale-95"
-                    : "bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-300"
-                }`}
-                title={
-                  isMoveToActiveEnabled
-                    ? "Promote this presale to Active Project"
-                    : "Requires Scope: 'Design + Construction' and Stage 11 Contract Signed Date"
-                }
-              >
-                <span>Move to Active Project</span>
-                <FaArrowRight className="text-xs" />
-              </button>
-            )}
+            <div className="flex items-center gap-2">
+              {/* For Consultancy Only or Design Only: Complete & Close Scope */}
+              {!readOnly && (engagementScope === "Consultancy Only" || engagementScope === "Design Only") && (
+                <button
+                  type="button"
+                  onClick={() => handleOpenCloseModal("COMPLETED")}
+                  className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold shadow-md cursor-pointer transition-all flex items-center gap-2"
+                >
+                  <FaCheckCircle className="text-xs" />
+                  <span>
+                    {engagementScope === "Consultancy Only"
+                      ? "Complete Consultancy & Close"
+                      : "Complete Design & Close"}
+                  </span>
+                </button>
+              )}
+
+              {/* Move to Active Project Button (Only for Design + Construction after Stage 11 Contract) */}
+              {!readOnly && engagementScope === "Design + Construction" && (
+                <button
+                  type="button"
+                  onClick={handleMoveToActive}
+                  disabled={!isMoveToActiveEnabled}
+                  className={`px-5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 ${
+                    isMoveToActiveEnabled
+                      ? "bg-emerald-600 hover:bg-emerald-700 text-white shadow-md cursor-pointer hover:scale-105 active:scale-95"
+                      : "bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-300"
+                  }`}
+                  title={
+                    isMoveToActiveEnabled
+                      ? "Promote this presale to Active Project"
+                      : "Requires Scope: 'Design + Construction' and Stage 11 Contract Signed Date"
+                  }
+                >
+                  <span>Move to Active Project</span>
+                  <FaArrowRight className="text-xs" />
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -1430,15 +1465,29 @@ const PresalesPipelineView = ({
           <div className="bg-white border border-slate-200 rounded-2xl max-w-xl w-full p-5 sm:p-6 shadow-2xl space-y-4 animate-in fade-in duration-150 my-8">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2.5">
-                <span className="p-2 rounded-xl bg-rose-100 text-rose-600">
-                  <FaTimesCircle className="text-lg" />
+                <span
+                  className={`p-2 rounded-xl ${
+                    closureType === "COMPLETED"
+                      ? "bg-emerald-100 text-emerald-600"
+                      : "bg-rose-100 text-rose-600"
+                  }`}
+                >
+                  {closureType === "COMPLETED" ? (
+                    <FaCheckCircle className="text-lg" />
+                  ) : (
+                    <FaTimesCircle className="text-lg" />
+                  )}
                 </span>
                 <div>
                   <h3 className="text-base font-extrabold text-slate-900 leading-tight">
-                    Mark Presale as Closed / Drop
+                    {closureType === "COMPLETED"
+                      ? "Complete & Close Scope"
+                      : "Mark Presale as Dropped / Lost"}
                   </h3>
                   <p className="text-[11px] text-slate-500">
-                    Record closure reason, voice explanation & proof attachments
+                    {closureType === "COMPLETED"
+                      ? "Record successful scope completion (Consultancy / Design) to move to Complete Projects"
+                      : "Record closure reason, voice explanation & proof attachments"}
                   </p>
                 </div>
               </div>
@@ -1452,12 +1501,58 @@ const PresalesPipelineView = ({
               </button>
             </div>
 
+            {/* Type Switcher Tabs: Completed vs Dropped */}
+            <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-xl">
+              <button
+                type="button"
+                disabled={isSubmittingClose}
+                onClick={() => {
+                  setClosureType("COMPLETED");
+                  if (engagementScope === "Consultancy Only") {
+                    setSelectedClosureOption("Closed — Consultancy Only");
+                  } else {
+                    setSelectedClosureOption("Closed — Design Only");
+                  }
+                }}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  closureType === "COMPLETED"
+                    ? "bg-emerald-600 text-white shadow-xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <FaCheckCircle className="text-xs" />
+                <span>Service Completed</span>
+              </button>
+              <button
+                type="button"
+                disabled={isSubmittingClose}
+                onClick={() => {
+                  setClosureType("LOST");
+                  setSelectedClosureOption("Lost — Client Dropped / Budget Mismatch");
+                }}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                  closureType === "LOST"
+                    ? "bg-rose-600 text-white shadow-xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <FaTimesCircle className="text-xs" />
+                <span>Lost / Dropped</span>
+              </button>
+            </div>
+
             {/* Stage Identification Badge */}
             <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-200 text-xs">
               <span className="font-bold text-slate-600 uppercase text-[10px] tracking-wider">
                 Current Pipeline Stage:
               </span>
-              <span className="font-extrabold text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded-lg text-xs">
+              <span
+                className={`font-extrabold px-2.5 py-0.5 rounded-lg text-xs border ${
+                  closureType === "COMPLETED"
+                    ? "text-emerald-700 bg-emerald-50 border-emerald-200"
+                    : "text-rose-700 bg-rose-50 border-rose-200"
+                }`}
+              >
                 Stage {activeStageId} — {activeStageConfig.name} ({activeStageConfig.fullName})
               </span>
             </div>
@@ -1466,42 +1561,61 @@ const PresalesPipelineView = ({
               {/* Reason Category Dropdown */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Closure Reason Category <span className="text-rose-500">*</span>
+                  {closureType === "COMPLETED" ? "Completion Category" : "Drop Reason Category"}{" "}
+                  <span className="text-rose-500">*</span>
                 </label>
                 <select
                   disabled={isSubmittingClose}
                   value={selectedClosureOption}
                   onChange={(e) => setSelectedClosureOption(e.target.value)}
-                  className="w-full px-3 py-2 rounded-xl border border-slate-300 text-xs sm:text-sm font-semibold focus:ring-2 focus:ring-rose-500 bg-white shadow-2xs"
+                  className={`w-full px-3 py-2 rounded-xl border text-xs sm:text-sm font-semibold bg-white shadow-2xs focus:ring-2 ${
+                    closureType === "COMPLETED"
+                      ? "border-emerald-300 focus:ring-emerald-500 text-emerald-950"
+                      : "border-rose-300 focus:ring-rose-500 text-slate-800"
+                  }`}
                 >
-                  <option value="Lost — Client Dropped / Budget Mismatch">
-                    Lost — Client Dropped / Budget Mismatch
-                  </option>
-                  <option value="Lost — Client Not Interested">
-                    Lost — Client Not Interested
-                  </option>
-                  <option value="Lost — No Response from Long Time">
-                    Lost — No Response from Long Time
-                  </option>
-                  <option value="Lost — Competitor Chosen">
-                    Lost — Competitor Chosen
-                  </option>
-                  <option value="Closed — Consultancy Only">
-                    Closed — Consultancy Only (Completed Stages 1–2)
-                  </option>
-                  <option value="Closed — Design Only">
-                    Closed — Design Only (Completed Drawings / Stages 1–10)
-                  </option>
-                  <option value="Other / Client Cancelled">
-                    Other / Client Cancelled
-                  </option>
+                  {closureType === "COMPLETED" ? (
+                    <>
+                      <option value="Closed — Consultancy Only">
+                        Closed — Consultancy Only (Completed Stages 1–2)
+                      </option>
+                      <option value="Closed — Design Only">
+                        Closed — Design Only (Completed Drawings / Stages 1–10)
+                      </option>
+                      <option value="Closed — Full Scope Completed">
+                        Closed — Full Scope Completed
+                      </option>
+                    </>
+                  ) : (
+                    <>
+                      <option value="Lost — Client Dropped / Budget Mismatch">
+                        Lost — Client Dropped / Budget Mismatch
+                      </option>
+                      <option value="Lost — Client Not Interested">
+                        Lost — Client Not Interested
+                      </option>
+                      <option value="Lost — No Response from Long Time">
+                        Lost — No Response from Long Time
+                      </option>
+                      <option value="Lost — Competitor Chosen">
+                        Lost — Competitor Chosen
+                      </option>
+                      <option value="Other / Client Cancelled">
+                        Other / Client Cancelled
+                      </option>
+                    </>
+                  )}
                 </select>
               </div>
 
               {/* Close Remarks & Audio/Screenshot Attachment */}
               <CommentWithMedia
-                title="Closure Remarks, Call Voice Note & Attachments"
-                placeholder="Detail why client dropped / closed (e.g. rate issue, postponed to next year, call summary)..."
+                title={closureType === "COMPLETED" ? "Completion Remarks & Attachments" : "Closure Remarks, Voice Note & Attachments"}
+                placeholder={
+                  closureType === "COMPLETED"
+                    ? "Detail completion handovers, drawings approved, consultation notes..."
+                    : "Detail why client dropped / closed (e.g. rate issue, postponed to next year, call summary)..."
+                }
                 value={closeRemarkText}
                 onChange={(val) => setCloseRemarkText(val)}
                 files={closeAttachments}
@@ -1523,17 +1637,26 @@ const PresalesPipelineView = ({
                 type="button"
                 disabled={isSubmittingClose}
                 onClick={handleConfirmClose}
-                className="px-5 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-xs sm:text-sm font-bold shadow-md cursor-pointer transition-all flex items-center gap-2 disabled:opacity-50"
+                className={`px-5 py-2.5 rounded-xl active:scale-95 text-white text-xs sm:text-sm font-bold shadow-md cursor-pointer transition-all flex items-center gap-2 disabled:opacity-50 ${
+                  closureType === "COMPLETED"
+                    ? "bg-emerald-600 hover:bg-emerald-700"
+                    : "bg-rose-600 hover:bg-rose-700"
+                }`}
               >
                 {isSubmittingClose ? (
                   <>
                     <FaSpinner className="animate-spin text-xs" />
-                    <span>Uploading Media & Closing...</span>
+                    <span>Processing...</span>
+                  </>
+                ) : closureType === "COMPLETED" ? (
+                  <>
+                    <FaCheckCircle className="text-xs" />
+                    <span>Confirm & Complete Project</span>
                   </>
                 ) : (
                   <>
                     <FaTimesCircle className="text-xs" />
-                    <span>Confirm & Mark as Closed</span>
+                    <span>Confirm & Mark as Dropped</span>
                   </>
                 )}
               </button>

@@ -178,28 +178,41 @@ const SalesSnapshotSection = ({ salesData = {} }) => {
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
               <FaChartLine className="text-blue-500 text-xs" />
-              6-Month Revenue &amp; Lead Growth Trend
+              6-Month Revenue Pipeline Trend
             </span>
-            <span className="text-[10px] text-slate-400 font-medium">Area = Pipeline ₹ (Lakhs) • Bar = Leads</span>
+            <span className="text-[10px] text-blue-600 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-md font-semibold">
+              Curve = Pipeline ₹ (Lakhs)
+            </span>
           </div>
 
           <div className="h-[230px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={monthlyTrends} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+              <ComposedChart data={monthlyTrends} margin={{ top: 10, right: 15, left: -20, bottom: 0 }}>
+                <defs>
+                  <linearGradient id="revenueTrendGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.35} />
+                    <stop offset="95%" stopColor="#3b82f6" stopOpacity={0.0} />
+                  </linearGradient>
+                </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
                 <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 11, fill: "#64748b" }} axisLine={false} tickLine={false} />
+                <YAxis
+                  tick={{ fontSize: 11, fill: "#64748b" }}
+                  axisLine={false}
+                  tickLine={false}
+                  tickFormatter={(v) => `₹${v}L`}
+                />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend iconSize={8} wrapperStyle={{ fontSize: "11px", paddingTop: "5px" }} />
                 <Area
                   type="monotone"
                   dataKey="Pipeline Revenue (₹ Lakhs)"
-                  fill="#3b82f6"
+                  fill="url(#revenueTrendGrad)"
                   stroke="#2563eb"
-                  fillOpacity={0.15}
-                  strokeWidth={2}
+                  strokeWidth={2.5}
+                  dot={{ r: 3, fill: "#2563eb", strokeWidth: 1.5, stroke: "#ffffff" }}
+                  activeDot={{ r: 5, fill: "#1d4ed8", strokeWidth: 2, stroke: "#ffffff" }}
                 />
-                <Bar dataKey="Total Leads" fill="#10b981" radius={[4, 4, 0, 0]} maxBarSize={28} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>

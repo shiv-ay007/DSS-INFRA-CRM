@@ -65,10 +65,10 @@ const CompleteProjectsComponent = () => {
   const [loading, setLoading] = useState(true);
   const [closedProjects, setClosedProjects] = useState([]);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterType, setFilterType] = useState("ALL"); // "ALL" | "COMPLETE" | "LOST"
+  const [filterType, setFilterType] = useState("COMPLETE"); // Default to "COMPLETE" instead of "ALL"
   const [completeSubFilter, setCompleteSubFilter] = useState("ALL"); // "ALL" | "CONSULTANCY" | "DESIGN" | "CONSTRUCTION"
   const [filterPriority, setFilterPriority] = useState("ALL");
-  const [showFilters, setShowFilters] = useState(true);
+  const [showFilters, setShowFilters] = useState(false); // Default filter panel is closed
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -138,9 +138,15 @@ const CompleteProjectsComponent = () => {
           const revenue = Number(bp.expectedBusiness || bp.amount || leadObj.expectedBusiness || 0);
 
           let closureCategory = "LOST";
-          if (closureStatus.toLowerCase().includes("consultancy")) {
+          const statusLower = closureStatus.toLowerCase();
+          const reasonLower = String(bp.closureReason || bp.lossReason || "").toLowerCase();
+          const workCatLower = String(bp.workCategory || bp.businessType || leadObj.workCategory || leadObj.businessType || "").toLowerCase();
+
+          if (statusLower.includes("consult") || reasonLower.includes("consult") || (bp.isCompleted && workCatLower.includes("consult"))) {
             closureCategory = "CONSULTANCY";
-          } else if (closureStatus.toLowerCase().includes("design")) {
+          } else if (statusLower.includes("design") || reasonLower.includes("design") || (bp.isCompleted && workCatLower.includes("design"))) {
+            closureCategory = "DESIGN";
+          } else if (bp.isCompleted === true || statusLower.includes("complete") || reasonLower.includes("complete")) {
             closureCategory = "DESIGN";
           }
 
@@ -403,9 +409,6 @@ const CompleteProjectsComponent = () => {
                   <h1 className="text-base sm:text-lg font-black tracking-tight text-white leading-tight">
                     Complete Projects
                   </h1>
-                  <span className="px-2 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 flex items-center gap-1">
-                    <HiSparkles className="w-2.5 h-2.5 text-emerald-300" /> Database Live
-                  </span>
                 </div>
                 <p className="text-[11px] text-indigo-200/90 mt-0.5 leading-none font-normal">
                   Central archive of closed presale pipelines and completed construction handovers.
@@ -455,15 +458,16 @@ const CompleteProjectsComponent = () => {
       ────────────────────────────────────────────────────────────────── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <KpiCard
-            gradient="bg-gradient-to-br from-slate-800 to-slate-900"
-            label="Total Closed"
-            value={metrics.total}
-            subtitle={metrics.totalValRaw}
-            icon={<FaLayerGroup className="w-5 h-5 text-white" />}
-            IconBg={<FaLayerGroup className="w-20 h-20" />}
-            active={filterType === "ALL"}
+            gradient="bg-gradient-to-br from-emerald-600 to-teal-700"
+            label="Complete Projects"
+            value={metrics.completeCount}
+            subtitle={`${metrics.consultancyCount + metrics.designCount} Presales • ${metrics.constructionCount} Sites`}
+            icon={<FaCheckCircle className="w-5 h-5 text-white" />}
+            IconBg={<FaCheckCircle className="w-20 h-20" />}
+            active={filterType === "COMPLETE" && completeSubFilter === "ALL"}
             onClick={() => {
-              setFilterType("ALL");
+              setFilterType("COMPLETE");
+              setCompleteSubFilter("ALL");
               setCurrentPage(1);
             }}
           />
@@ -495,12 +499,12 @@ const CompleteProjectsComponent = () => {
             }}
           />
           <KpiCard
-            gradient="bg-gradient-to-br from-emerald-600 to-teal-700"
+            gradient="bg-gradient-to-br from-teal-700 to-emerald-900"
             label="Construction Completed"
             value={metrics.constructionCount}
             subtitle="100% Handover & Snagged"
-            icon={<FaCheckCircle className="w-5 h-5 text-white" />}
-            IconBg={<FaCheckCircle className="w-20 h-20" />}
+            icon={<FaHardHat className="w-5 h-5 text-white" />}
+            IconBg={<FaHardHat className="w-20 h-20" />}
             active={filterType === "COMPLETE" && completeSubFilter === "CONSTRUCTION"}
             onClick={() => {
               setFilterType("COMPLETE");
