@@ -308,11 +308,26 @@ const PaymentsComponent = () => {
         label: "Balance Left (₹)",
         align: "center",
         headerClass: "min-w-[150px]",
-        render: (val) => (
-          <span className="font-extrabold font-mono text-amber-800 text-xs sm:text-sm">
-            {formatINR(val)}
-          </span>
-        )
+        render: (val, row) => {
+          const deal = Number(row?.totalDealValue || 0);
+          const rec = Number(row?.totalReceived || 0);
+          const isDone = deal > 0 && rec >= deal;
+          if (isDone) {
+            return (
+              <div className="flex flex-col items-center justify-center">
+                <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs">
+                  ✓ Completed
+                </span>
+                <span className="text-[10px] text-slate-500 font-mono mt-0.5">₹0 Left</span>
+              </div>
+            );
+          }
+          return (
+            <span className="font-extrabold font-mono text-amber-800 text-xs sm:text-sm">
+              {formatINR(val)}
+            </span>
+          );
+        }
       }
     }),
     [canEdit]

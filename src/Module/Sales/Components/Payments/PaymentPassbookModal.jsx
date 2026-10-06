@@ -10,7 +10,8 @@ import {
   FaFileInvoiceDollar,
   FaSearch,
   FaFilter,
-  FaArrowDown
+  FaArrowDown,
+  FaCheckCircle
 } from "react-icons/fa";
 import { getProjectPaymentsApi, deletePaymentApi } from "../../services/payment.api";
 import { toast } from "react-toastify";
@@ -176,6 +177,11 @@ const PaymentPassbookModal = ({
     }
   };
 
+  const calculatedTotalReceived = payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+  const totalDeal = Number(projectData?.totalDealValue || 0);
+  const remainingBalance = Math.max(0, totalDeal - calculatedTotalReceived);
+  const isCompleted = totalDeal > 0 && calculatedTotalReceived >= totalDeal;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-slate-900/60 backdrop-blur-xs animate-fadeIn">
       <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-4xl overflow-hidden flex flex-col max-h-[92vh]">
@@ -188,8 +194,12 @@ const PaymentPassbookModal = ({
             <div>
               <div className="flex items-center gap-2">
                 <h3 className="text-base sm:text-lg font-bold tracking-tight">Payment Records</h3>
-                <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
-                  Project Ledger
+                <span className={`text-[10px] uppercase font-bold px-2 py-0.5 rounded-full border ${
+                  isCompleted
+                    ? "bg-emerald-500/30 text-emerald-300 border-emerald-400/50"
+                    : "bg-emerald-500/20 text-emerald-300 border-emerald-500/30"
+                }`}>
+                  {isCompleted ? "✓ Completed" : "Project Ledger"}
                 </span>
               </div>
               <p className="text-xs text-slate-300">
@@ -200,22 +210,31 @@ const PaymentPassbookModal = ({
 
           <div className="flex items-center gap-2.5">
             {canEdit && (
-              <button
-                type="button"
-                onClick={() => {
-                  onClose();
-                  onOpenAddPayment?.({
-                    projectId,
-                    clientName: projectData?.clientName,
-                    projectName: projectData?.projectName,
-                    totalDealValue: projectData?.totalDealValue
-                  });
-                }}
-                className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
-              >
-                <FaPlus className="text-xs" />
-                <span>Add Payment</span>
-              </button>
+              isCompleted ? (
+                <div className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
+                  <FaCheckCircle className="text-xs" />
+                  <span>Completed</span>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenAddPayment?.({
+                      projectId,
+                      clientName: projectData?.clientName,
+                      projectName: projectData?.projectName,
+                      totalDealValue: totalDeal,
+                      totalReceived: calculatedTotalReceived,
+                      balanceLeft: remainingBalance
+                    });
+                  }}
+                  className="px-3 py-1.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                >
+                  <FaPlus className="text-xs" />
+                  <span>Add Payment</span>
+                </button>
+              )
             )}
             <button
               onClick={onClose}
@@ -234,7 +253,7 @@ const PaymentPassbookModal = ({
               Total Deal Value
             </span>
             <div className="text-lg sm:text-xl font-extrabold text-slate-800 font-mono">
-              {formatINR(projectData?.totalDealValue)}
+              {formatINR(totalDeal)}
             </div>
             <p className="text-[10px] text-slate-500 mt-0.5">Agreed commercial contract value</p>
           </div>
@@ -245,21 +264,33 @@ const PaymentPassbookModal = ({
               Total Received
             </span>
             <div className="text-lg sm:text-xl font-extrabold text-emerald-700 font-mono">
-              {formatINR(projectData?.totalReceived)}
+              {formatINR(calculatedTotalReceived)}
             </div>
             <p className="text-[10px] text-slate-500 mt-0.5">{payments.length} transactions recorded</p>
           </div>
 
-          {/* Box 3: Balance Left */}
-          <div className="bg-white rounded-xl p-3.5 border border-amber-200/80 shadow-2xs">
-            <span className="text-[10px] uppercase font-bold text-amber-700 block tracking-wider mb-1">
-              Balance Left
-            </span>
-            <div className="text-lg sm:text-xl font-extrabold text-amber-800 font-mono">
-              {formatINR(projectData?.balanceLeft)}
+          {/* Box 3: Balance Left / Completed */}
+          {isCompleted ? (
+            <div className="bg-emerald-50 rounded-xl p-3.5 border border-emerald-300 shadow-2xs">
+              <span className="text-[10px] uppercase font-bold text-emerald-700 block tracking-wider mb-1">
+                Payment Status
+              </span>
+              <div className="text-lg sm:text-xl font-black text-emerald-800 font-mono flex items-center gap-1.5">
+                <FaCheckCircle className="text-emerald-600 text-base" /> Completed
+              </div>
+              <p className="text-[10px] text-emerald-700 font-semibold mt-0.5">All dues cleared (₹0 balance left)</p>
             </div>
-            <p className="text-[10px] text-slate-500 mt-0.5">Remaining receivable amount</p>
-          </div>
+          ) : (
+            <div className="bg-white rounded-xl p-3.5 border border-amber-200/80 shadow-2xs">
+              <span className="text-[10px] uppercase font-bold text-amber-700 block tracking-wider mb-1">
+                Balance Left
+              </span>
+              <div className="text-lg sm:text-xl font-extrabold text-amber-800 font-mono">
+                {formatINR(remainingBalance)}
+              </div>
+              <p className="text-[10px] text-slate-500 mt-0.5">Remaining receivable amount</p>
+            </div>
+          )}
         </div>
 
         {/* Passbook Filters Bar */}

@@ -32,6 +32,7 @@ const EditPaymentModal = ({
   isOpen,
   onClose,
   payment,
+  project = null,
   onSuccess
 }) => {
   const [formData, setFormData] = useState({
@@ -44,6 +45,12 @@ const EditPaymentModal = ({
   });
   const [mediaFiles, setMediaFiles] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+
+  // Compute maximum allowed amount for this specific payment record
+  const totalDealValue = Number(project?.totalDealValue || payment?.totalDealValue || 0);
+  const currentPaymentAmount = Number(payment?.amount || 0);
+  const remainingBalance = project?.balanceLeft !== undefined ? Math.max(0, Number(project.balanceLeft)) : 0;
+  const maxAllowedAmount = totalDealValue > 0 ? remainingBalance + currentPaymentAmount : 0;
 
   useEffect(() => {
     if (isOpen && payment) {
@@ -70,6 +77,11 @@ const EditPaymentModal = ({
     const numAmount = Number(formData.amount);
     if (!numAmount || numAmount <= 0) {
       toast.error("Please enter a valid payment amount (greater than ₹0)");
+      return;
+    }
+
+    if (maxAllowedAmount > 0 && numAmount > maxAllowedAmount) {
+      toast.error(`Payment amount cannot exceed deal balance limit of ${formatINR(maxAllowedAmount)}`);
       return;
     }
 
@@ -136,17 +148,17 @@ const EditPaymentModal = ({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-5 bg-black/60 backdrop-blur-xs overflow-y-auto">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-xl my-auto overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6 bg-black/60 backdrop-blur-xs overflow-y-auto">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-2xl lg:max-w-3xl my-auto overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="bg-slate-900 text-white px-5 py-3.5 flex items-center justify-between shrink-0">
+        <div className="bg-slate-900 text-white px-6 py-4 flex items-center justify-between shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center border border-white/20 text-amber-400">
+            <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center border border-white/20 text-amber-400">
               <FaRupeeSign className="text-base" />
             </div>
             <div>
-              <h3 className="text-sm sm:text-base font-bold tracking-tight text-white">Edit Payment Entry</h3>
-              <p className="text-[11px] text-slate-300">Modify payment amount, date or remarks</p>
+              <h3 className="text-base sm:text-lg font-bold tracking-tight text-white">Edit Payment Entry</h3>
+              <p className="text-xs text-slate-300">Modify payment amount, date or remarks</p>
             </div>
           </div>
           <button
@@ -172,11 +184,21 @@ const EditPaymentModal = ({
               )}
             </div>
           </div>
-          <div className="text-right shrink-0">
-            <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Original Amount</span>
-            <span className="font-black text-slate-700 font-mono text-xs sm:text-sm">
-              {formatINR(payment.amount)}
-            </span>
+          <div className="flex items-center gap-3 shrink-0 text-right">
+            {totalDealValue > 0 && (
+              <div>
+                <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Deal Value</span>
+                <span className="font-bold text-slate-800 font-mono text-xs">
+                  {formatINR(totalDealValue)}
+                </span>
+              </div>
+            )}
+            <div className="border-l border-slate-300 pl-3">
+              <span className="text-[10px] uppercase font-bold text-slate-400 block tracking-wider">Original Amount</span>
+              <span className="font-black text-slate-700 font-mono text-xs sm:text-sm">
+                {formatINR(payment.amount)}
+              </span>
+            </div>
           </div>
         </div>
 
@@ -212,9 +234,16 @@ const EditPaymentModal = ({
           {/* Amount & Mode */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                Amount (₹) <span className="text-rose-500">*</span>
-              </label>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-xs font-bold text-slate-700">
+                  Amount (₹) <span className="text-rose-500">*</span>
+                </label>
+                {maxAllowedAmount > 0 && (
+                  <span className="text-[11px] font-semibold text-slate-500">
+                    Max: <strong className="font-mono text-slate-800">{formatINR(maxAllowedAmount)}</strong>
+                  </span>
+                )}
+              </div>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs pointer-events-none select-none">
                   ₹
@@ -223,12 +252,37 @@ const EditPaymentModal = ({
                   type="number"
                   required
                   min="1"
+                  max={maxAllowedAmount > 0 ? maxAllowedAmount : undefined}
                   step="any"
                   value={formData.amount}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, amount: e.target.value }))}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === "") {
+                      setFormData((prev) => ({ ...prev, amount: "" }));
+                      return;
+                    }
+                    const numVal = Number(val);
+                    if (maxAllowedAmount > 0 && numVal > maxAllowedAmount) {
+                      toast.warning(`Amount capped to max allowable limit: ${formatINR(maxAllowedAmount)}`);
+                      setFormData((prev) => ({ ...prev, amount: String(maxAllowedAmount) }));
+                    } else {
+                      setFormData((prev) => ({ ...prev, amount: val }));
+                    }
+                  }}
                   className="w-full pl-7 pr-3 py-2 rounded-lg border border-slate-300 text-xs sm:text-sm font-bold font-mono text-slate-900 bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 transition-all"
                 />
               </div>
+              {maxAllowedAmount > 0 && (
+                <div className="mt-1 flex items-center justify-end">
+                  <button
+                    type="button"
+                    onClick={() => setFormData((prev) => ({ ...prev, amount: String(maxAllowedAmount) }))}
+                    className="text-[11px] font-bold text-amber-700 hover:text-amber-900 hover:underline cursor-pointer"
+                  >
+                    Set Max Limit ({formatINR(maxAllowedAmount)})
+                  </button>
+                </div>
+              )}
             </div>
 
             <div>

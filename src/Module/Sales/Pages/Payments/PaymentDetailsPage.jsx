@@ -17,7 +17,8 @@ import {
   FaExternalLinkAlt,
   FaTimes,
   FaFileInvoiceDollar,
-  FaSync
+  FaSync,
+  FaCheckCircle
 } from "react-icons/fa";
 import { getProjectPaymentsApi, deletePaymentApi } from "../../services/payment.api";
 import { getAllLeadProjectsApi, getLeadProjectByIdApi } from "../../services/leadProject.api";
@@ -299,6 +300,15 @@ const PaymentDetailsPage = () => {
     }
   };
 
+  // Real-time financial calculations
+  const calculatedTotalReceived = useMemo(() => {
+    return payments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
+  }, [payments]);
+
+  const totalDealValue = Number(projectData?.totalDealValue || 0);
+  const remainingBalance = Math.max(0, totalDealValue - calculatedTotalReceived);
+  const isCompleted = totalDealValue > 0 && calculatedTotalReceived >= totalDealValue;
+
   return (
     <div className="space-y-4 pb-12 font-sans px-1 sm:px-0 w-full max-w-full min-w-0">
       {/* 1. Header with Back Button */}
@@ -306,12 +316,12 @@ const PaymentDetailsPage = () => {
         <PageHeader
           title={`Payment Records • ${projectData?.projectName || "Project"}`}
           description={`Client: ${projectData?.clientName || "--"} ${projectData?.phoneNumber ? `(${projectData.phoneNumber})` : ""}`}
-          badge="Payment Records"
+          badge={isCompleted ? "Payment Complete" : "Payment Records"}
           showBackButton={true}
           onBack={() => navigate("/sales/payments")}
           icon={FaFileInvoiceDollar}
-          iconBgColor="bg-emerald-50"
-          iconColor="text-emerald-600"
+          iconBgColor={isCompleted ? "bg-emerald-100" : "bg-emerald-50"}
+          iconColor={isCompleted ? "text-emerald-700" : "text-emerald-600"}
           rightActions={
             <div className="flex items-center gap-2">
               {/* Filter Toggle Button */}
@@ -333,14 +343,26 @@ const PaymentDetailsPage = () => {
               </button>
 
               {canEdit && (
-                <button
-                  type="button"
-                  onClick={() => setIsAddModalOpen(true)}
-                  className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
-                >
-                  <FaPlus className="text-xs" />
-                  <span>Add Payment</span>
-                </button>
+                isCompleted ? (
+                  <button
+                    type="button"
+                    disabled
+                    className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-emerald-600 text-white flex items-center gap-1.5 opacity-90 cursor-not-allowed shadow-xs"
+                    title="Deal payment is 100% completed"
+                  >
+                    <FaCheckCircle className="text-xs" />
+                    <span>Completed</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsAddModalOpen(true)}
+                    className="px-3.5 py-1.5 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5 transition-all shadow-xs cursor-pointer"
+                  >
+                    <FaPlus className="text-xs" />
+                    <span>Add Payment</span>
+                  </button>
+                )
               )}
 
               <button
@@ -364,7 +386,7 @@ const PaymentDetailsPage = () => {
             <div>
               <p className="text-[11px] font-bold uppercase tracking-wider opacity-90">Total Deal Value</p>
               <h3 className="text-2xl font-black mt-0.5 tracking-tight font-mono">
-                {formatINR(projectData?.totalDealValue)}
+                {formatINR(totalDealValue)}
               </h3>
               <p className="text-[10px] opacity-80 mt-1 font-medium">Agreed commercial contract value</p>
             </div>
@@ -380,7 +402,7 @@ const PaymentDetailsPage = () => {
             <div>
               <p className="text-[11px] font-bold uppercase tracking-wider opacity-90">Total Received</p>
               <h3 className="text-2xl font-black mt-0.5 tracking-tight font-mono">
-                {formatINR(projectData?.totalReceived)}
+                {formatINR(calculatedTotalReceived)}
               </h3>
               <p className="text-[10px] opacity-80 mt-1 font-medium">{payments.length} transactions recorded</p>
             </div>
@@ -390,21 +412,40 @@ const PaymentDetailsPage = () => {
           </div>
         </div>
 
-        {/* Balance Left */}
-        <div className="bg-gradient-to-r from-amber-600 to-orange-700 rounded-xl p-4 text-white shadow-xs">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-[11px] font-bold uppercase tracking-wider opacity-90">Balance Left</p>
-              <h3 className="text-2xl font-black mt-0.5 tracking-tight font-mono">
-                {formatINR(projectData?.balanceLeft)}
-              </h3>
-              <p className="text-[10px] opacity-80 mt-1 font-medium">Remaining balance to be collected</p>
-            </div>
-            <div className="p-3 bg-white/20 rounded-xl text-white text-lg">
-              <FaCoins />
+        {/* Balance Left / Completed Status */}
+        {isCompleted ? (
+          <div className="bg-gradient-to-r from-teal-600 to-emerald-700 rounded-xl p-4 text-white shadow-xs">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider opacity-90">Payment Status</p>
+                <h3 className="text-2xl font-black mt-0.5 tracking-tight font-mono flex items-center gap-2">
+                  Completed
+                </h3>
+                <p className="text-[10px] opacity-90 mt-1 font-semibold flex items-center gap-1">
+                  <FaCheckCircle className="text-emerald-200" /> All dues cleared (₹0 balance left)
+                </p>
+              </div>
+              <div className="p-3 bg-white/20 rounded-xl text-white text-lg">
+                <FaCheckCircle />
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="bg-gradient-to-r from-amber-600 to-orange-700 rounded-xl p-4 text-white shadow-xs">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-[11px] font-bold uppercase tracking-wider opacity-90">Balance Left</p>
+                <h3 className="text-2xl font-black mt-0.5 tracking-tight font-mono">
+                  {formatINR(remainingBalance)}
+                </h3>
+                <p className="text-[10px] opacity-80 mt-1 font-medium">Remaining balance to be collected</p>
+              </div>
+              <div className="p-3 bg-white/20 rounded-xl text-white text-lg">
+                <FaCoins />
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 3. Search & Filter Bar (Opens on Header Filter button click) */}
@@ -668,7 +709,12 @@ const PaymentDetailsPage = () => {
         <AddPaymentModal
           isOpen={isAddModalOpen}
           onClose={() => setIsAddModalOpen(false)}
-          project={projectData}
+          project={{
+            ...projectData,
+            totalDealValue,
+            totalReceived: calculatedTotalReceived,
+            balanceLeft: remainingBalance
+          }}
           currentUser={user}
           onSuccess={() => {
             fetchPassbook();
@@ -685,6 +731,12 @@ const PaymentDetailsPage = () => {
             setSelectedPaymentForEdit(null);
           }}
           payment={selectedPaymentForEdit}
+          project={{
+            ...projectData,
+            totalDealValue,
+            totalReceived: calculatedTotalReceived,
+            balanceLeft: remainingBalance
+          }}
           onSuccess={() => {
             fetchPassbook();
           }}
