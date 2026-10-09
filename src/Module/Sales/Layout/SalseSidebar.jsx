@@ -132,7 +132,7 @@ const workerMenuItems = [
       },
       { 
         id: "suplire_contractor", 
-        label: "Supplire and Contractor", 
+        label: "Supplier and Contractor", 
         path: "/sales/master/suplire-and-contractor", 
         badge: "Vendors",
         icon: <FaHardHat className="w-3.5 h-3.5 text-amber-400" />,
